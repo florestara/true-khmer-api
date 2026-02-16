@@ -1,0 +1,34 @@
+{
+  "name": "truekhmer-api",
+  "version": "1.0.0",
+  "description": "TrueKhmer API - Hono.js with Drizzle ORM and PostgreSQL",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "db:pull": "drizzle-kit pull",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio",
+    "db:secondary:pull": "drizzle-kit pull --config=drizzle.secondary.config.ts",
+    "db:secondary:generate": "drizzle-kit generate --config=drizzle.secondary.config.ts",
+    "db:secondary:migrate": "drizzle-kit migrate --config=drizzle.secondary.config.ts",
+    "db:secondary:push": "drizzle-kit push --config=drizzle.secondary.config.ts",
+    "db:secondary:studio": "drizzle-kit studio --config=drizzle.secondary.config.ts"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13.0",
+    "dotenv": "^16.4.0",
+    "drizzle-orm": "^0.45.1",
+    "hono": "^4.6.0",
+    "postgres": "^3.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.11",
+    "drizzle-kit": "^0.31.9",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}

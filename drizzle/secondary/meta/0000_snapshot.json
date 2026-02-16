@@ -1,0 +1,1262 @@
+{
+  "id": "00000000-0000-0000-0000-000000000000",
+  "prevId": "",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.event": {
+      "name": "event",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_by": {
+          "name": "updated_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "title": {
+          "name": "title",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "slug": {
+          "name": "slug",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sub_title": {
+          "name": "sub_title",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "excerpt": {
+          "name": "excerpt",
+          "type": "varchar(500)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "cover": {
+          "name": "cover",
+          "type": "varchar(500)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "photos": {
+          "name": "photos",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "start_at": {
+          "name": "start_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "end_at": {
+          "name": "end_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "registration_start_at": {
+          "name": "registration_start_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "registration_end_at": {
+          "name": "registration_end_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "agenda": {
+          "name": "agenda",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "organizer_info": {
+          "name": "organizer_info",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "speakers": {
+          "name": "speakers",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sponsors": {
+          "name": "sponsors",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "event_type": {
+          "name": "event_type",
+          "type": "event_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'OTHER'"
+        },
+        "venue_id": {
+          "name": "venue_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "online_url": {
+          "name": "online_url",
+          "type": "varchar(500)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "meeting_id": {
+          "name": "meeting_id",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "meeting_password": {
+          "name": "meeting_password",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "max_attendees": {
+          "name": "max_attendees",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "min_attendees": {
+          "name": "min_attendees",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 1
+        },
+        "current_attendees": {
+          "name": "current_attendees",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "base_price": {
+          "name": "base_price",
+          "type": "numeric(12, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "currency_code": {
+          "name": "currency_code",
+          "type": "char(3)",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'USD'"
+        },
+        "qr": {
+          "name": "qr",
+          "type": "varchar(500)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tracking_code": {
+          "name": "tracking_code",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "event_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'DRAFT'"
+        },
+        "is_online": {
+          "name": "is_online",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "is_hybrid": {
+          "name": "is_hybrid",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "is_featured": {
+          "name": "is_featured",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "is_recurring": {
+          "name": "is_recurring",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "is_paid": {
+          "name": "is_paid",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "is_private": {
+          "name": "is_private",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "requires_approval": {
+          "name": "requires_approval",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "published_at": {
+          "name": "published_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "archived_at": {
+          "name": "archived_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "view_count": {
+          "name": "view_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "meta_title": {
+          "name": "meta_title",
+          "type": "varchar(60)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "meta_description": {
+          "name": "meta_description",
+          "type": "varchar(160)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "social_image": {
+          "name": "social_image",
+          "type": "varchar(500)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "venue": {
+          "name": "venue",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "venue_name": {
+          "name": "venue_name",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sale_price": {
+          "name": "sale_price",
+          "type": "numeric(12, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ticket_status": {
+          "name": "ticket_status",
+          "type": "event_ticket_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'AVAILABLE'"
+        },
+        "thumbnail": {
+          "name": "thumbnail",
+          "type": "varchar(500)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "visibility": {
+          "name": "visibility",
+          "type": "event_visibility",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'LISTED'"
+        },
+        "registration_mode": {
+          "name": "registration_mode",
+          "type": "event_registration_mode",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'ANYONE'"
+        },
+        "entry_mode": {
+          "name": "entry_mode",
+          "type": "event_entry_mode",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'TICKETED'"
+        }
+      },
+      "indexes": {
+        "event_attendees_idx": {
+          "name": "event_attendees_idx",
+          "columns": [
+            {
+              "expression": "current_attendees",
+              "asc": true,
+              "nulls": "last",
+              "opclass": "int4_ops",
+              "isExpression": false
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "event_capacity_idx": {
+          "name": "event_capacity_idx",
+          "columns": [
+            {
+              "expression": "max_attendees",
+              "asc": true,
+              "nulls": "last",
+              "opclass": "int4_ops",
+              "isExpression": false
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "event_created_by_idx": {
+          "name": "event_created_by_idx",
+          "columns": [
+            {
+              "expression": "created_by",
+              "asc": true,
+              "nulls": "last",
+              "opclass": "uuid_ops",
+              "isExpression": false
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "event_created_by_status_idx": {
+          "name": "event_created_by_status_idx",
+          "columns": [
+            {
+              "expression": "created_by",
+              "asc": true,
+              "nulls": "last",
+              "opclass": "uuid_ops",
+              "isExpression": false
+            },
+            {
+              "expression": "status",
+              "asc": true,
+              "nulls": "last",
+              "opclass": "uuid_ops",
+              "isExpression": false
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "event_created_idx": {
+          "name": "event_created_idx",
+          "columns": [
+            {
+              "expression": "created_at",
+              "asc": true,
+              "nulls": "last",
+              "opclass": "timestamptz_ops",
+              "isExpression": false
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "event_end_at_idx": {
+          "name": "event_end_at_idx",
+          "columns": [
+            {
+              "expression": "end_at",
+              "asc": true,
+              "nulls": "last",
+              "opclass": "timestamptz_ops",
+              "isExpression": false
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "event_entry_mode_idx": {
+          "name": "event_entry_mode_idx",
+          "columns": [
+            {
+              "expression": "entry_mode",
+              "asc": true,
+              "nulls": "last",
+              "opclass": "enum_ops",
+              "isExpression": false
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "event_featured_idx": {
+          "name": "event_featured_idx",
+          "columns": [
+            {
+              "expression": "is_featured",
+              "asc": true,
+              "nulls": "last",
+              "opclass": "bool_ops",
+              "isExpression": false
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "event_featured_published_idx": {
+          "name": "event_featured_published_idx",
+          "columns": [
+            {
+              "expression": "is_featured",
+              "asc": true,
+              "nulls": "last",
+              "opclass": "bool_ops",
+              "isExpression": false
+            },
+            {
+              "expression": "published_at",
+              "asc": true,
+              "nulls": "last",
+              "opclass": "bool_ops",
+              "isExpression": false
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "event_online_idx": {
+          "name": "event_online_idx",
+          "columns": [
+            {
+              "expression": "is_online",
+              "asc": true,
+              "nulls": "last",
+              "opclass": "bool_ops",
+              "isExpression": false
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "event_online_start_idx": {
+          "name": "event_online_start_idx",
+          "columns": [
+            {
+              "expression": "is_online",
+              "asc": true,
+              "nulls": "last",
+              "opclass": "timestamptz_ops",
+              "isExpression": false
+            },
+            {
+              "expression": "start_at",
+              "asc": true,
+              "nulls": "last",
+              "opclass": "bool_ops",
+              "isExpression": false
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "event_organization_idx": {
+          "name": "event_organization_idx",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "asc": true,
+              "nulls": "last",
+              "opclass": "uuid_ops",
+              "isExpression": false
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "event_paid_idx": {
+          "name": "event_paid_idx",
+          "columns": [
+            {
+              "expression": "is_paid",
+              "asc": true,
+              "nulls": "last",
+              "opclass": "bool_ops",
+              "isExpression": false
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "event_private_idx": {
+          "name": "event_private_idx",
+          "columns": [
+            {
+              "expression": "is_private",
+              "asc": true,
+              "nulls": "last",
+              "opclass": "bool_ops",
+              "isExpression": false
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "event_published_at_idx": {
+          "name": "event_published_at_idx",
+          "columns": [
+            {
+              "expression": "published_at",
+              "asc": true,
+              "nulls": "last",
+              "opclass": "timestamptz_ops",
+              "isExpression": false
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "event_registration_mode_idx": {
+          "name": "event_registration_mode_idx",
+          "columns": [
+            {
+              "expression": "registration_mode",
+              "asc": true,
+              "nulls": "last",
+              "opclass": "enum_ops",
+              "isExpression": false
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "event_registration_period_idx": {
+          "name": "event_registration_period_idx",
+          "columns": [
+            {
+              "expression": "registration_start_at",
+              "asc": true,
+              "nulls": "last",
+              "opclass": "timestamptz_ops",
+              "isExpression": false
+            },
+            {
+              "expression": "registration_end_at",
+              "asc": true,
+              "nulls": "last",
+              "opclass": "timestamptz_ops",
+              "isExpression": false
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "event_slug_unique_idx": {
+          "name": "event_slug_unique_idx",
+          "columns": [
+            {
+              "expression": "slug",
+              "asc": true,
+              "nulls": "last",
+              "opclass": "text_ops",
+              "isExpression": false
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "event_start_at_idx": {
+          "name": "event_start_at_idx",
+          "columns": [
+            {
+              "expression": "start_at",
+              "asc": true,
+              "nulls": "last",
+              "opclass": "timestamptz_ops",
+              "isExpression": false
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "event_status_idx": {
+          "name": "event_status_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "asc": true,
+              "nulls": "last",
+              "opclass": "enum_ops",
+              "isExpression": false
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "event_status_start_idx": {
+          "name": "event_status_start_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "asc": true,
+              "nulls": "last",
+              "opclass": "enum_ops",
+              "isExpression": false
+            },
+            {
+              "expression": "start_at",
+              "asc": true,
+              "nulls": "last",
+              "opclass": "timestamptz_ops",
+              "isExpression": false
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "event_type_idx": {
+          "name": "event_type_idx",
+          "columns": [
+            {
+              "expression": "event_type",
+              "asc": true,
+              "nulls": "last",
+              "opclass": "enum_ops",
+              "isExpression": false
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "event_type_status_idx": {
+          "name": "event_type_status_idx",
+          "columns": [
+            {
+              "expression": "event_type",
+              "asc": true,
+              "nulls": "last",
+              "opclass": "enum_ops",
+              "isExpression": false
+            },
+            {
+              "expression": "status",
+              "asc": true,
+              "nulls": "last",
+              "opclass": "enum_ops",
+              "isExpression": false
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "event_updated_idx": {
+          "name": "event_updated_idx",
+          "columns": [
+            {
+              "expression": "updated_at",
+              "asc": true,
+              "nulls": "last",
+              "opclass": "timestamptz_ops",
+              "isExpression": false
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "event_venue_idx": {
+          "name": "event_venue_idx",
+          "columns": [
+            {
+              "expression": "venue_id",
+              "asc": true,
+              "nulls": "last",
+              "opclass": "uuid_ops",
+              "isExpression": false
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "event_venue_start_idx": {
+          "name": "event_venue_start_idx",
+          "columns": [
+            {
+              "expression": "venue_id",
+              "asc": true,
+              "nulls": "last",
+              "opclass": "timestamptz_ops",
+              "isExpression": false
+            },
+            {
+              "expression": "start_at",
+              "asc": true,
+              "nulls": "last",
+              "opclass": "uuid_ops",
+              "isExpression": false
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "event_view_count_idx": {
+          "name": "event_view_count_idx",
+          "columns": [
+            {
+              "expression": "view_count",
+              "asc": true,
+              "nulls": "last",
+              "opclass": "int4_ops",
+              "isExpression": false
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "event_visibility_idx": {
+          "name": "event_visibility_idx",
+          "columns": [
+            {
+              "expression": "visibility",
+              "asc": true,
+              "nulls": "last",
+              "opclass": "enum_ops",
+              "isExpression": false
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "event_created_by_user_id_fk": {
+          "name": "event_created_by_user_id_fk",
+          "tableFrom": "event",
+          "tableTo": "user",
+          "schemaTo": "public",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "cascade"
+        },
+        "event_updated_by_user_id_fk": {
+          "name": "event_updated_by_user_id_fk",
+          "tableFrom": "event",
+          "tableTo": "user",
+          "schemaTo": "public",
+          "columnsFrom": [
+            "updated_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "cascade"
+        },
+        "event_venue_id_venue_id_fk": {
+          "name": "event_venue_id_venue_id_fk",
+          "tableFrom": "event",
+          "tableTo": "venue",
+          "schemaTo": "public",
+          "columnsFrom": [
+            "venue_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "cascade"
+        },
+        "event_organization_id_organization_id_fk": {
+          "name": "event_organization_id_organization_id_fk",
+          "tableFrom": "event",
+          "tableTo": "organization",
+          "schemaTo": "public",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {},
+      "policies": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {
+    "public.access_level": {
+      "name": "access_level",
+      "values": [
+        "VIEW_ONLY",
+        "LIMITED",
+        "STANDARD",
+        "ADMIN",
+        "FULL"
+      ],
+      "schema": "public"
+    },
+    "public.event_category_status": {
+      "name": "event_category_status",
+      "values": [
+        "DRAFT",
+        "ACTIVE",
+        "INACTIVE",
+        "DELETED"
+      ],
+      "schema": "public"
+    },
+    "public.event_entry_mode": {
+      "name": "event_entry_mode",
+      "values": [
+        "TICKETED",
+        "RSVP",
+        "OPEN_ACCESS"
+      ],
+      "schema": "public"
+    },
+    "public.event_registration_mode": {
+      "name": "event_registration_mode",
+      "values": [
+        "ANYONE",
+        "REQUIRED_APPROVAL",
+        "INVITED_GUESTS_ONLY"
+      ],
+      "schema": "public"
+    },
+    "public.event_staff_role": {
+      "name": "event_staff_role",
+      "values": [
+        "ORGANIZER",
+        "CO_ORGANIZER",
+        "SPEAKER",
+        "MODERATOR",
+        "VOLUNTEER",
+        "CHECK_IN",
+        "SUPPORT",
+        "MEDIA",
+        "SECURITY",
+        "VENDOR",
+        "SPONSOR_REP",
+        "PHOTOGRAPHER",
+        "VIDEOGRAPHER",
+        "TECHNICAL",
+        "OTHER"
+      ],
+      "schema": "public"
+    },
+    "public.event_staff_status": {
+      "name": "event_staff_status",
+      "values": [
+        "INVITED",
+        "PENDING",
+        "ACCEPTED",
+        "DECLINED",
+        "ACTIVE",
+        "INACTIVE",
+        "REMOVED"
+      ],
+      "schema": "public"
+    },
+    "public.event_status": {
+      "name": "event_status",
+      "values": [
+        "DRAFT",
+        "PUBLISHED",
+        "COMPLETED",
+        "CANCELLED",
+        "POSTPONED",
+        "ACTIVE",
+        "ARCHIVED"
+      ],
+      "schema": "public"
+    },
+    "public.event_ticket_status": {
+      "name": "event_ticket_status",
+      "values": [
+        "AVAILABLE",
+        "ALMOST_FULL",
+        "SOLD_OUT",
+        "WAITING_LIST"
+      ],
+      "schema": "public"
+    },
+    "public.event_type": {
+      "name": "event_type",
+      "values": [
+        "CONFERENCE",
+        "WORKSHOP",
+        "SEMINAR",
+        "CONCERT",
+        "FESTIVAL",
+        "EXHIBITION",
+        "NETWORKING",
+        "TRAINING",
+        "WEBINAR",
+        "OTHER"
+      ],
+      "schema": "public"
+    },
+    "public.event_visibility": {
+      "name": "event_visibility",
+      "values": [
+        "LISTED",
+        "UNLISTED"
+      ],
+      "schema": "public"
+    },
+    "public.gender": {
+      "name": "gender",
+      "values": [
+        "MALE",
+        "FEMALE",
+        "OTHER"
+      ],
+      "schema": "public"
+    },
+    "public.order_status": {
+      "name": "order_status",
+      "values": [
+        "DRAFT",
+        "PENDING",
+        "CONFIRMED",
+        "PROCESSING",
+        "COMPLETED",
+        "CANCELLED",
+        "REFUNDED",
+        "EXPIRED"
+      ],
+      "schema": "public"
+    },
+    "public.organization_invitation_status": {
+      "name": "organization_invitation_status",
+      "values": [
+        "PENDING",
+        "ACCEPTED",
+        "DECLINED",
+        "REVOKED",
+        "EXPIRED"
+      ],
+      "schema": "public"
+    },
+    "public.organization_member_role": {
+      "name": "organization_member_role",
+      "values": [
+        "OWNER",
+        "ADMIN",
+        "MANAGER",
+        "EDITOR",
+        "MEMBER"
+      ],
+      "schema": "public"
+    },
+    "public.organization_member_status": {
+      "name": "organization_member_status",
+      "values": [
+        "ACTIVE",
+        "INVITED",
+        "REJECTED",
+        "LEFT",
+        "REVOKED"
+      ],
+      "schema": "public"
+    },
+    "public.organization_type": {
+      "name": "organization_type",
+      "values": [
+        "COMPANY",
+        "NGO"
+      ],
+      "schema": "public"
+    },
+    "public.payment_gateway": {
+      "name": "payment_gateway",
+      "values": [
+        "PAYWAY",
+        "PAYPAL",
+        "STRIPE",
+        "CASH",
+        "BANK_TRANSFER",
+        "CRYPTO"
+      ],
+      "schema": "public"
+    },
+    "public.payment_status": {
+      "name": "payment_status",
+      "values": [
+        "PENDING",
+        "PROCESSING",
+        "COMPLETED",
+        "FAILED",
+        "CANCELLED",
+        "REFUNDED",
+        "PARTIALLY_REFUNDED"
+      ],
+      "schema": "public"
+    },
+    "public.promotion_scope": {
+      "name": "promotion_scope",
+      "values": [
+        "EVENT",
+        "TICKET_TIER",
+        "GLOBAL",
+        "USER_SPECIFIC"
+      ],
+      "schema": "public"
+    },
+    "public.promotion_status": {
+      "name": "promotion_status",
+      "values": [
+        "DRAFT",
+        "ACTIVE",
+        "PAUSED",
+        "EXPIRED",
+        "CANCELLED",
+        "USED_UP"
+      ],
+      "schema": "public"
+    },
+    "public.promotion_type": {
+      "name": "promotion_type",
+      "values": [
+        "PERCENTAGE",
+        "FIXED_AMOUNT",
+        "BUY_X_GET_Y",
+        "FREE_SHIPPING",
+        "EARLY_BIRD",
+        "BULK_DISCOUNT"
+      ],
+      "schema": "public"
+    },
+    "public.ticket_tier_status": {
+      "name": "ticket_tier_status",
+      "values": [
+        "DRAFT",
+        "ACTIVE",
+        "PAUSED",
+        "SOLD_OUT",
+        "EXPIRED",
+        "CANCELLED"
+      ],
+      "schema": "public"
+    },
+    "public.ticket_tier_type": {
+      "name": "ticket_tier_type",
+      "values": [
+        "FREE",
+        "PAID",
+        "DONATION",
+        "VIP",
+        "EARLY_BIRD",
+        "GROUP",
+        "STUDENT"
+      ],
+      "schema": "public"
+    },
+    "public.token_nonce_purpose": {
+      "name": "token_nonce_purpose",
+      "values": [
+        "VERIFY_EMAIL",
+        "RESET_PASSWORD",
+        "MAGIC_LOGIN",
+        "PAYMENT_CALLBACK",
+        "CONFIRM_EMAIL_CHANGE",
+        "CONFIRM_ACCOUNT_DELETION",
+        "ORGANIZATION_INVITATION",
+        "EVENT_STAFF_INVITATION"
+      ],
+      "schema": "public"
+    },
+    "public.user_role": {
+      "name": "user_role",
+      "values": [
+        "USER",
+        "ADMIN"
+      ],
+      "schema": "public"
+    },
+    "public.user_status": {
+      "name": "user_status",
+      "values": [
+        "STAGED",
+        "ACTIVE",
+        "RECOVERY",
+        "BANNED",
+        "SUSPENDED",
+        "LOCKED",
+        "DEACTIVATED",
+        "DELETED"
+      ],
+      "schema": "public"
+    }
+  },
+  "schemas": {},
+  "sequences": {
+    "public.order_number_seq": {
+      "name": "order_number_seq",
+      "schema": "public",
+      "startWith": "1000000",
+      "minValue": "1000000",
+      "maxValue": "99999999",
+      "increment": "1",
+      "cycle": false,
+      "cache": "1"
+    }
+  },
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "schemas": {},
+    "tables": {},
+    "columns": {}
+  },
+  "internal": {
+    "tables": {}
+  }
+}
