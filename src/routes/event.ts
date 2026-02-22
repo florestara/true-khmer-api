@@ -1,19 +1,47 @@
 import { Hono } from "hono";
 import { secondaryDb } from "../db/index";
-import { event } from "../db/schema/secondary";
-import { eq, and } from "drizzle-orm";
+import { event, venue, ticketTier } from "../db/schema/secondary";
+import { eq, and, getTableColumns, min, sql } from "drizzle-orm";
 
 const eventRoute = new Hono();
 
 // GET /event - List all events from secondary database
 eventRoute.get("/", async (c) => {
+  const ticketSubquery = secondaryDb
+    .select({
+      eventId: ticketTier.eventId,
+      minBasePrice: min(ticketTier.basePrice).as("min_base_price"),
+    })
+    .from(ticketTier)
+    .where(and(eq(ticketTier.isActive, true), eq(ticketTier.isVisible, true)))
+    .groupBy(ticketTier.eventId)
+    .as("t");
+
   const allEvents = await secondaryDb
-    .select()
+    .select({
+      ...getTableColumns(event),
+      city: venue.city,
+      minBasePrice: ticketSubquery.minBasePrice,
+    })
     .from(event)
+    .leftJoin(ticketSubquery, eq(ticketSubquery.eventId, event.id))
+    .leftJoin(venue, eq(venue.id, event.venueId))
     .where(and(eq(event.visibility, "LISTED"), eq(event.status, "PUBLISHED")));
 
   return c.json({
-    data: allEvents,
+    data: allEvents.map((v) => ({
+      title: v.title,
+      slug: v.slug,
+      startDate: v.startAt,
+      endDate: v.endAt,
+      venueId: v.venueId,
+      cover: v.cover,
+      excerpt: v.excerpt,
+      city: v.city,
+      ticketStatus: v.ticketStatus,
+      isOnline: v.isOnline,
+      basePrice: v.minBasePrice,
+    })),
   });
 });
 

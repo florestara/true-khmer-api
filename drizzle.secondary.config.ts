@@ -7,7 +7,7 @@ export default defineConfig({
   out: "./drizzle/secondary",
   schema: "./src/db/schema/secondary.ts",
   dialect: "postgresql",
-  tablesFilter: ["event"],
+  tablesFilter: ["event", "event_category", "ticket_tier", "venue"],
   dbCredentials: {
     url: process.env.SECONDARY_DATABASE_URL!,
   },

@@ -1,4 +1,4 @@
-import { pgTable, index, uniqueIndex, foreignKey, uuid, varchar, text, jsonb, timestamp, integer, numeric, char, boolean, pgSequence, pgEnum } from "drizzle-orm/pg-core"
+import { pgTable, index, uniqueIndex, foreignKey, uuid, varchar, text, jsonb, timestamp, integer, numeric, char, boolean, smallint, pgSequence, pgEnum } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm"
 
 export const accessLevel = pgEnum("access_level", ['VIEW_ONLY', 'LIMITED', 'STANDARD', 'ADMIN', 'FULL'])
@@ -41,8 +41,8 @@ export const event = pgTable("event", {
 	excerpt: varchar({ length: 500 }).notNull(),
 	cover: varchar({ length: 500 }),
 	photos: jsonb(),
-	startAt: timestamp("start_at", { withTimezone: true, mode: 'string' }).notNull(),
-	endAt: timestamp("end_at", { withTimezone: true, mode: 'string' }).notNull(),
+	startAt: timestamp("start_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	endAt: timestamp("end_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	registrationStartAt: timestamp("registration_start_at", { withTimezone: true, mode: 'string' }),
 	registrationEndAt: timestamp("registration_end_at", { withTimezone: true, mode: 'string' }),
 	agenda: jsonb(),
@@ -86,6 +86,7 @@ export const event = pgTable("event", {
 	visibility: eventVisibility().default('LISTED').notNull(),
 	registrationMode: eventRegistrationMode("registration_mode").default('ANYONE').notNull(),
 	entryMode: eventEntryMode("entry_mode").default('TICKETED').notNull(),
+	hasConfirmedDates: boolean("has_confirmed_dates").default(false).notNull(),
 }, (table) => [
 	index("event_attendees_idx").using("btree", table.currentAttendees.asc().nullsLast().op("int4_ops")),
 	index("event_capacity_idx").using("btree", table.maxAttendees.asc().nullsLast().op("int4_ops")),
@@ -134,5 +135,161 @@ export const event = pgTable("event", {
 			columns: [table.organizationId],
 			foreignColumns: [organization.id],
 			name: "event_organization_id_organization_id_fk"
+		}).onUpdate("cascade").onDelete("set null"),
+]);
+
+export const eventCategory = pgTable("event_category", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	name: varchar({ length: 100 }).notNull(),
+	slug: varchar({ length: 110 }).notNull(),
+	description: varchar({ length: 500 }),
+	icon: varchar({ length: 500 }),
+	color: varchar({ length: 7 }),
+	sortOrder: integer("sort_order").default(0),
+	status: eventCategoryStatus().default('DRAFT').notNull(),
+	createdBy: uuid("created_by"),
+	updatedBy: uuid("updated_by"),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	index("event_category_active_sort_idx").using("btree", table.sortOrder.asc().nullsLast().op("int4_ops")),
+	index("event_category_created_idx").using("btree", table.createdAt.asc().nullsLast().op("timestamptz_ops")),
+	index("event_category_creator_idx").using("btree", table.createdBy.asc().nullsLast().op("uuid_ops")),
+	uniqueIndex("event_category_slug_unique_idx").using("btree", table.slug.asc().nullsLast().op("text_ops")),
+	index("event_category_sort_order_idx").using("btree", table.sortOrder.asc().nullsLast().op("int4_ops")),
+	index("event_category_status_idx").using("btree", table.status.asc().nullsLast().op("enum_ops")),
+	index("event_category_updated_idx").using("btree", table.updatedAt.asc().nullsLast().op("timestamptz_ops")),
+	foreignKey({
+			columns: [table.createdBy],
+			foreignColumns: [user.id],
+			name: "event_category_created_by_user_id_fk"
+		}).onUpdate("cascade").onDelete("set null"),
+	foreignKey({
+			columns: [table.updatedBy],
+			foreignColumns: [user.id],
+			name: "event_category_updated_by_user_id_fk"
+		}).onUpdate("cascade").onDelete("set null"),
+]);
+
+export const venue = pgTable("venue", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	createdBy: uuid("created_by"),
+	updatedBy: uuid("updated_by"),
+	name: varchar({ length: 255 }).notNull(),
+	slug: varchar({ length: 255 }).notNull(),
+	description: text(),
+	email: varchar({ length: 320 }),
+	phone: varchar({ length: 20 }),
+	website: varchar({ length: 500 }),
+	address: text().notNull(),
+	city: varchar({ length: 100 }).notNull(),
+	countryCode: char("country_code", { length: 2 }).default('KH').notNull(),
+	latitude: numeric({ precision: 10, scale:  8 }),
+	longitude: numeric({ precision: 11, scale:  8 }),
+	locationUrl: varchar("location_url", { length: 500 }),
+	maxCapacity: smallint("max_capacity"),
+	minCapacity: smallint("min_capacity"),
+	amenities: jsonb(),
+	cover: varchar({ length: 500 }),
+	images: jsonb(),
+	floorPlan: varchar("floor_plan", { length: 500 }),
+	basePrice: numeric("base_price", { precision: 12, scale:  2 }),
+	currency: char({ length: 3 }).default('USD').notNull(),
+	pricingModel: varchar("pricing_model", { length: 20 }).default('hourly').notNull(),
+	isVerified: boolean("is_verified").default(false).notNull(),
+	verifiedAt: timestamp("verified_at", { withTimezone: true, mode: 'string' }),
+	isActive: boolean("is_active").default(true).notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	index("venue_active_verified_idx").using("btree", table.isActive.asc().nullsLast().op("bool_ops"), table.isVerified.asc().nullsLast().op("bool_ops")),
+	index("venue_capacity_idx").using("btree", table.maxCapacity.asc().nullsLast().op("int2_ops")),
+	index("venue_city_active_idx").using("btree", table.city.asc().nullsLast().op("bool_ops"), table.isActive.asc().nullsLast().op("bool_ops")),
+	index("venue_city_country_idx").using("btree", table.city.asc().nullsLast().op("text_ops"), table.countryCode.asc().nullsLast().op("text_ops")),
+	index("venue_created_at_idx").using("btree", table.createdAt.asc().nullsLast().op("timestamptz_ops")),
+	index("venue_created_by_idx").using("btree", table.createdBy.asc().nullsLast().op("uuid_ops")),
+	index("venue_location_idx").using("btree", table.latitude.asc().nullsLast().op("numeric_ops"), table.longitude.asc().nullsLast().op("numeric_ops")),
+	index("venue_price_currency_idx").using("btree", table.basePrice.asc().nullsLast().op("numeric_ops"), table.currency.asc().nullsLast().op("numeric_ops")),
+	uniqueIndex("venue_slug_unique_idx").using("btree", table.slug.asc().nullsLast().op("text_ops")),
+	foreignKey({
+			columns: [table.createdBy],
+			foreignColumns: [user.id],
+			name: "venue_created_by_user_id_fk"
+		}).onDelete("set null"),
+	foreignKey({
+			columns: [table.updatedBy],
+			foreignColumns: [user.id],
+			name: "venue_updated_by_user_id_fk"
+		}).onDelete("set null"),
+]);
+
+export const ticketTier = pgTable("ticket_tier", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	name: varchar({ length: 100 }).notNull(),
+	slug: varchar({ length: 110 }).notNull(),
+	description: varchar({ length: 500 }),
+	eventId: uuid("event_id").notNull(),
+	type: ticketTierType().default('FREE').notNull(),
+	isActive: boolean("is_active").default(true).notNull(),
+	isVisible: boolean("is_visible").default(true).notNull(),
+	sortOrder: integer("sort_order").default(0),
+	totalQuantity: integer("total_quantity").default(0).notNull(),
+	soldCount: integer("sold_count").default(0).notNull(),
+	reservedCount: integer("reserved_count").default(0).notNull(),
+	availableCount: integer("available_count").default(0).notNull(),
+	minPurchase: integer("min_purchase").default(1).notNull(),
+	maxPurchase: integer("max_purchase").default(10).notNull(),
+	maxPerUser: integer("max_per_user").default(5).notNull(),
+	basePrice: numeric("base_price", { precision: 12, scale:  2 }).default('0.00').notNull(),
+	salePrice: numeric("sale_price", { precision: 12, scale:  2 }),
+	currencyCode: char({ length: 3 }).default('USD').notNull(),
+	saleStartAt: timestamp("sale_start_at", { withTimezone: true, mode: 'string' }),
+	saleEndAt: timestamp("sale_end_at", { withTimezone: true, mode: 'string' }),
+	validFrom: timestamp("valid_from", { withTimezone: true, mode: 'string' }),
+	validUntil: timestamp("valid_until", { withTimezone: true, mode: 'string' }),
+	status: ticketTierStatus().default('DRAFT').notNull(),
+	requiredInfo: jsonb("required_info"),
+	benefits: jsonb(),
+	restrictions: jsonb(),
+	cover: varchar({ length: 500 }),
+	badge: varchar({ length: 500 }),
+	createdBy: uuid("created_by"),
+	updatedBy: uuid("updated_by"),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	index("ticket_tier_active_idx").using("btree", table.isActive.asc().nullsLast().op("bool_ops")),
+	index("ticket_tier_availability_idx").using("btree", table.availableCount.asc().nullsLast().op("int4_ops")),
+	index("ticket_tier_created_idx").using("btree", table.createdAt.asc().nullsLast().op("timestamptz_ops")),
+	index("ticket_tier_creator_idx").using("btree", table.createdBy.asc().nullsLast().op("uuid_ops")),
+	index("ticket_tier_event_active_idx").using("btree", table.eventId.asc().nullsLast().op("uuid_ops"), table.isActive.asc().nullsLast().op("uuid_ops")),
+	index("ticket_tier_event_idx").using("btree", table.eventId.asc().nullsLast().op("uuid_ops")),
+	index("ticket_tier_event_sort_idx").using("btree", table.eventId.asc().nullsLast().op("uuid_ops"), table.sortOrder.asc().nullsLast().op("uuid_ops")),
+	index("ticket_tier_event_status_idx").using("btree", table.eventId.asc().nullsLast().op("uuid_ops"), table.status.asc().nullsLast().op("uuid_ops")),
+	index("ticket_tier_price_range_idx").using("btree", table.basePrice.asc().nullsLast().op("numeric_ops"), table.salePrice.asc().nullsLast().op("numeric_ops")),
+	index("ticket_tier_sale_period_idx").using("btree", table.saleStartAt.asc().nullsLast().op("timestamptz_ops"), table.saleEndAt.asc().nullsLast().op("timestamptz_ops")),
+	uniqueIndex("ticket_tier_slug_event_unique_idx").using("btree", table.eventId.asc().nullsLast().op("uuid_ops"), table.slug.asc().nullsLast().op("text_ops")),
+	index("ticket_tier_sold_count_idx").using("btree", table.soldCount.asc().nullsLast().op("int4_ops")),
+	index("ticket_tier_sort_order_idx").using("btree", table.sortOrder.asc().nullsLast().op("int4_ops")),
+	index("ticket_tier_status_idx").using("btree", table.status.asc().nullsLast().op("enum_ops")),
+	index("ticket_tier_type_idx").using("btree", table.type.asc().nullsLast().op("enum_ops")),
+	index("ticket_tier_type_status_idx").using("btree", table.type.asc().nullsLast().op("enum_ops"), table.status.asc().nullsLast().op("enum_ops")),
+	index("ticket_tier_updated_idx").using("btree", table.updatedAt.asc().nullsLast().op("timestamptz_ops")),
+	index("ticket_tier_validity_period_idx").using("btree", table.validFrom.asc().nullsLast().op("timestamptz_ops"), table.validUntil.asc().nullsLast().op("timestamptz_ops")),
+	index("ticket_tier_visible_idx").using("btree", table.isVisible.asc().nullsLast().op("bool_ops")),
+	foreignKey({
+			columns: [table.eventId],
+			foreignColumns: [event.id],
+			name: "ticket_tier_event_id_event_id_fk"
+		}).onUpdate("cascade").onDelete("restrict"),
+	foreignKey({
+			columns: [table.createdBy],
+			foreignColumns: [user.id],
+			name: "ticket_tier_created_by_user_id_fk"
+		}).onUpdate("cascade").onDelete("set null"),
+	foreignKey({
+			columns: [table.updatedBy],
+			foreignColumns: [user.id],
+			name: "ticket_tier_updated_by_user_id_fk"
 		}).onUpdate("cascade").onDelete("set null"),
 ]);
