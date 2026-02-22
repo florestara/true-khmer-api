@@ -37,6 +37,7 @@ export async function handleCreateCategory(c: Context) {
     if (code === "23505") {
       return c.json({ ok: false, error: "Category already exists" }, 409);
     }
-    throw err;
+    console.error("Failed to create category", err);
+    return c.json({ ok: false, error: "Internal server error" }, 500);
   }
 }
