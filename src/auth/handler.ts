@@ -1,4 +1,5 @@
 import { Context } from "hono";
+import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { auth } from "../lib/auth";
 import {
   getAccessTokenFromRefreshToken,
@@ -14,6 +15,21 @@ import {
   validateRegisterPayload,
   validateVerifyRegisterOtpPayload,
 } from "./validator";
+
+function toStatusCode(
+  status: unknown,
+  fallback: ContentfulStatusCode = 500
+): ContentfulStatusCode {
+  if (
+    typeof status === "number" &&
+    Number.isInteger(status) &&
+    status >= 400 &&
+    status <= 599
+  ) {
+    return status as ContentfulStatusCode;
+  }
+  return fallback;
+}
 
 async function parseJsonBody(c: Context) {
   try {
@@ -40,13 +56,19 @@ export async function handleRegister(c: Context) {
   const registerResult = await signUpWithEmailPassword(payload.data);
 
   if (!registerResult.ok) {
-    return c.json(registerResult.body ?? { error: "Registration failed" }, registerResult.status as 400 | 401 | 403 | 404 | 500);
+    return c.json(
+      registerResult.body ?? { error: "Registration failed" },
+      toStatusCode(registerResult.status)
+    );
   }
 
   const otpResult = await requestEmailVerificationOtp(payload.data.email);
 
   if (!otpResult.ok) {
-    return c.json(otpResult.body ?? { error: "Failed to send verification OTP" }, otpResult.status as 400 | 401 | 403 | 404 | 500);
+    return c.json(
+      otpResult.body ?? { error: "Failed to send verification OTP" },
+      toStatusCode(otpResult.status)
+    );
   }
 
   return c.json({
@@ -70,13 +92,19 @@ export async function handleVerifyRegisterOtp(c: Context) {
   const verifyResult = await verifyRegisterOtp(payload.data);
 
   if (!verifyResult.ok) {
-    return c.json(verifyResult.body ?? { error: "OTP verification failed" }, verifyResult.status as 400 | 401 | 403 | 404 | 500);
+    return c.json(
+      verifyResult.body ?? { error: "OTP verification failed" },
+      toStatusCode(verifyResult.status)
+    );
   }
 
   const accessTokenResult = await getAccessTokenFromRefreshToken(verifyResult.body.token);
 
   if (!accessTokenResult.ok) {
-    return c.json(accessTokenResult.body ?? { error: "Failed to issue access token" }, accessTokenResult.status as 400 | 401 | 403 | 404 | 500);
+    return c.json(
+      accessTokenResult.body ?? { error: "Failed to issue access token" },
+      toStatusCode(accessTokenResult.status)
+    );
   }
 
   return c.json({
@@ -100,13 +128,19 @@ export async function handleLogin(c: Context) {
   const loginResult = await signInWithEmailPassword(payload.data);
 
   if (!loginResult.ok) {
-    return c.json(loginResult.body ?? { error: "Login failed" }, loginResult.status as 400 | 401 | 403 | 404 | 500);
+    return c.json(
+      loginResult.body ?? { error: "Login failed" },
+      toStatusCode(loginResult.status)
+    );
   }
 
   const accessTokenResult = await getAccessTokenFromRefreshToken(loginResult.body.token);
 
   if (!accessTokenResult.ok) {
-    return c.json(accessTokenResult.body ?? { error: "Failed to issue access token" }, accessTokenResult.status as 400 | 401 | 403 | 404 | 500);
+    return c.json(
+      accessTokenResult.body ?? { error: "Failed to issue access token" },
+      toStatusCode(accessTokenResult.status)
+    );
   }
 
   return c.json({
@@ -142,7 +176,10 @@ export async function handleRefresh(c: Context) {
   );
 
   if (!accessTokenResult.ok) {
-    return c.json(accessTokenResult.body ?? { error: "Token refresh failed" }, accessTokenResult.status as 400 | 401 | 403 | 404 | 500);
+    return c.json(
+      accessTokenResult.body ?? { error: "Token refresh failed" },
+      toStatusCode(accessTokenResult.status)
+    );
   }
 
   return c.json({
