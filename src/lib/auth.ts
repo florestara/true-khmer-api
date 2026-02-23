@@ -3,17 +3,22 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { bearer } from "better-auth/plugins/bearer";
 import { emailOTP } from "better-auth/plugins/email-otp";
 import { jwt } from "better-auth/plugins/jwt";
-import { db } from "../db";
+import { db } from "../db/index";
 
-const betterAuthUrl = process.env.BETTER_AUTH_URL;
-const resendApiKey = process.env.RESEND_API_KEY;
-const resendFrom = process.env.RESEND_FROM_EMAIL;
+function requireEnv(name: string) {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`Missing required environment variable: ${name}`);
+  }
+  return value;
+}
+
+const betterAuthUrl = requireEnv("BETTER_AUTH_URL");
+const betterAuthSecret = requireEnv("BETTER_AUTH_SECRET");
+const resendApiKey = requireEnv("RESEND_API_KEY");
+const resendFrom = requireEnv("RESEND_FROM_EMAIL");
 
 async function sendOtpByResend(email: string, otp: string, type: "sign-in" | "email-verification" | "forget-password") {
-  if (!resendApiKey || !resendFrom) {
-    throw new Error("RESEND_API_KEY or RESEND_FROM_EMAIL is missing");
-  }
-
   const subjectByType: Record<typeof type, string> = {
     "sign-in": "Your login code",
     "email-verification": "Verify your email",
@@ -51,7 +56,7 @@ async function sendOtpByResend(email: string, otp: string, type: "sign-in" | "em
 
 export const auth = betterAuth({
   baseURL: betterAuthUrl,
-  secret: process.env.BETTER_AUTH_SECRET,
+  secret: betterAuthSecret,
   database: drizzleAdapter(db, {
     provider: "pg",
   }),

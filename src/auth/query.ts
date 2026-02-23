@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
-import { db } from "../db";
-import { session, user } from "../db/schema";
+import { db } from "../db/index";
+import { session, user } from "../db/schema/index";
 
 export async function findSessionOwnerByRefreshToken(refreshToken: string) {
   const [sessionOwner] = await db
