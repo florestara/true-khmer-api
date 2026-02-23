@@ -1,4 +1,5 @@
-import type { z, ZodTypeAny } from "zod";
+import { z } from "zod";
+import type { ZodTypeAny } from "zod";
 import {
   authLoginSchema,
   authRefreshSchema,

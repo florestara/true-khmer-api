@@ -15,8 +15,23 @@ import {
   validateVerifyRegisterOtpPayload,
 } from "./validator";
 
+async function parseJsonBody(c: Context) {
+  try {
+    return { ok: true as const, data: await c.req.json() };
+  } catch {
+    return {
+      ok: false as const,
+      response: c.json({ error: "Invalid JSON body" }, 400),
+    };
+  }
+}
+
 export async function handleRegister(c: Context) {
-  const payload = validateRegisterPayload(await c.req.json());
+  const body = await parseJsonBody(c);
+  if (!body.ok) {
+    return body.response;
+  }
+  const payload = validateRegisterPayload(body.data);
 
   if (!payload.ok) {
     return c.json({ error: payload.message }, 400);
@@ -42,7 +57,11 @@ export async function handleRegister(c: Context) {
 }
 
 export async function handleVerifyRegisterOtp(c: Context) {
-  const payload = validateVerifyRegisterOtpPayload(await c.req.json());
+  const body = await parseJsonBody(c);
+  if (!body.ok) {
+    return body.response;
+  }
+  const payload = validateVerifyRegisterOtpPayload(body.data);
 
   if (!payload.ok) {
     return c.json({ error: payload.message }, 400);
@@ -68,7 +87,11 @@ export async function handleVerifyRegisterOtp(c: Context) {
 }
 
 export async function handleLogin(c: Context) {
-  const payload = validateLoginPayload(await c.req.json());
+  const body = await parseJsonBody(c);
+  if (!body.ok) {
+    return body.response;
+  }
+  const payload = validateLoginPayload(body.data);
 
   if (!payload.ok) {
     return c.json({ error: payload.message }, 400);
@@ -94,7 +117,11 @@ export async function handleLogin(c: Context) {
 }
 
 export async function handleRefresh(c: Context) {
-  const payload = validateRefreshPayload(await c.req.json());
+  const body = await parseJsonBody(c);
+  if (!body.ok) {
+    return body.response;
+  }
+  const payload = validateRefreshPayload(body.data);
 
   if (!payload.ok) {
     return c.json({ error: payload.message }, 400);
