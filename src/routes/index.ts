@@ -1,12 +1,10 @@
 import { Hono } from "hono";
 import { communityForumFeature } from "../community/forum/categories";
-import usersRoute from "./users";
-import eventRoute from "./event";
+import authRoute from "../auth";
 
 const routes = new Hono();
 
-routes.route("/forum", communityForumFeature);
-routes.route("/users", usersRoute);
-routes.route("/event", eventRoute);
+routes.route("/forum/category", communityForumFeature);
+routes.route("/auth", authRoute);
 
 export default routes;
