@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { ZodTypeAny } from "zod";
 import {
   authLoginSchema,
+  authResendRegisterOtpSchema,
   authRefreshSchema,
   authRegisterSchema,
   authVerifyRegisterOtpSchema,
@@ -9,7 +10,7 @@ import {
 
 type ValidationResult<T> =
   | { ok: true; data: T }
-  | { ok: false; message: string };
+  | { ok: false; message: string; fieldErrors?: Record<string, string> };
 
 function parseWithSchema<TSchema extends ZodTypeAny>(
   schema: TSchema,
@@ -21,9 +22,32 @@ function parseWithSchema<TSchema extends ZodTypeAny>(
 
   const parsed = schema.safeParse(input);
   if (!parsed.success) {
+    const fieldErrors: Record<string, string> = {};
+
+    for (const issue of parsed.error.issues) {
+      const path =
+        issue.path.length > 0
+          ? issue.path.map((segment) => String(segment)).join(".")
+          : "body";
+      const isMissingField =
+        issue.code === "invalid_type" &&
+        "received" in issue &&
+        issue.received === "undefined" &&
+        issue.path.length > 0;
+      const message = isMissingField ? `${path} is required` : issue.message;
+      if (!fieldErrors[path]) {
+        fieldErrors[path] = message;
+      }
+    }
+
+    const firstField = Object.keys(fieldErrors).sort((a, b) =>
+      a.localeCompare(b)
+    )[0];
+
     return {
       ok: false,
-      message: parsed.error.issues[0]?.message ?? "Validation failed",
+      message: firstField ? fieldErrors[firstField] : "Validation failed",
+      fieldErrors,
     };
   }
 
@@ -36,6 +60,10 @@ export function validateRegisterPayload(input: unknown) {
 
 export function validateVerifyRegisterOtpPayload(input: unknown) {
   return parseWithSchema(authVerifyRegisterOtpSchema, input);
+}
+
+export function validateResendRegisterOtpPayload(input: unknown) {
+  return parseWithSchema(authResendRegisterOtpSchema, input);
 }
 
 export function validateLoginPayload(input: unknown) {

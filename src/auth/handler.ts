@@ -8,13 +8,22 @@ import {
   signUpWithEmailPassword,
   verifyRegisterOtp,
 } from "./helper";
-import { findSessionOwnerByRefreshToken } from "./query";
+import {
+  findUserByEmail,
+  revokeEmailVerificationOtp,
+} from "./query";
 import {
   validateLoginPayload,
+  validateResendRegisterOtpPayload,
   validateRefreshPayload,
   validateRegisterPayload,
   validateVerifyRegisterOtpPayload,
 } from "./validator";
+
+type FieldErrors = Record<string, string>;
+type ValidationFailure = { ok: false; message: string; fieldErrors?: FieldErrors };
+type ValidationSuccess<T> = { ok: true; data: T };
+type ValidationResult<T> = ValidationSuccess<T> | ValidationFailure;
 
 function toStatusCode(
   status: unknown,
@@ -42,149 +51,211 @@ async function parseJsonBody(c: Context) {
   }
 }
 
-export async function handleRegister(c: Context) {
+function validationErrorResponse(c: Context, payload: ValidationFailure) {
+  return c.json(
+    {
+      error: "Validation failed",
+      message: payload.message,
+      ...(payload.fieldErrors ? { fieldErrors: payload.fieldErrors } : {}),
+    },
+    400
+  );
+}
+
+async function parseAndValidate<T>(
+  c: Context,
+  validate: (input: unknown) => ValidationResult<T>
+) {
   const body = await parseJsonBody(c);
   if (!body.ok) {
-    return body.response;
+    return { ok: false as const, response: body.response };
   }
-  const payload = validateRegisterPayload(body.data);
 
+  const payload = validate(body.data);
   if (!payload.ok) {
-    return c.json({ error: payload.message }, 400);
+    return {
+      ok: false as const,
+      response: validationErrorResponse(c, payload),
+    };
   }
 
-  const registerResult = await signUpWithEmailPassword(payload.data);
+  return { ok: true as const, data: payload.data };
+}
 
-  if (!registerResult.ok) {
-    return c.json(
-      registerResult.body ?? { error: "Registration failed" },
-      toStatusCode(registerResult.status)
+function authProviderError(
+  c: Context,
+  status: unknown,
+  body: unknown,
+  fallbackMessage: string
+) {
+  return c.json(
+    (body as Record<string, unknown> | null | undefined) ?? { error: fallbackMessage },
+    toStatusCode(status)
+  );
+}
+
+async function buildAuthTokenResponse(
+  c: Context,
+  refreshToken: string,
+  user: unknown
+) {
+  const accessTokenResult = await getAccessTokenFromRefreshToken(refreshToken);
+
+  if (!accessTokenResult.ok) {
+    return authProviderError(
+      c,
+      accessTokenResult.status,
+      accessTokenResult.body,
+      "Failed to issue access token"
     );
   }
 
-  const otpResult = await requestEmailVerificationOtp(payload.data.email);
+  return c.json({
+    accessToken: accessTokenResult.token,
+    refreshToken,
+    user,
+  });
+}
+
+export async function handleRegister(c: Context) {
+  const parsed = await parseAndValidate(c, validateRegisterPayload);
+  if (!parsed.ok) {
+    return parsed.response;
+  }
+
+  const registerResult = await signUpWithEmailPassword(parsed.data);
+
+  if (!registerResult.ok) {
+    return authProviderError(
+      c,
+      registerResult.status,
+      registerResult.body,
+      "Registration failed"
+    );
+  }
+
+  const otpResult = await requestEmailVerificationOtp(parsed.data.email);
 
   if (!otpResult.ok) {
     return c.json(
-      otpResult.body ?? { error: "Failed to send verification OTP" },
-      toStatusCode(otpResult.status)
+      {
+        success: true,
+        message:
+          "Registration successful, but we could not send the OTP yet. Please use resend OTP.",
+        otpSent: false,
+        user: registerResult.body.user,
+      },
+      201
     );
   }
 
   return c.json({
     success: true,
     message: "Registration successful. OTP sent to email.",
+    otpSent: true,
     user: registerResult.body.user,
   }, 201);
 }
 
 export async function handleVerifyRegisterOtp(c: Context) {
-  const body = await parseJsonBody(c);
-  if (!body.ok) {
-    return body.response;
-  }
-  const payload = validateVerifyRegisterOtpPayload(body.data);
-
-  if (!payload.ok) {
-    return c.json({ error: payload.message }, 400);
+  const parsed = await parseAndValidate(c, validateVerifyRegisterOtpPayload);
+  if (!parsed.ok) {
+    return parsed.response;
   }
 
-  const verifyResult = await verifyRegisterOtp(payload.data);
+  const verifyResult = await verifyRegisterOtp(parsed.data);
 
   if (!verifyResult.ok) {
-    return c.json(
-      verifyResult.body ?? { error: "OTP verification failed" },
-      toStatusCode(verifyResult.status)
+    return authProviderError(
+      c,
+      verifyResult.status,
+      verifyResult.body,
+      "OTP verification failed"
     );
   }
 
-  const accessTokenResult = await getAccessTokenFromRefreshToken(verifyResult.body.token);
+  return buildAuthTokenResponse(
+    c,
+    verifyResult.body.token,
+    verifyResult.body.user
+  );
+}
 
-  if (!accessTokenResult.ok) {
-    return c.json(
-      accessTokenResult.body ?? { error: "Failed to issue access token" },
-      toStatusCode(accessTokenResult.status)
-    );
+export async function handleResendRegisterOtp(c: Context) {
+  const parsed = await parseAndValidate(c, validateResendRegisterOtpPayload);
+  if (!parsed.ok) {
+    return parsed.response;
   }
 
-  return c.json({
-    accessToken: accessTokenResult.token,
-    refreshToken: verifyResult.body.token,
-    user: verifyResult.body.user,
-  });
+  const genericResponse = {
+    success: true,
+    message:
+      "If this email is eligible, we sent a verification code. Please check your inbox.",
+  };
+
+  const foundUser = await findUserByEmail(parsed.data.email);
+
+  if (!foundUser || foundUser.emailVerified) {
+    return c.json(genericResponse, 200);
+  }
+
+  try {
+    await revokeEmailVerificationOtp(parsed.data.email);
+  } catch (error) {
+    console.error("Failed to revoke previous email verification OTP:", error);
+  }
+
+  const otpResult = await requestEmailVerificationOtp(parsed.data.email);
+
+  if (!otpResult.ok) {
+    return c.json(genericResponse, 200);
+  }
+
+  return c.json(genericResponse, 200);
 }
 
 export async function handleLogin(c: Context) {
-  const body = await parseJsonBody(c);
-  if (!body.ok) {
-    return body.response;
-  }
-  const payload = validateLoginPayload(body.data);
-
-  if (!payload.ok) {
-    return c.json({ error: payload.message }, 400);
+  const parsed = await parseAndValidate(c, validateLoginPayload);
+  if (!parsed.ok) {
+    return parsed.response;
   }
 
-  const loginResult = await signInWithEmailPassword(payload.data);
+  const loginResult = await signInWithEmailPassword(parsed.data);
 
   if (!loginResult.ok) {
-    return c.json(
-      loginResult.body ?? { error: "Login failed" },
-      toStatusCode(loginResult.status)
+    return authProviderError(
+      c,
+      loginResult.status,
+      loginResult.body,
+      "Login failed"
     );
   }
 
-  const accessTokenResult = await getAccessTokenFromRefreshToken(loginResult.body.token);
-
-  if (!accessTokenResult.ok) {
-    return c.json(
-      accessTokenResult.body ?? { error: "Failed to issue access token" },
-      toStatusCode(accessTokenResult.status)
-    );
-  }
-
-  return c.json({
-    accessToken: accessTokenResult.token,
-    refreshToken: loginResult.body.token,
-    user: loginResult.body.user,
-  });
+  return buildAuthTokenResponse(c, loginResult.body.token, loginResult.body.user);
 }
 
 export async function handleRefresh(c: Context) {
-  const body = await parseJsonBody(c);
-  if (!body.ok) {
-    return body.response;
-  }
-  const payload = validateRefreshPayload(body.data);
-
-  if (!payload.ok) {
-    return c.json({ error: payload.message }, 400);
-  }
-
-  const sessionOwner = await findSessionOwnerByRefreshToken(payload.data.refreshToken);
-
-  if (!sessionOwner) {
-    return c.json({ error: "Invalid refresh token" }, 401);
-  }
-
-  if (sessionOwner.email.toLowerCase() !== payload.data.email.toLowerCase()) {
-    return c.json({ error: "Refresh token does not belong to this email" }, 403);
+  const parsed = await parseAndValidate(c, validateRefreshPayload);
+  if (!parsed.ok) {
+    return parsed.response;
   }
 
   const accessTokenResult = await getAccessTokenFromRefreshToken(
-    payload.data.refreshToken,
+    parsed.data.refreshToken,
   );
 
   if (!accessTokenResult.ok) {
-    return c.json(
-      accessTokenResult.body ?? { error: "Token refresh failed" },
-      toStatusCode(accessTokenResult.status)
+    return authProviderError(
+      c,
+      accessTokenResult.status,
+      accessTokenResult.body,
+      "Token refresh failed"
     );
   }
 
   return c.json({
     accessToken: accessTokenResult.token,
-    refreshToken: payload.data.refreshToken,
+    refreshToken: parsed.data.refreshToken,
   });
 }
 
