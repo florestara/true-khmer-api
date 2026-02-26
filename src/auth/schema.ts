@@ -28,10 +28,7 @@ export const authRegisterSchema = z.object({
     .trim()
     .toLowerCase()
     .min(1, "gender is required")
-    .refine(
-      (value): value is Gender => ["male", "female", "other"].includes(value),
-      "gender must be one of: male, female, other"
-    ),
+    .pipe(genderSchema),
 });
 export type AuthRegisterPayload = z.infer<typeof authRegisterSchema>;
 

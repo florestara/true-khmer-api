@@ -58,7 +58,7 @@ async function parseResponseBody(
 }
 
 function isJsonRecord(value: unknown): value is JsonRecord {
-  return typeof value === "object" && value !== null;
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function normalizeAuthErrorBody(
@@ -69,7 +69,7 @@ function normalizeAuthErrorBody(
     return { error: body };
   }
 
-  if (body && typeof body === "object") {
+  if (isJsonRecord(body)) {
     const error = body.error;
     if (typeof error === "string" && error.trim()) {
       return { error, details: body };
