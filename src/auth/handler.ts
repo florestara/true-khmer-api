@@ -13,17 +13,14 @@ import {
   revokeEmailVerificationOtp,
 } from "./query";
 import {
+  type ValidationFailure,
+  type ValidationResult,
   validateLoginPayload,
   validateResendRegisterOtpPayload,
   validateRefreshPayload,
   validateRegisterPayload,
   validateVerifyRegisterOtpPayload,
 } from "./validator";
-
-type FieldErrors = Record<string, string>;
-type ValidationFailure = { ok: false; message: string; fieldErrors?: FieldErrors };
-type ValidationSuccess<T> = { ok: true; data: T };
-type ValidationResult<T> = ValidationSuccess<T> | ValidationFailure;
 
 function toStatusCode(
   status: unknown,

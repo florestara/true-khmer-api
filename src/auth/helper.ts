@@ -273,9 +273,10 @@ export async function getAccessTokenFromRefreshToken(refreshToken: string) {
       body,
       fallbackMessage
     );
+    const status = response.ok ? 502 : response.status;
     return {
       ok: false,
-      status: response.status,
+      status,
       body: errorBody,
     } as const;
   }

@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "../db/index";
 import { user, verification } from "../db/schema/index";
 
@@ -21,7 +21,7 @@ export async function findUserByEmail(email: string) {
       emailVerified: user.emailVerified,
     })
     .from(user)
-    .where(sql`lower(${user.email}) = ${normalizedEmail}`)
+    .where(eq(user.email, normalizedEmail))
     .limit(1);
 
   return foundUser ?? null;

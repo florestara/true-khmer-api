@@ -8,9 +8,14 @@ import {
   authVerifyRegisterOtpSchema,
 } from "./schema";
 
-type ValidationResult<T> =
-  | { ok: true; data: T }
-  | { ok: false; message: string; fieldErrors?: Record<string, string> };
+export type FieldErrors = Record<string, string>;
+export type ValidationFailure = {
+  ok: false;
+  message: string;
+  fieldErrors?: FieldErrors;
+};
+export type ValidationSuccess<T> = { ok: true; data: T };
+export type ValidationResult<T> = ValidationSuccess<T> | ValidationFailure;
 
 function parseWithSchema<TSchema extends ZodTypeAny>(
   schema: TSchema,
