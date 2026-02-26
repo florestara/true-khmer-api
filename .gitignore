@@ -8,5 +8,4 @@ package-lock.json
 *.log
 coverage/
 *.tsbuildinfo
-bun.lock
 drizzle
