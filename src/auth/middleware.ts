@@ -2,6 +2,21 @@ import { createMiddleware } from "hono/factory";
 import { verifyJwtToken } from "./helper";
 import { findUserRoleById } from "./query";
 
+function isAccessTokenPayload(payload: Record<string, unknown>) {
+  const tokenType = payload.type ?? payload.tokenType ?? payload.token_type;
+
+  if (typeof tokenType !== "string") {
+    return false;
+  }
+
+  const normalized = tokenType.toLowerCase();
+  return (
+    normalized === "access" ||
+    normalized === "access_token" ||
+    normalized === "accesstoken"
+  );
+}
+
 export const requireAccessToken = createMiddleware(async (c, next) => {
   const authorization = c.req.header("authorization") ?? "";
 
@@ -17,6 +32,10 @@ export const requireAccessToken = createMiddleware(async (c, next) => {
   const verifyResult = await verifyJwtToken(token);
   if (!verifyResult.ok) {
     return c.json({ error: "Invalid or expired access token" }, 401);
+  }
+
+  if (!isAccessTokenPayload(verifyResult.payload)) {
+    return c.json({ error: "Access token required" }, 401);
   }
 
   c.set("auth", verifyResult.payload);

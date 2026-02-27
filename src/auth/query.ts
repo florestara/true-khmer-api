@@ -1,20 +1,6 @@
 import { eq } from "drizzle-orm";
 import { db } from "../db/index";
-import { session, user } from "../db/schema/index";
-
-export async function findSessionOwnerByRefreshToken(refreshToken: string) {
-  const [sessionOwner] = await db
-    .select({
-      userId: session.userId,
-      email: user.email,
-    })
-    .from(session)
-    .innerJoin(user, eq(user.id, session.userId))
-    .where(eq(session.token, refreshToken))
-    .limit(1);
-
-  return sessionOwner ?? null;
-}
+import { user, verification } from "../db/schema/index";
 
 export async function findUserRoleById(userId: string) {
   const [foundUser] = await db
@@ -24,4 +10,25 @@ export async function findUserRoleById(userId: string) {
     .limit(1);
 
   return foundUser ?? null;
+}
+
+export async function findUserByEmail(email: string) {
+  const normalizedEmail = email.trim().toLowerCase();
+  const [foundUser] = await db
+    .select({
+      id: user.id,
+      email: user.email,
+      emailVerified: user.emailVerified,
+    })
+    .from(user)
+    .where(eq(user.email, normalizedEmail))
+    .limit(1);
+
+  return foundUser ?? null;
+}
+
+export async function revokeEmailVerificationOtp(email: string) {
+  const normalizedEmail = email.trim().toLowerCase();
+  const identifier = `email-verification-otp-${normalizedEmail}`;
+  await db.delete(verification).where(eq(verification.identifier, identifier));
 }

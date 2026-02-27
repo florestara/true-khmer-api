@@ -6,9 +6,12 @@ import {
 } from "./schema";
 
 const AUTH_PREFIX = "/api/auth";
-const DEFAULT_BASE_URL = "http://localhost:3000";
 
 type JsonRecord = Record<string, unknown>;
+type AuthErrorBody = {
+  error: string;
+  details?: unknown;
+};
 
 type UserLike = {
   id: string;
@@ -24,29 +27,61 @@ type UserLike = {
 };
 
 export function getAuthBaseUrl() {
-  return process.env.BETTER_AUTH_URL ?? DEFAULT_BASE_URL;
-}
-
-function readTokenIssuer(token: string) {
-  const parts = token.split(".");
-  if (parts.length !== 3) return undefined;
-
-  try {
-    const payload = JSON.parse(
-      Buffer.from(parts[1], "base64url").toString("utf-8"),
-    ) as { iss?: string };
-    return typeof payload.iss === "string" ? payload.iss : undefined;
-  } catch {
-    return undefined;
+  const baseUrl = process.env.BETTER_AUTH_URL;
+  if (!baseUrl) {
+    throw new Error("Missing required environment variable: BETTER_AUTH_URL");
   }
+  return baseUrl;
 }
 
-async function parseJsonResponse<T>(response: Response): Promise<T | null> {
+function getTrustedTokenIssuer() {
+  const issuer = process.env.BETTER_AUTH_ISSUER?.trim();
+  return issuer ? issuer : undefined;
+}
+
+async function parseResponseBody(
+  response: Response
+): Promise<JsonRecord | string | null> {
   const contentType = response.headers.get("content-type") ?? "";
-  if (!contentType.includes("application/json")) {
-    return null;
+
+  if (contentType.includes("application/json")) {
+    try {
+      return (await response.json()) as JsonRecord;
+    } catch {
+      return null;
+    }
   }
-  return response.json() as Promise<T>;
+
+  const text = await response.text().catch(() => "");
+  const trimmed = text.trim();
+  return trimmed ? trimmed : null;
+}
+
+function isJsonRecord(value: unknown): value is JsonRecord {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function normalizeAuthErrorBody(
+  body: JsonRecord | string | null,
+  fallbackMessage: string
+): AuthErrorBody {
+  if (typeof body === "string") {
+    return { error: body };
+  }
+
+  if (isJsonRecord(body)) {
+    const error = body.error;
+    if (typeof error === "string" && error.trim()) {
+      return { error, details: body };
+    }
+
+    const message = body.message;
+    if (typeof message === "string" && message.trim()) {
+      return { error: message, details: body };
+    }
+  }
+
+  return { error: fallbackMessage };
 }
 
 export async function callAuth(path: string, init?: RequestInit) {
@@ -70,21 +105,28 @@ export async function signUpWithEmailPassword(payload: AuthRegisterPayload) {
     }),
   });
 
-  const body = await parseJsonResponse<{ token?: string | null; user?: UserLike }>(response);
+  const body = await parseResponseBody(response);
+  const parsedBody = isJsonRecord(body) ? body : null;
+  const user = parsedBody?.user as UserLike | undefined;
+  const token = parsedBody?.token as string | null | undefined;
 
-  if (!response.ok || !body?.user) {
+  if (!response.ok || !user) {
+    const errorBody = normalizeAuthErrorBody(
+      body,
+      "Registration failed"
+    );
     return {
       ok: false,
       status: response.status,
-      body,
+      body: errorBody,
     } as const;
   }
 
   return {
     ok: true,
     body: {
-      token: body.token ?? null,
-      user: body.user,
+      token: token ?? null,
+      user,
     },
   } as const;
 }
@@ -101,19 +143,24 @@ export async function requestEmailVerificationOtp(email: string) {
     }),
   });
 
-  const body = await parseJsonResponse<{ success?: boolean }>(response);
+  const body = await parseResponseBody(response);
+  const parsedBody = isJsonRecord(body) ? body : null;
 
   if (!response.ok) {
+    const errorBody = normalizeAuthErrorBody(
+      body,
+      "Failed to send verification OTP"
+    );
     return {
       ok: false,
       status: response.status,
-      body,
+      body: errorBody,
     } as const;
   }
 
   return {
     ok: true,
-    body,
+    body: parsedBody,
   } as const;
 }
 
@@ -129,25 +176,35 @@ export async function verifyRegisterOtp(payload: AuthVerifyRegisterOtpPayload) {
     }),
   });
 
-  const body = await parseJsonResponse<{
-    status?: boolean;
-    token?: string | null;
-    user?: UserLike;
-  }>(response);
+  const body = await parseResponseBody(response);
+  const parsedBody = isJsonRecord(body) ? body : null;
+  const status = parsedBody?.status;
+  const token = parsedBody?.token;
+  const user = parsedBody?.user;
 
-  if (!response.ok || !body?.status || !body.user || !body.token) {
+  if (
+    !response.ok ||
+    status !== true ||
+    typeof token !== "string" ||
+    !token ||
+    !isJsonRecord(user)
+  ) {
+    const errorBody = normalizeAuthErrorBody(
+      body,
+      "OTP verification failed"
+    );
     return {
       ok: false,
       status: response.status,
-      body,
+      body: errorBody,
     } as const;
   }
 
   return {
     ok: true,
     body: {
-      token: body.token,
-      user: body.user,
+      token,
+      user: user as UserLike,
     },
   } as const;
 }
@@ -165,21 +222,33 @@ export async function signInWithEmailPassword(payload: AuthLoginPayload) {
     }),
   });
 
-  const body = await parseJsonResponse<{ token?: string; user?: UserLike }>(response);
+  const body = await parseResponseBody(response);
+  const parsedBody = isJsonRecord(body) ? body : null;
+  const token = parsedBody?.token;
+  const user = parsedBody?.user;
 
-  if (!response.ok || !body?.token || !body.user) {
+  if (
+    !response.ok ||
+    typeof token !== "string" ||
+    !token ||
+    !isJsonRecord(user)
+  ) {
+    const errorBody = normalizeAuthErrorBody(
+      body,
+      "Login failed"
+    );
     return {
       ok: false,
       status: response.status,
-      body,
+      body: errorBody,
     } as const;
   }
 
   return {
     ok: true,
     body: {
-      token: body.token,
-      user: body.user,
+      token,
+      user: user as UserLike,
     },
   } as const;
 }
@@ -192,24 +261,34 @@ export async function getAccessTokenFromRefreshToken(refreshToken: string) {
     },
   });
 
-  const body = await parseJsonResponse<{ token?: string }>(response);
+  const body = await parseResponseBody(response);
+  const parsedBody = isJsonRecord(body) ? body : null;
+  const token = parsedBody?.token;
 
-  if (!response.ok || !body?.token) {
+  if (!response.ok || typeof token !== "string" || !token) {
+    const fallbackMessage = response.ok
+      ? "Failed to issue access token"
+      : "Token refresh failed";
+    const errorBody = normalizeAuthErrorBody(
+      body,
+      fallbackMessage
+    );
+    const status = response.ok ? 502 : response.status;
     return {
       ok: false,
-      status: response.status,
-      body,
+      status,
+      body: errorBody,
     } as const;
   }
 
   return {
     ok: true,
-    token: body.token,
+    token,
   } as const;
 }
 
 export async function verifyJwtToken(token: string) {
-  const issuer = readTokenIssuer(token);
+  const issuer = getTrustedTokenIssuer();
   const result = await auth.api
     .verifyJWT({
       body: {
