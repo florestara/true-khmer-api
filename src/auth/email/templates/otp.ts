@@ -1,8 +1,8 @@
-import { escape as escapeHtmlLib } from "he";
+import * as he from "he";
 import { trueKhmerLogo, otpLogo, igLogo, threadLogo, xLogo } from "./logo";
 
 function escapeHtml(input: string) {
-  return escapeHtmlLib(input);
+  return he.escape(input);
 }
 
 function resolveDisplayName(displayName?: string | null) {
