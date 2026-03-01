@@ -1,4 +1,5 @@
 import { createMiddleware } from "hono/factory";
+import { getAuthUserId, type AuthPayload } from "./types";
 import { verifyJwtToken } from "./helper";
 import { findUserRoleById } from "./query";
 
@@ -38,6 +39,11 @@ export const requireAccessToken = createMiddleware(async (c, next) => {
     return c.json({ error: "Access token required" }, 401);
   }
 
+  const userId = getAuthUserId(verifyResult.payload as AuthPayload);
+  if (!userId) {
+    return c.json({ error: "Invalid access token payload" }, 401);
+  }
+
   c.set("auth", verifyResult.payload);
   await next();
 });
@@ -48,16 +54,11 @@ export const requireAdmin = createMiddleware(async (c, next) => {
     return authResult;
   }
 
-  const authPayload = c.get("auth") as
-    | {
-        sub?: string;
-        id?: string;
-        [key: string]: unknown;
-      }
-    | undefined;
-
-  const userId = authPayload?.sub ?? authPayload?.id;
-
+  const authPayload = c.get("auth") as AuthPayload | undefined;
+  if (!authPayload) {
+    return c.json({ error: "Invalid access token payload" }, 401);
+  }
+  const userId = getAuthUserId(authPayload);
   if (!userId) {
     return c.json({ error: "Invalid access token payload" }, 401);
   }

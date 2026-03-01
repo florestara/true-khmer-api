@@ -36,7 +36,12 @@ export function getAuthBaseUrl() {
 
 function getTrustedTokenIssuer() {
   const issuer = process.env.BETTER_AUTH_ISSUER?.trim();
-  return issuer ? issuer : undefined;
+  if (issuer) {
+    return issuer;
+  }
+
+  const baseUrl = process.env.BETTER_AUTH_URL?.trim();
+  return baseUrl ? baseUrl : undefined;
 }
 
 async function parseResponseBody(
@@ -288,17 +293,19 @@ export async function getAccessTokenFromRefreshToken(refreshToken: string) {
 }
 
 export async function verifyJwtToken(token: string) {
-  const issuer = getTrustedTokenIssuer();
+  const trustedIssuer = getTrustedTokenIssuer();
   const result = await auth.api
     .verifyJWT({
       body: {
         token,
-        ...(issuer ? { issuer } : {}),
+        ...(trustedIssuer ? { issuer: trustedIssuer } : {}),
       },
     })
     .catch(() => null);
 
-  if (!result?.payload) {
+  const payload = result?.payload;
+
+  if (!payload) {
     return {
       ok: false,
       status: 401,
@@ -308,6 +315,6 @@ export async function verifyJwtToken(token: string) {
 
   return {
     ok: true,
-    payload: result.payload as JsonRecord,
+    payload: payload as JsonRecord,
   } as const;
 }
