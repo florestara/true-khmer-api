@@ -1,8 +1,15 @@
 import type { Context } from "hono";
-import { validateCreateCategoryInput } from "./schema";
-import { createCategory, findCategoryById, findCategoryByParentAndName } from "./query";
+import { getAuthUserId, type AuthPayload } from "../../../auth/types";
+import { validateCreateCategoryInput, type CreateCategoryInput } from "./schema";
+import { createCategory, findCategoryByName } from "./query";
 
 export async function handleCreateCategory(c: Context) {
+  const authPayload = c.get("auth") as AuthPayload | undefined;
+  const userId = getAuthUserId(authPayload);
+  if (!userId) {
+    return c.json({ ok: false, error: "Unauthorized" }, 401);
+  }
+
   const body = await c.req.json<unknown>().catch(() => undefined);
   const parsed = validateCreateCategoryInput(body);
   if (!parsed.ok) {
@@ -12,19 +19,12 @@ export async function handleCreateCategory(c: Context) {
     );
   }
 
-  const data = parsed.data;
+  const data: CreateCategoryInput = {
+    ...parsed.data,
+    createdBy: userId,
+  };
 
-  if (data.parentId) {
-    const parent = await findCategoryById(data.parentId);
-    if (!parent) {
-      return c.json({ ok: false, error: "Parent category not found" }, 404);
-    }
-    if (parent.status === "ARCHIVED") {
-      return c.json({ ok: false, error: "Parent category is archived" }, 409);
-    }
-  }
-
-  const existing = await findCategoryByParentAndName(data.parentId ?? null, data.name);
+  const existing = await findCategoryByName(data.name);
   if (existing) {
     return c.json({ ok: false, error: "Category name already exists" }, 409);
   }

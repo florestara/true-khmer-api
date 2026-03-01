@@ -1,4 +1,3 @@
-import { sql } from "drizzle-orm";
 import {
   index,
   pgEnum,
@@ -11,12 +10,7 @@ import {
   integer,
 } from "drizzle-orm/pg-core";
 
-// MVP forum schema: categories/subcategories, questions, and answers.
-
-export const forumCategoryType = pgEnum("forum_category_type", [
-  "CATEGORY",
-  "SUBCATEGORY",
-]);
+// MVP forum schema: categories, questions, and answers.
 
 export const forumCategoryStatus = pgEnum("forum_category_status", [
   "ACTIVE",
@@ -39,13 +33,9 @@ export const forumCategory = pgTable(
   "forum_category",
   {
     id: uuid("id").defaultRandom().primaryKey().notNull(),
-    parentId: uuid("parent_id"),
-    type: forumCategoryType("type").default("CATEGORY").notNull(),
     name: varchar("name", { length: 255 }).notNull(),
     slug: varchar("slug", { length: 255 }).notNull(),
     description: text("description"),
-    icon: varchar("icon", { length: 255 }),
-    color: varchar("color", { length: 30 }),
     displayOrder: integer("display_order").default(0).notNull(),
     status: forumCategoryStatus("status").default("ACTIVE").notNull(),
     createdBy: uuid("created_by").notNull(),
@@ -60,20 +50,8 @@ export const forumCategory = pgTable(
   },
   (table) => [
     uniqueIndex("forum_category_slug_unique_idx").using("btree", table.slug),
-    uniqueIndex("forum_category_root_name_unique_idx")
-      .using("btree", table.name)
-      .where(sql`${table.parentId} is null`),
-    uniqueIndex("forum_category_parent_name_unique_idx")
-      .using("btree", table.parentId, table.name)
-      .where(sql`${table.parentId} is not null`),
-    index("forum_category_parent_idx").using("btree", table.parentId),
-    index("forum_category_parent_name_idx").using(
-      "btree",
-      table.parentId,
-      table.name,
-    ),
+    uniqueIndex("forum_category_name_unique_idx").using("btree", table.name),
     index("forum_category_status_idx").using("btree", table.status),
-    index("forum_category_type_idx").using("btree", table.type),
     index("forum_category_order_idx").using("btree", table.displayOrder),
   ],
 );

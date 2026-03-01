@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "../../../db/index";
 import { forumCategory } from "../../../db/schema";
 import type { CreateCategoryInput } from "./schema";
@@ -11,36 +11,46 @@ export async function findCategoryById(id: string): Promise<ForumCategoryRow | n
   return rows[0] ?? null;
 }
 
-export async function findCategoryByParentAndName(
-  parentId: string | null,
-  name: string
-): Promise<ForumCategoryRow | null> {
-  const condition = parentId
-    ? and(eq(forumCategory.parentId, parentId), eq(forumCategory.name, name))
-    : and(isNull(forumCategory.parentId), eq(forumCategory.name, name));
-
-  const rows = await db.select().from(forumCategory).where(condition);
+export async function findCategoryByName(name: string): Promise<ForumCategoryRow | null> {
+  const rows = await db.select().from(forumCategory).where(eq(forumCategory.name, name));
   return rows[0] ?? null;
 }
 
 export async function createCategory(
   data: CreateCategoryInput
 ): Promise<ForumCategoryRow> {
-  const insertData: ForumCategoryInsert = {
-    parentId: data.parentId ?? null,
-    name: data.name,
-    slug: data.slug,
-    description: data.description ?? null,
-    icon: data.icon ?? null,
-    color: data.color ?? null,
-    displayOrder: data.displayOrder ?? 0,
-    status: data.status ?? "ACTIVE",
-    createdBy: data.createdBy,
-    type: data.type ?? "CATEGORY",
-  };
+  return db.transaction(async (tx) => {
+    // Namespaced advisory lock: (100 = forum domain, 1 = category display order sequence).
+    await tx.execute(sql`select pg_advisory_xact_lock(100, 1)`);
 
-  const [newCategory] = await db.insert(forumCategory).values(insertData).returning();
-  return newCategory;
+    const [orderRow] = await tx
+      .select({
+        maxDisplayOrder: sql`coalesce(max(${forumCategory.displayOrder}), -1)`,
+      })
+      .from(forumCategory);
+
+    const rawMaxDisplayOrder = orderRow?.maxDisplayOrder;
+    const maxDisplayOrderNumber =
+      typeof rawMaxDisplayOrder === "number"
+        ? rawMaxDisplayOrder
+        : Number(rawMaxDisplayOrder ?? -1);
+
+    if (!Number.isFinite(maxDisplayOrderNumber)) {
+      throw new Error("Invalid display order value returned from database");
+    }
+
+    const insertData: ForumCategoryInsert = {
+      name: data.name,
+      slug: data.slug,
+      description: data.description ?? null,
+      displayOrder: maxDisplayOrderNumber + 1,
+      status: "ACTIVE",
+      createdBy: data.createdBy,
+    };
+
+    const [newCategory] = await tx.insert(forumCategory).values(insertData).returning();
+    return newCategory;
+  });
 }
 
 export async function updateCategory(
