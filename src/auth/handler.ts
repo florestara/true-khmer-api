@@ -183,6 +183,8 @@ export async function handleResendRegisterOtp(c: Context) {
     return parsed.response;
   }
 
+  // For security and privacy, we return the same generic success response regardless of whether the email exists or not.
+  // This prevents potential attackers from enumerating valid email addresses in our system.
   const genericResponse = {
     success: true,
     message:
