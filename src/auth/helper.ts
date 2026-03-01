@@ -1,4 +1,4 @@
-import { auth } from "../lib/auth";
+import { auth } from "./provider";
 import {
   AuthLoginPayload,
   AuthRegisterPayload,

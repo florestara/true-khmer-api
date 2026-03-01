@@ -1,6 +1,5 @@
 import { Context } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
-import { auth } from "../lib/auth";
 import {
   getAccessTokenFromRefreshToken,
   requestEmailVerificationOtp,
@@ -254,9 +253,4 @@ export async function handleRefresh(c: Context) {
     accessToken: accessTokenResult.token,
     refreshToken: parsed.data.refreshToken,
   });
-}
-
-export async function handleAuthPassthrough(c: Context) {
-  const response = await auth.handler(c.req.raw);
-  return response;
 }
