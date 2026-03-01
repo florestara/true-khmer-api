@@ -1,4 +1,4 @@
-import * as he from "he";
+import he from "he";
 import { trueKhmerLogo, otpLogo, igLogo, threadLogo, xLogo } from "./logo";
 
 function escapeHtml(input: string) {
