@@ -1,6 +1,5 @@
 import { Context } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
-import { auth } from "../lib/auth";
 import {
   getAccessTokenFromRefreshToken,
   requestEmailVerificationOtp,
@@ -184,6 +183,8 @@ export async function handleResendRegisterOtp(c: Context) {
     return parsed.response;
   }
 
+  // For security and privacy, we return the same generic success response regardless of whether the email exists or not.
+  // This prevents potential attackers from enumerating valid email addresses in our system.
   const genericResponse = {
     success: true,
     message:
@@ -254,9 +255,4 @@ export async function handleRefresh(c: Context) {
     accessToken: accessTokenResult.token,
     refreshToken: parsed.data.refreshToken,
   });
-}
-
-export async function handleAuthPassthrough(c: Context) {
-  const response = await auth.handler(c.req.raw);
-  return response;
 }

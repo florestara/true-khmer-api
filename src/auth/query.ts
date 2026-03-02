@@ -27,6 +27,18 @@ export async function findUserByEmail(email: string) {
   return foundUser ?? null;
 }
 
+export async function findUserFirstNameByEmail(email: string) {
+  const normalizedEmail = email.trim().toLowerCase();
+  const [foundUser] = await db
+    .select({ firstName: user.firstName })
+    .from(user)
+    .where(eq(user.email, normalizedEmail))
+    .limit(1);
+
+  const firstName = foundUser?.firstName?.trim();
+  return firstName || null;
+}
+
 export async function revokeEmailVerificationOtp(email: string) {
   const normalizedEmail = email.trim().toLowerCase();
   const identifier = `email-verification-otp-${normalizedEmail}`;
