@@ -14,13 +14,15 @@ export function buildOtpTemplate(
   otp: string,
   expiresInMinutes: number,
   displayName?: string | null,
+  appName = "True Khmer",
 ) {
   const currentYear = new Date().getFullYear();
   const name = resolveDisplayName(displayName);
   const safeName = escapeHtml(name);
   const safeMinutes = escapeHtml(String(expiresInMinutes));
+  const safeAppName = escapeHtml(appName);
   const safePreheader = escapeHtml(
-    `Hi ${name}, your True Khmer verification code is ${otp}. It expires in ${expiresInMinutes} minutes. Please use this code to complete your registration.`,
+    `Hi ${name}, your ${appName} verification code is ${otp}. It expires in ${expiresInMinutes} minutes. Please use this code to complete your registration.`,
   );
   const preheaderPadding = "&zwnj;&nbsp;".repeat(160);
   const safeOtpChars = [...otp].map((char) => escapeHtml(char));
@@ -64,7 +66,7 @@ export function buildOtpTemplate(
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width: 620px;">
               <tr>
                 <td align="center" style="padding-bottom:24px;">
-                  <img src="${logoUrl}" alt="True Khmer Logo" width="100" height="32" style="display:block;border:0;outline:none;text-decoration:none;" />
+                  <img src="${logoUrl}" alt="${safeAppName} Logo" width="100" height="32" style="display:block;border:0;outline:none;text-decoration:none;" />
                 </td>
               </tr>
               <tr>
@@ -91,7 +93,7 @@ export function buildOtpTemplate(
                     </tr>
                     <tr>
                       <td style="padding-bottom:24px;color:#48566A;font-size:16px;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-weight:400;line-height:20px;">
-                        We&rsquo;re excited to have you join True Khmer.<br /><br />
+                        We&rsquo;re excited to have you join ${safeAppName}.<br /><br />
                         To complete your account registration, please use the One-Time Password (OTP) below to activate your account:
                       </td>
                     </tr>
@@ -124,7 +126,7 @@ export function buildOtpTemplate(
                   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
                     <tr>
                       <td align="left" valign="middle" style="color:#65758B;font-size:16px;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-weight:400;line-height:24px;padding-bottom:10px;">
-                        &copy; ${currentYear} True Khmer. All Rights Reserved.
+                        &copy; ${currentYear} ${safeAppName}. All Rights Reserved.
                       </td>
                       <td align="right" valign="middle" style="padding-bottom:10px;">
                         <table role="presentation" cellpadding="0" cellspacing="0" border="0">

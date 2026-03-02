@@ -13,7 +13,7 @@ export async function sendOtpByResend(
   displayName?: string | null,
   otpTtlMinutes = authConfig.otpTtlMinutes,
 ) {
-  const html = buildOtpTemplate(otp, otpTtlMinutes, displayName);
+  const html = buildOtpTemplate(otp, otpTtlMinutes, displayName, authConfig.appName);
   const subject = subjectByType[type];
 
   const response = await fetch("https://api.resend.com/emails", {
