@@ -14,6 +14,7 @@ function optionalEnv(name: string, fallback: string) {
 export const authConfig = {
   appName: optionalEnv("APP_NAME", "True Khmer"),
   otpTtlMinutes: 5,
+  jwtExpiration: optionalEnv("JWT_EXPIRATION", "15m"),
   betterAuthUrl: requireEnv("BETTER_AUTH_URL"),
   betterAuthSecret: requireEnv("BETTER_AUTH_SECRET"),
   resendApiKey: requireEnv("RESEND_API_KEY"),

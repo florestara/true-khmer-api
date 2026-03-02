@@ -1,3 +1,5 @@
+import { authConfig } from "../config";
+
 const ALLOWED_ROLES = new Set(["user", "admin"]);
 
 function normalizeRole(role: unknown): "user" | "admin" {
@@ -23,7 +25,7 @@ function getRequiredUserId(user: Record<string, unknown>) {
 
 export const jwtPluginConfig = {
   jwt: {
-    expirationTime: "15m",
+    expirationTime: authConfig.jwtExpiration,
     definePayload: async ({
       user,
       session,
