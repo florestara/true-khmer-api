@@ -1,5 +1,7 @@
+import { sql } from "drizzle-orm";
 import {
   index,
+  integer,
   pgEnum,
   pgTable,
   text,
@@ -7,7 +9,6 @@ import {
   uniqueIndex,
   uuid,
   varchar,
-  integer,
 } from "drizzle-orm/pg-core";
 
 // MVP forum schema: categories, questions, and answers.
@@ -50,7 +51,10 @@ export const forumCategory = pgTable(
   },
   (table) => [
     uniqueIndex("forum_category_slug_unique_idx").using("btree", table.slug),
-    uniqueIndex("forum_category_name_unique_idx").using("btree", table.name),
+    uniqueIndex("forum_category_name_unique_idx").using(
+      "btree",
+      sql`lower(${table.name})`,
+    ),
     index("forum_category_status_idx").using("btree", table.status),
     index("forum_category_order_idx").using("btree", table.displayOrder),
   ],

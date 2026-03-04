@@ -12,7 +12,11 @@ export async function findCategoryById(id: string): Promise<ForumCategoryRow | n
 }
 
 export async function findCategoryByName(name: string): Promise<ForumCategoryRow | null> {
-  const rows = await db.select().from(forumCategory).where(eq(forumCategory.name, name));
+  const normalizedName = name.toLowerCase();
+  const rows = await db
+    .select()
+    .from(forumCategory)
+    .where(sql`lower(${forumCategory.name}) = ${normalizedName}`);
   return rows[0] ?? null;
 }
 
