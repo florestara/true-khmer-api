@@ -12,6 +12,19 @@ export async function findUserRoleById(userId: string) {
   return foundUser ?? null;
 }
 
+export async function findUserOnboardingStatusById(userId: string) {
+  const [foundUser] = await db
+    .select({
+      onboardingStep: user.onboardingStep,
+      onboardingCompletedAt: user.onboardingCompletedAt,
+    })
+    .from(user)
+    .where(eq(user.id, userId))
+    .limit(1);
+
+  return foundUser ?? null;
+}
+
 export async function findUserByEmail(email: string) {
   const normalizedEmail = email.trim().toLowerCase();
   const [foundUser] = await db
@@ -35,8 +48,7 @@ export async function findUserFirstNameByEmail(email: string) {
     .where(eq(user.email, normalizedEmail))
     .limit(1);
 
-  const firstName = foundUser?.firstName?.trim();
-  return firstName || null;
+  return foundUser?.firstName?.trim() || null;
 }
 
 export async function revokeEmailVerificationOtp(email: string) {

@@ -1,7 +1,6 @@
 import { z } from "zod";
 
-export const genderSchema = z.enum(["male", "female", "other"]);
-export type Gender = z.infer<typeof genderSchema>;
+const genderSchema = z.enum(["male", "female", "other"]);
 
 const emailSchema = z
   .string()
@@ -19,16 +18,12 @@ const passwordSchema = z
   .regex(/[^A-Za-z0-9\s]/, "password must contain at least one special character");
 
 export const authRegisterSchema = z.object({
+  firstName: z.string().trim().min(1, "firstName is required").max(100),
+  lastName: z.string().trim().min(1, "lastName is required").max(100),
+  gender: genderSchema,
+  occupation: z.string().trim().min(1, "occupation is required").max(120),
   email: emailSchema,
   password: passwordSchema,
-  firstName: z.string().trim().min(1, "firstName is required"),
-  lastName: z.string().trim().min(1, "lastName is required"),
-  gender: z
-    .string()
-    .trim()
-    .toLowerCase()
-    .min(1, "gender is required")
-    .pipe(genderSchema),
 });
 export type AuthRegisterPayload = z.infer<typeof authRegisterSchema>;
 

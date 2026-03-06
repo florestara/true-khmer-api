@@ -90,6 +90,29 @@ function authProviderError(
   );
 }
 
+function getAuthErrorCode(body: unknown): string | null {
+  if (!body || typeof body !== "object") {
+    return null;
+  }
+
+  const directCode = (body as Record<string, unknown>).code;
+  if (typeof directCode === "string" && directCode.trim()) {
+    return directCode.trim();
+  }
+
+  const details = (body as Record<string, unknown>).details;
+  if (!details || typeof details !== "object") {
+    return null;
+  }
+
+  const detailsCode = (details as Record<string, unknown>).code;
+  if (typeof detailsCode === "string" && detailsCode.trim()) {
+    return detailsCode.trim();
+  }
+
+  return null;
+}
+
 async function buildAuthTokenResponse(
   c: Context,
   refreshToken: string,
@@ -137,7 +160,7 @@ export async function handleRegister(c: Context) {
       {
         success: true,
         message:
-          "Registration successful, but we could not send the OTP yet. Please use resend OTP.",
+          "Registration successful, but we could not send the OTP due to a temporary issue. Please request a new OTP to verify your email address.",
         otpSent: false,
         user: registerResult.body.user,
       },
@@ -147,7 +170,7 @@ export async function handleRegister(c: Context) {
 
   return c.json({
     success: true,
-    message: "Registration successful. OTP sent to email.",
+    message: "Registration successful. OTP code sent to email.",
     otpSent: true,
     user: registerResult.body.user,
   }, 201);
@@ -166,7 +189,7 @@ export async function handleVerifyRegisterOtp(c: Context) {
       c,
       verifyResult.status,
       verifyResult.body,
-      "OTP verification failed"
+      "OTP code check failed"
     );
   }
 
@@ -188,7 +211,7 @@ export async function handleResendRegisterOtp(c: Context) {
   const genericResponse = {
     success: true,
     message:
-      "If this email is eligible, we sent a verification code. Please check your inbox.",
+      "If this email is eligible, we sent an OTP code. Please check your inbox.",
   };
 
   const foundUser = await findUserByEmail(parsed.data.email);
@@ -221,6 +244,36 @@ export async function handleLogin(c: Context) {
   const loginResult = await signInWithEmailPassword(parsed.data);
 
   if (!loginResult.ok) {
+    const errorCode = getAuthErrorCode(loginResult.body);
+
+    if (errorCode === "EMAIL_NOT_VERIFIED") {
+      let otpSent = false;
+      const foundUser = await findUserByEmail(parsed.data.email);
+
+      if (foundUser && !foundUser.emailVerified) {
+        try {
+          await revokeEmailVerificationOtp(parsed.data.email);
+        } catch (error) {
+          console.error("Failed to revoke previous email verification OTP:", error);
+        }
+
+        const otpResult = await requestEmailVerificationOtp(parsed.data.email);
+        otpSent = otpResult.ok;
+      }
+
+      return c.json(
+        {
+          error: "Email not verified",
+          code: "EMAIL_NOT_VERIFIED",
+          otpSent,
+          message: otpSent
+            ? "OTP sent. Please use it to verify your email."
+            : "Email not verified. Please request a new OTP.",
+        },
+        403,
+      );
+    }
+
     return authProviderError(
       c,
       loginResult.status,
