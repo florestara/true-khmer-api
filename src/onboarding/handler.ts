@@ -1,5 +1,6 @@
 import type { Context } from "hono";
 import { getAuthUserId, type AuthPayload } from "../auth/types";
+import { ONBOARDING_CONTRIBUTIONS_STEP } from "./constants";
 import type {
   OnboardingContributionsStepPayload,
   OnboardingInterestsStepPayload,
@@ -46,7 +47,9 @@ function resolveAvatarUrl(avatarKey?: string): string | null {
   }
 
   const normalizedBase = normalizeBaseUrl(baseUrl);
-  const normalizedKey = avatarKey.startsWith("/") ? avatarKey.slice(1) : avatarKey;
+  const normalizedKey = avatarKey.startsWith("/")
+    ? avatarKey.slice(1)
+    : avatarKey;
   return `${normalizedBase}/${normalizedKey}`;
 }
 
@@ -135,12 +138,18 @@ export async function handleSaveProfileStep(
   }
 
   if (!isAvatarKeyOwnedByUser(userId, payload.avatarKey)) {
-    return c.json({ ok: false, error: "avatarKey does not belong to current user" }, 400);
+    return c.json(
+      { ok: false, error: "avatarKey does not belong to current user" },
+      400,
+    );
   }
 
   const avatarUrl = resolveAvatarUrl(payload.avatarKey);
 
-  const locationResult = await validateCountryCityIds(payload.countryId, payload.cityId);
+  const locationResult = await validateCountryCityIds(
+    payload.countryId,
+    payload.cityId,
+  );
   if (!locationResult.ok) {
     return c.json({ ok: false, error: locationResult.error }, 400);
   }
@@ -197,6 +206,21 @@ export async function handleCompleteOnboarding(c: Context) {
   const userId = getUserId(c);
   if (!userId) {
     return c.json({ ok: false, error: "Unauthorized" }, 401);
+  }
+
+  const currentState = await getOnboardingState(userId);
+  if (
+    !currentState ||
+    currentState.user.onboardingStep < ONBOARDING_CONTRIBUTIONS_STEP
+  ) {
+    return c.json(
+      {
+        ok: false,
+        error:
+          "Onboarding steps 1–3 must be completed before finishing onboarding",
+      },
+      400,
+    );
   }
 
   await completeOnboarding(userId);

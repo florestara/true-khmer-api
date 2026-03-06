@@ -37,15 +37,19 @@ function toAmzDate(date: Date) {
 }
 
 function encodeRfc3986(value: string) {
-  return encodeURIComponent(value).replace(/[!'()*]/g, (char) =>
-    `%${char.charCodeAt(0).toString(16).toUpperCase()}`,
+  return encodeURIComponent(value).replace(
+    /[!'()*]/g,
+    (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`,
   );
 }
 
 function buildAvatarKey(userId: string, fileName: string) {
   const baseName = fileName.split(/[/\\]/).pop() || "";
-  const extension = baseName.includes(".") ? baseName.split(".").pop() ?? "bin" : "bin";
-  const safeExtension = extension.toLowerCase().replace(/[^a-z0-9]/g, "") || "bin";
+  const extension = baseName.includes(".")
+    ? (baseName.split(".").pop() ?? "bin")
+    : "bin";
+  const safeExtension =
+    extension.toLowerCase().replace(/[^a-z0-9]/g, "") || "bin";
   return `avatars/${userId}/${Date.now()}-${randomUUID()}.${safeExtension}`;
 }
 
@@ -72,7 +76,11 @@ function toSafeErrorLog(error: unknown) {
   };
 }
 
-function buildPresignedPutUrl(avatarKey: string, contentType: string) {
+function buildPresignedPutUrl(
+  avatarKey: string,
+  contentType: string,
+  fileSize: number,
+) {
   const accountId = getEnv("R2_ACCOUNT_ID");
   const accessKeyId = getEnv("R2_ACCESS_KEY_ID");
   const secretAccessKey = getEnv("R2_SECRET_ACCESS_KEY");
@@ -94,16 +102,16 @@ function buildPresignedPutUrl(avatarKey: string, contentType: string) {
     "X-Amz-Credential": `${accessKeyId}/${credentialScope}`,
     "X-Amz-Date": amzDate,
     "X-Amz-Expires": String(PRESIGN_EXPIRY_SECONDS),
-    "X-Amz-SignedHeaders": "content-type;host",
+    "X-Amz-SignedHeaders": "content-length;content-type;host",
   });
 
   const canonicalQueryString = Array.from(queryParams.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
     .map(([key, value]) => `${encodeRfc3986(key)}=${encodeRfc3986(value)}`)
     .join("&");
 
-  const canonicalHeaders = `content-type:${contentType}\nhost:${host}\n`;
-  const signedHeaders = "content-type;host";
+  const canonicalHeaders = `content-length:${fileSize}\ncontent-type:${contentType}\nhost:${host}\n`;
+  const signedHeaders = "content-length;content-type;host";
   const payloadHash = "UNSIGNED-PAYLOAD";
 
   const canonicalRequest = [
@@ -126,7 +134,9 @@ function buildPresignedPutUrl(avatarKey: string, contentType: string) {
   const kRegion = hmac(kDate, R2_REGION);
   const kService = hmac(kRegion, "s3");
   const kSigning = hmac(kService, "aws4_request");
-  const signature = createHmac("sha256", kSigning).update(stringToSign).digest("hex");
+  const signature = createHmac("sha256", kSigning)
+    .update(stringToSign)
+    .digest("hex");
 
   const signedQuery = `${canonicalQueryString}&X-Amz-Signature=${signature}`;
   const uploadUrl = `https://${host}${canonicalUri}?${signedQuery}`;
@@ -134,6 +144,7 @@ function buildPresignedPutUrl(avatarKey: string, contentType: string) {
   return {
     uploadUrl,
     requiredHeaders: {
+      "Content-Length": String(fileSize),
       "Content-Type": contentType,
     },
     expiresInSeconds: PRESIGN_EXPIRY_SECONDS,
@@ -151,7 +162,11 @@ export async function handlePresignAvatarUpload(
 
   try {
     const avatarKey = buildAvatarKey(userId, payload.fileName);
-    const presigned = buildPresignedPutUrl(avatarKey, payload.contentType);
+    const presigned = buildPresignedPutUrl(
+      avatarKey,
+      payload.contentType,
+      payload.fileSize,
+    );
     const response: PresignAvatarUploadResponse = {
       uploadUrl: presigned.uploadUrl,
       method: "PUT",
@@ -163,7 +178,10 @@ export async function handlePresignAvatarUpload(
 
     return c.json({ ok: true, upload: response });
   } catch (error) {
-    console.error("Failed to generate avatar upload URL", toSafeErrorLog(error));
+    console.error(
+      "Failed to generate avatar upload URL",
+      toSafeErrorLog(error),
+    );
     return c.json({ ok: false, error: "Failed to generate upload URL" }, 500);
   }
 }

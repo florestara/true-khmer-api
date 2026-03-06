@@ -1,5 +1,6 @@
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../db/index";
+import { normalizeLocationName } from "./utils";
 import {
   city,
   contribution,
@@ -33,10 +34,6 @@ import type {
   OnboardingOptionsDto,
   OnboardingStateDto,
 } from "./types";
-
-function normalizeLocationName(value: string) {
-  return value.trim().replace(/\s+/g, " ").toLowerCase();
-}
 
 export async function listCountriesFromDb(): Promise<CountryListItemDto[]> {
   return db
@@ -161,24 +158,6 @@ export async function findUserById(userId: string) {
  * Updates the user's onboarding step. The step can only go forward, never backward.
  * Clamps the value to the valid range and uses SQL GREATEST to prevent decreasing.
  */
-async function markOnboardingStep(userId: string, step: number) {
-  if (!Number.isFinite(step)) {
-    throw new Error("Invalid onboarding step value");
-  }
-
-  const normalizedStep = Math.max(
-    ONBOARDING_MIN_STEP,
-    Math.min(ONBOARDING_COMPLETE_STEP, Math.trunc(step)),
-  );
-
-  await db
-    .update(user)
-    .set({
-      onboardingStep: sql`GREATEST(${user.onboardingStep}, ${normalizedStep})`,
-    })
-    .where(eq(user.id, userId));
-}
-
 export async function getOnboardingState(
   userId: string,
 ): Promise<OnboardingStateDto | null> {
@@ -350,9 +329,14 @@ export async function saveProfileStep(
           updatedAt: new Date(),
         },
       });
-  });
 
-  await markOnboardingStep(userId, ONBOARDING_PROFILE_STEP);
+    await tx
+      .update(user)
+      .set({
+        onboardingStep: sql`GREATEST(${user.onboardingStep}, ${ONBOARDING_PROFILE_STEP})`,
+      })
+      .where(eq(user.id, userId));
+  });
 }
 
 export async function replaceUserInterests(
@@ -383,9 +367,14 @@ export async function replaceUserInterests(
         })),
       );
     }
-  });
 
-  await markOnboardingStep(userId, ONBOARDING_INTERESTS_STEP);
+    await tx
+      .update(user)
+      .set({
+        onboardingStep: sql`GREATEST(${user.onboardingStep}, ${ONBOARDING_INTERESTS_STEP})`,
+      })
+      .where(eq(user.id, userId));
+  });
   return { ok: true as const };
 }
 
@@ -427,9 +416,14 @@ export async function replaceUserContributions(
         })),
       );
     }
-  });
 
-  await markOnboardingStep(userId, ONBOARDING_CONTRIBUTIONS_STEP);
+    await tx
+      .update(user)
+      .set({
+        onboardingStep: sql`GREATEST(${user.onboardingStep}, ${ONBOARDING_CONTRIBUTIONS_STEP})`,
+      })
+      .where(eq(user.id, userId));
+  });
   return { ok: true as const };
 }
 

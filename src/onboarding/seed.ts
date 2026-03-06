@@ -1,14 +1,9 @@
 import { db } from "../db/index";
 import { eq } from "drizzle-orm";
+import { normalizeLocationName } from "./utils";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
-import {
-  city,
-  contribution,
-  country,
-  interest,
-  tier,
-} from "../db/schema";
+import { city, contribution, country, interest, tier } from "../db/schema";
 
 const INTEREST_SEED = [
   { slug: "education", label: "Education" },
@@ -40,24 +35,24 @@ const CONTRIBUTION_SEED = [
   {
     slug: "recruit-volunteer",
     name: "Recruit Volunteer",
-    description:
-      "Post for volunteer opportunities and make direct impact.",
+    description: "Post for volunteer opportunities and make direct impact.",
   },
   {
     slug: "post-project",
     name: "Post Project",
-    description: "Launch projects and recruit talented collaborators to your team.",
+    description:
+      "Launch projects and recruit talented collaborators to your team.",
   },
   {
     slug: "organize-event",
     name: "Organize Event",
-    description: "Host events and connect the Khmer community around shared goals.",
+    description:
+      "Host events and connect the Khmer community around shared goals.",
   },
   {
     slug: "basic-activities",
     name: "Basic Activities",
-    description:
-      "Browse, react, and support members across the platform.",
+    description: "Browse, react, and support members across the platform.",
   },
 ] satisfies Array<
   Pick<typeof contribution.$inferInsert, "slug" | "name" | "description">
@@ -86,12 +81,11 @@ const TIER_SEED = [
     description: "Advanced tier.",
   },
 ] satisfies Array<
-  Pick<typeof tier.$inferInsert, "slug" | "name" | "rankOrder" | "minPoints" | "description">
+  Pick<
+    typeof tier.$inferInsert,
+    "slug" | "name" | "rankOrder" | "minPoints" | "description"
+  >
 >;
-
-function normalizeLocationName(value: string) {
-  return value.trim().replace(/\s+/g, " ").toLowerCase();
-}
 
 const CAMBODIA_COUNTRY_SEED = {
   name: "Cambodia",
@@ -172,9 +166,12 @@ export async function seedOnboardingLookups() {
     >
   >;
 
-  await db.insert(city).values(citySeed).onConflictDoNothing({
-    target: [city.countryId, city.normalizedName],
-  });
+  await db
+    .insert(city)
+    .values(citySeed)
+    .onConflictDoNothing({
+      target: [city.countryId, city.normalizedName],
+    });
 }
 
 function isExecutedDirectly() {
