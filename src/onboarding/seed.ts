@@ -1,61 +1,70 @@
 import { db } from "../db/index";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { normalizeLocationName } from "./utils";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 import { city, contribution, country, interest, tier } from "../db/schema";
 
 const INTEREST_SEED = [
-  { slug: "education", label: "Education" },
-  { slug: "technology", label: "Technology" },
-  { slug: "environment", label: "Environment" },
-  { slug: "healthcare", label: "Healthcare" },
-  { slug: "arts-culture", label: "Arts & Culture" },
-  { slug: "business", label: "Business" },
-  { slug: "agriculture", label: "Agriculture" },
-  { slug: "mentorship", label: "Mentorship" },
-  { slug: "social", label: "Social" },
-  { slug: "heritage", label: "Heritage" },
-  { slug: "startups", label: "Startups" },
-] satisfies Array<Pick<typeof interest.$inferInsert, "slug" | "label">>;
+  { slug: "education", label: "Education", icon: "🎓" },
+  { slug: "technology", label: "Technology", icon: "💻" },
+  { slug: "environment", label: "Environment", icon: "🌱" },
+  { slug: "healthcare", label: "Healthcare", icon: "🩺" },
+  { slug: "arts-culture", label: "Arts & Culture", icon: "🎨" },
+  { slug: "business", label: "Business", icon: "📊" },
+  { slug: "agriculture", label: "Agriculture", icon: "🌾" },
+  { slug: "mentorship", label: "Mentorship", icon: "👨🏻‍🏫" },
+  { slug: "social", label: "Social", icon: "🤝" },
+  { slug: "heritage", label: "Heritage", icon: "🏛️" },
+  { slug: "startups", label: "Startups", icon: "🚀" },
+] satisfies Array<Pick<typeof interest.$inferInsert, "slug" | "label" | "icon">>;
 
 const CONTRIBUTION_SEED = [
   {
     slug: "ask-questions",
     name: "Ask Questions",
+    iconKey: "ask_questions",
     description:
       "Ask questions in the forum and get practical help from the community.",
   },
   {
     slug: "find-answers",
     name: "Find Answers",
+    iconKey: "find_answers",
     description:
       "Discover answers from existing discussions and community tips.",
   },
   {
     slug: "recruit-volunteer",
     name: "Recruit Volunteer",
+    iconKey: "recruit_volunteer",
     description: "Post for volunteer opportunities and make direct impact.",
   },
   {
     slug: "post-project",
     name: "Post Project",
+    iconKey: "post_project",
     description:
       "Launch projects and recruit talented collaborators to your team.",
   },
   {
     slug: "organize-event",
     name: "Organize Event",
+    iconKey: "organize_event",
     description:
       "Host events and connect the Khmer community around shared goals.",
   },
   {
     slug: "basic-activities",
     name: "Basic Activities",
+    iconKey: "basic_activities",
     description: "Browse, react, and support members across the platform.",
   },
 ] satisfies Array<
-  Pick<typeof contribution.$inferInsert, "slug" | "name" | "description">
+  Pick<
+    typeof contribution.$inferInsert,
+    "slug" | "name" | "iconKey" | "description"
+  >
 >;
 
 const TIER_SEED = [
@@ -88,7 +97,7 @@ const TIER_SEED = [
 >;
 
 const CAMBODIA_COUNTRY_SEED = {
-  name: "Cambodia",
+  name: "🇰🇭Cambodia",
   normalizedName: normalizeLocationName("Cambodia"),
   iso2: "KH",
   provider: "seed",
@@ -131,8 +140,15 @@ export async function seedOnboardingLookups() {
     target: interest.slug,
   });
 
-  await db.insert(contribution).values(CONTRIBUTION_SEED).onConflictDoNothing({
+  await db.insert(contribution).values(CONTRIBUTION_SEED).onConflictDoUpdate({
     target: contribution.slug,
+    set: {
+      name: sql`excluded.name`,
+      iconKey: sql`excluded.icon_key`,
+      description: sql`excluded.description`,
+      isActive: true,
+      updatedAt: new Date(),
+    },
   });
 
   await db.insert(tier).values(TIER_SEED).onConflictDoNothing({

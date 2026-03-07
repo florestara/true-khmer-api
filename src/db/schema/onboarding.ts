@@ -99,6 +99,7 @@ export const interest = pgTable(
     id: uuid("id").defaultRandom().primaryKey(),
     slug: varchar("slug", { length: 80 }).notNull(),
     label: varchar("label", { length: 120 }).notNull(),
+    icon: varchar("icon", { length: 30 }).default("").notNull(),
     isActive: boolean("is_active").default(true).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
@@ -141,6 +142,9 @@ export const contribution = pgTable(
     id: uuid("id").defaultRandom().primaryKey(),
     slug: varchar("slug", { length: 80 }).notNull(),
     name: varchar("name", { length: 120 }).notNull(),
+    iconKey: varchar("icon_key", { length: 80 })
+      .default("basic_activities")
+      .notNull(),
     description: text("description"),
     isActive: boolean("is_active").default(true).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),

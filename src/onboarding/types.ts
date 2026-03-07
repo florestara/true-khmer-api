@@ -39,11 +39,13 @@ export type OnboardingOptionsDto = {
     id: string;
     slug: string;
     label: string;
+    icon: string;
   }>;
   contributions: Array<{
     id: string;
     slug: string;
     name: string;
+    iconKey: string;
     description: string | null;
   }>;
   tiers: Array<{
@@ -60,12 +62,14 @@ export type InterestOptionDto = {
   id: string;
   slug: string;
   label: string;
+  icon: string;
 };
 
 export type ContributionOptionDto = {
   id: string;
   slug: string;
   name: string;
+  iconKey: string;
   description: string | null;
 };
 

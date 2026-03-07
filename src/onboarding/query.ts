@@ -155,8 +155,8 @@ export async function findUserById(userId: string) {
 }
 
 /**
- * Updates the user's onboarding step. The step can only go forward, never backward.
- * Clamps the value to the valid range and uses SQL GREATEST to prevent decreasing.
+ * Retrieves the current onboarding state for a user, including their profile,
+ * selected interests, contributions, and progress/tier information.
  */
 export async function getOnboardingState(
   userId: string,
@@ -226,7 +226,12 @@ export async function getOnboardingState(
 export async function getOnboardingOptions(): Promise<OnboardingOptionsDto> {
   const [interests, contributions, tiers] = await Promise.all([
     db
-      .select({ id: interest.id, slug: interest.slug, label: interest.label })
+      .select({
+        id: interest.id,
+        slug: interest.slug,
+        label: interest.label,
+        icon: interest.icon,
+      })
       .from(interest)
       .where(eq(interest.isActive, true))
       .orderBy(asc(interest.label)),
@@ -235,6 +240,7 @@ export async function getOnboardingOptions(): Promise<OnboardingOptionsDto> {
         id: contribution.id,
         slug: contribution.slug,
         name: contribution.name,
+        iconKey: contribution.iconKey,
         description: contribution.description,
       })
       .from(contribution)
@@ -262,7 +268,12 @@ export async function getOnboardingOptions(): Promise<OnboardingOptionsDto> {
 
 export async function getInterestOptions(): Promise<InterestOptionDto[]> {
   return db
-    .select({ id: interest.id, slug: interest.slug, label: interest.label })
+    .select({
+      id: interest.id,
+      slug: interest.slug,
+      label: interest.label,
+      icon: interest.icon,
+    })
     .from(interest)
     .where(eq(interest.isActive, true))
     .orderBy(asc(interest.label));
@@ -276,6 +287,7 @@ export async function getContributionOptions(): Promise<
       id: contribution.id,
       slug: contribution.slug,
       name: contribution.name,
+      iconKey: contribution.iconKey,
       description: contribution.description,
     })
     .from(contribution)
