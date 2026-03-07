@@ -1,6 +1,10 @@
 import type { Context } from "hono";
 import { getAuthUserId, type AuthPayload } from "../auth/types";
-import { ONBOARDING_CONTRIBUTIONS_STEP } from "./constants";
+import {
+  ONBOARDING_CONTRIBUTIONS_STEP,
+  ONBOARDING_INTERESTS_STEP,
+  ONBOARDING_PROFILE_STEP,
+} from "./constants";
 import type {
   OnboardingContributionsStepPayload,
   OnboardingInterestsStepPayload,
@@ -175,6 +179,21 @@ export async function handleSaveInterestsStep(
     return c.json({ ok: false, error: "Unauthorized" }, 401);
   }
 
+  const existingUser = await findUserById(userId);
+  if (!existingUser) {
+    return c.json({ ok: false, error: "User not found" }, 404);
+  }
+
+  if (existingUser.onboardingStep < ONBOARDING_PROFILE_STEP) {
+    return c.json(
+      {
+        ok: false,
+        error: "Profile step must be completed before saving interests",
+      },
+      400,
+    );
+  }
+
   const result = await replaceUserInterests(userId, payload);
   if (!result.ok) {
     return c.json({ ok: false, error: result.error }, 400);
@@ -191,6 +210,21 @@ export async function handleSaveContributionsStep(
   const userId = getUserId(c);
   if (!userId) {
     return c.json({ ok: false, error: "Unauthorized" }, 401);
+  }
+
+  const existingUser = await findUserById(userId);
+  if (!existingUser) {
+    return c.json({ ok: false, error: "User not found" }, 404);
+  }
+
+  if (existingUser.onboardingStep < ONBOARDING_INTERESTS_STEP) {
+    return c.json(
+      {
+        ok: false,
+        error: "Interests step must be completed before saving contributions",
+      },
+      400,
+    );
   }
 
   const result = await replaceUserContributions(userId, payload);

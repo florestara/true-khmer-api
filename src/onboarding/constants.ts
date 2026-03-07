@@ -1,4 +1,3 @@
-export const ONBOARDING_MIN_STEP = 0;
 export const ONBOARDING_PROFILE_STEP = 1;
 export const ONBOARDING_INTERESTS_STEP = 2;
 export const ONBOARDING_CONTRIBUTIONS_STEP = 3;

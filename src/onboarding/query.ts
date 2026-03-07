@@ -23,7 +23,6 @@ import {
   ONBOARDING_COMPLETE_STEP,
   ONBOARDING_CONTRIBUTIONS_STEP,
   ONBOARDING_INTERESTS_STEP,
-  ONBOARDING_MIN_STEP,
   ONBOARDING_PROFILE_STEP,
 } from "./constants";
 import type {
@@ -166,41 +165,48 @@ export async function getOnboardingState(
     return null;
   }
 
-  const [profileRow] = await db
-    .select()
-    .from(userProfile)
-    .where(eq(userProfile.userId, userId))
-    .limit(1);
+  const [
+    profileRows,
+    selectedInterestRows,
+    selectedContributionRows,
+    progressRows,
+  ] = await Promise.all([
+    db
+      .select()
+      .from(userProfile)
+      .where(eq(userProfile.userId, userId))
+      .limit(1),
+    db
+      .select({ interestId: userInterest.interestId })
+      .from(userInterest)
+      .where(eq(userInterest.userId, userId)),
+    db
+      .select({ contributionId: userContribution.contributionId })
+      .from(userContribution)
+      .where(eq(userContribution.userId, userId)),
+    db
+      .select({
+        totalPoints: userProgress.totalPoints,
+        tierId: tier.id,
+        tierSlug: tier.slug,
+        tierName: tier.name,
+        tierRankOrder: tier.rankOrder,
+        tierMinPoints: tier.minPoints,
+      })
+      .from(userProgress)
+      .leftJoin(tier, eq(userProgress.currentTierId, tier.id))
+      .where(eq(userProgress.userId, userId))
+      .limit(1),
+  ]);
 
-  const selectedInterests = await db
-    .select({ interestId: userInterest.interestId })
-    .from(userInterest)
-    .where(eq(userInterest.userId, userId));
-
-  const selectedContributions = await db
-    .select({ contributionId: userContribution.contributionId })
-    .from(userContribution)
-    .where(eq(userContribution.userId, userId));
-
-  const [progressRow] = await db
-    .select({
-      totalPoints: userProgress.totalPoints,
-      tierId: tier.id,
-      tierSlug: tier.slug,
-      tierName: tier.name,
-      tierRankOrder: tier.rankOrder,
-      tierMinPoints: tier.minPoints,
-    })
-    .from(userProgress)
-    .leftJoin(tier, eq(userProgress.currentTierId, tier.id))
-    .where(eq(userProgress.userId, userId))
-    .limit(1);
+  const [profileRow] = profileRows;
+  const [progressRow] = progressRows;
 
   return {
     user: foundUser,
     profile: profileRow ?? null,
-    selectedInterestIds: selectedInterests.map((item) => item.interestId),
-    selectedContributionIds: selectedContributions.map(
+    selectedInterestIds: selectedInterestRows.map((item) => item.interestId),
+    selectedContributionIds: selectedContributionRows.map(
       (item) => item.contributionId,
     ),
     progress: {
@@ -478,7 +484,7 @@ export async function completeOnboarding(userId: string) {
       .update(user)
       .set({
         onboardingStep: sql`GREATEST(${user.onboardingStep}, ${ONBOARDING_COMPLETE_STEP})`,
-        onboardingCompletedAt: new Date(),
+        onboardingCompletedAt: sql`COALESCE(${user.onboardingCompletedAt}, NOW())`,
       })
       .where(eq(user.id, userId));
   });
