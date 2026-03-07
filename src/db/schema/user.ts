@@ -1,16 +1,25 @@
 import { relations } from "drizzle-orm";
-import { pgTable, text, timestamp, boolean, index, uuid } from "drizzle-orm/pg-core";
+import { boolean, index, integer, pgEnum, pgTable, text, timestamp, uuid, varchar } from "drizzle-orm/pg-core";
 
+export const userGender = pgEnum("user_gender", ["male", "female", "other"]);
+
+// Core auth identity table used by Better Auth.
 export const user = pgTable("user", {
   id: uuid("id").defaultRandom().primaryKey(),
+  // Compatibility field for Better Auth; app profile display name is stored in user_profile.
   name: text("name").notNull(),
-  firstName: text("first_name").default("").notNull(),
-  lastName: text("last_name").default("").notNull(),
-  gender: text("gender").default("other").notNull(),
+  firstName: varchar("first_name", { length: 100 }).notNull(),
+  lastName: varchar("last_name", { length: 100 }).notNull(),
+  gender: userGender("gender").default("other").notNull(),
+  // Stores the user's occupation/profession.
+  occupation: text("occupation").notNull(),
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified").default(false).notNull(),
+  // Compatibility field for Better Auth; canonical avatar is stored in user_profile.
   image: text("image"),
   role: text("role").default("user").notNull(),
+  onboardingStep: integer("onboarding_step").default(0).notNull(),
+  onboardingCompletedAt: timestamp("onboarding_completed_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .defaultNow()
@@ -54,7 +63,8 @@ export const account = pgTable(
     scope: text("scope"),
     password: text("password"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at").defaultNow()
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
       .$onUpdate(() => /* @__PURE__ */ new Date())
       .notNull(),
   },

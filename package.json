@@ -11,6 +11,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
+    "db:seed:onboarding": "tsx src/onboarding/seed.ts",
     "db:studio": "drizzle-kit studio",
     "db:secondary:pull": "drizzle-kit pull --config=drizzle.secondary.config.ts",
     "db:secondary:generate": "drizzle-kit generate --config=drizzle.secondary.config.ts",

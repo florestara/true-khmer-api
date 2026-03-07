@@ -19,9 +19,6 @@ type UserLike = {
   emailVerified: boolean;
   name: string;
   image?: string | null;
-  firstName?: string;
-  lastName?: string;
-  gender?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -95,18 +92,22 @@ export async function callAuth(path: string, init?: RequestInit) {
 }
 
 export async function signUpWithEmailPassword(payload: AuthRegisterPayload) {
+  const fullName = `${payload.firstName} ${payload.lastName}`.trim();
+  const emailPrefix = payload.email.split("@")[0]?.trim();
+  const displayName = fullName || emailPrefix || "User";
   const response = await callAuth("/sign-up/email", {
     method: "POST",
     headers: {
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      name: `${payload.firstName} ${payload.lastName}`.trim(),
-      email: payload.email,
-      password: payload.password,
+      name: displayName,
       firstName: payload.firstName,
       lastName: payload.lastName,
       gender: payload.gender,
+      occupation: payload.occupation,
+      email: payload.email,
+      password: payload.password,
     }),
   });
 
