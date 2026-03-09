@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { createCleanNameSchema } from "../utils/validation/name";
+import { createStrongPasswordSchema } from "../utils/validation/password";
 
 const genderSchema = z.enum(["male", "female", "other"]);
 
@@ -9,17 +11,11 @@ const emailSchema = z
   .min(1, "email is required")
   .email("email must be a valid email");
 
-const passwordSchema = z
-  .string()
-  .regex(/^\S+$/, "password must not contain whitespace")
-  .min(8, "password must be at least 8 characters")
-  .regex(/[a-z]/, "password must contain at least one lowercase letter")
-  .regex(/[A-Z]/, "password must contain at least one uppercase letter")
-  .regex(/[^A-Za-z0-9\s]/, "password must contain at least one special character");
+const passwordSchema = createStrongPasswordSchema();
 
 export const authRegisterSchema = z.object({
-  firstName: z.string().trim().min(1, "firstName is required").max(100),
-  lastName: z.string().trim().min(1, "lastName is required").max(100),
+  firstName: createCleanNameSchema({ label: "firstName", maxLength: 100 }),
+  lastName: createCleanNameSchema({ label: "lastName", maxLength: 100 }),
   gender: genderSchema,
   occupation: z.string().trim().min(1, "occupation is required").max(120),
   email: emailSchema,
@@ -29,7 +25,7 @@ export type AuthRegisterPayload = z.infer<typeof authRegisterSchema>;
 
 export const authVerifyRegisterOtpSchema = z.object({
   email: emailSchema,
-  otp: z.string().trim().min(1, "otp is required"),
+  otp: z.string().trim().length(6, "otp must be exactly 6 characters"),
 });
 export type AuthVerifyRegisterOtpPayload = z.infer<
   typeof authVerifyRegisterOtpSchema
