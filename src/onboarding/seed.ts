@@ -1,9 +1,9 @@
 import { db } from "../db/index";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { normalizeLocationName } from "./utils";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
-import { city, contribution, country, interest, tier } from "../db/schema";
+import { city, country, interest, tier } from "../db/schema";
 
 const INTEREST_SEED = [
   { slug: "education", label: "Education", icon: "🎓" },
@@ -18,54 +18,6 @@ const INTEREST_SEED = [
   { slug: "heritage", label: "Heritage", icon: "🏛️" },
   { slug: "startups", label: "Startups", icon: "🚀" },
 ] satisfies Array<Pick<typeof interest.$inferInsert, "slug" | "label" | "icon">>;
-
-const CONTRIBUTION_SEED = [
-  {
-    slug: "ask-questions",
-    name: "Ask Questions",
-    iconKey: "ask_questions",
-    description:
-      "Ask questions in the forum and get practical help from the community.",
-  },
-  {
-    slug: "find-answers",
-    name: "Find Answers",
-    iconKey: "find_answers",
-    description:
-      "Discover answers from existing discussions and community tips.",
-  },
-  {
-    slug: "recruit-volunteer",
-    name: "Recruit Volunteer",
-    iconKey: "recruit_volunteer",
-    description: "Post for volunteer opportunities and make direct impact.",
-  },
-  {
-    slug: "post-project",
-    name: "Post Project",
-    iconKey: "post_project",
-    description:
-      "Launch projects and recruit talented collaborators to your team.",
-  },
-  {
-    slug: "organize-event",
-    name: "Organize Event",
-    iconKey: "organize_event",
-    description:
-      "Host events and connect the Khmer community around shared goals.",
-  },
-  {
-    slug: "basic-activities",
-    name: "Basic Activities",
-    iconKey: "basic_activities",
-    description: "Browse, react, and support members across the platform.",
-  },
-] satisfies Array<
-  Pick<
-    typeof contribution.$inferInsert,
-    "slug" | "name" | "iconKey" | "description"
-  >
->;
 
 const TIER_SEED = [
   {
@@ -138,17 +90,6 @@ const CAMBODIA_CITY_NAMES = [
 export async function seedOnboardingLookups() {
   await db.insert(interest).values(INTEREST_SEED).onConflictDoNothing({
     target: interest.slug,
-  });
-
-  await db.insert(contribution).values(CONTRIBUTION_SEED).onConflictDoUpdate({
-    target: contribution.slug,
-    set: {
-      name: sql`excluded.name`,
-      iconKey: sql`excluded.icon_key`,
-      description: sql`excluded.description`,
-      isActive: true,
-      updatedAt: new Date(),
-    },
   });
 
   await db.insert(tier).values(TIER_SEED).onConflictDoNothing({

@@ -3,12 +3,11 @@ import { db } from "../db/index";
 import { normalizeLocationName } from "./utils";
 import {
   city,
-  contribution,
   country,
   interest,
   tier,
   user,
-  userContribution,
+  userContributionOnboard,
   userInterest,
   userPointLedger,
   userProfile,
@@ -20,11 +19,13 @@ import type {
   OnboardingProfileStepPayload,
 } from "./schema";
 import {
+  CONTRIBUTION_KEY_OPTIONS,
   ONBOARDING_COMPLETE_STEP,
   ONBOARDING_CONTRIBUTIONS_STEP,
   ONBOARDING_INTERESTS_STEP,
   ONBOARDING_PROFILE_STEP,
 } from "./constants";
+import type { ContributionKey } from "./constants";
 import type {
   CityListItemDto,
   ContributionOptionDto,
@@ -33,6 +34,28 @@ import type {
   OnboardingOptionsDto,
   OnboardingStateDto,
 } from "./types";
+
+type ContributionBooleanColumn = Exclude<
+  keyof typeof userContributionOnboard.$inferInsert,
+  "userId" | "createdAt" | "updatedAt"
+>;
+
+const contributionKeyToColumnMap = {
+  community_member: "communityMember",
+  find_volunteers: "findVolunteers",
+  launch_project: "launchProject",
+  organize_event: "organizeEvent",
+} as const satisfies Record<ContributionKey, ContributionBooleanColumn>;
+
+function toContributionSelection(selectedKeys: readonly ContributionKey[]) {
+  const selectedKeySet = new Set(selectedKeys);
+  return Object.fromEntries(
+    CONTRIBUTION_KEY_OPTIONS.map((key) => [
+      contributionKeyToColumnMap[key],
+      selectedKeySet.has(key),
+    ]),
+  ) as Record<ContributionBooleanColumn, boolean>;
+}
 
 export async function listCountriesFromDb(): Promise<CountryListItemDto[]> {
   return db
@@ -181,9 +204,15 @@ export async function getOnboardingState(
       .from(userInterest)
       .where(eq(userInterest.userId, userId)),
     db
-      .select({ contributionId: userContribution.contributionId })
-      .from(userContribution)
-      .where(eq(userContribution.userId, userId)),
+      .select({
+        communityMember: userContributionOnboard.communityMember,
+        findVolunteers: userContributionOnboard.findVolunteers,
+        launchProject: userContributionOnboard.launchProject,
+        organizeEvent: userContributionOnboard.organizeEvent,
+      })
+      .from(userContributionOnboard)
+      .where(eq(userContributionOnboard.userId, userId))
+      .limit(1),
     db
       .select({
         totalPoints: userProgress.totalPoints,
@@ -200,15 +229,18 @@ export async function getOnboardingState(
   ]);
 
   const [profileRow] = profileRows;
+  const [selectedContributionRow] = selectedContributionRows;
   const [progressRow] = progressRows;
+  const selectedContributionKeys = CONTRIBUTION_KEY_OPTIONS.filter((key) => {
+    const columnName = contributionKeyToColumnMap[key];
+    return Boolean(selectedContributionRow?.[columnName]);
+  });
 
   return {
     user: foundUser,
     profile: profileRow ?? null,
     selectedInterestIds: selectedInterestRows.map((item) => item.interestId),
-    selectedContributionIds: selectedContributionRows.map(
-      (item) => item.contributionId,
-    ),
+    selectedContributionKeys,
     progress: {
       totalPoints: progressRow?.totalPoints ?? 0,
       tier:
@@ -230,7 +262,7 @@ export async function getOnboardingState(
 }
 
 export async function getOnboardingOptions(): Promise<OnboardingOptionsDto> {
-  const [interests, contributions, tiers] = await Promise.all([
+  const [interests, tiers] = await Promise.all([
     db
       .select({
         id: interest.id,
@@ -241,17 +273,6 @@ export async function getOnboardingOptions(): Promise<OnboardingOptionsDto> {
       .from(interest)
       .where(eq(interest.isActive, true))
       .orderBy(asc(interest.label)),
-    db
-      .select({
-        id: contribution.id,
-        slug: contribution.slug,
-        name: contribution.name,
-        iconKey: contribution.iconKey,
-        description: contribution.description,
-      })
-      .from(contribution)
-      .where(eq(contribution.isActive, true))
-      .orderBy(asc(contribution.name)),
     db
       .select({
         id: tier.id,
@@ -267,7 +288,7 @@ export async function getOnboardingOptions(): Promise<OnboardingOptionsDto> {
 
   return {
     interests,
-    contributions,
+    contributions: CONTRIBUTION_KEY_OPTIONS.map((key) => ({ key })),
     tiers,
   };
 }
@@ -288,17 +309,7 @@ export async function getInterestOptions(): Promise<InterestOptionDto[]> {
 export async function getContributionOptions(): Promise<
   ContributionOptionDto[]
 > {
-  return db
-    .select({
-      id: contribution.id,
-      slug: contribution.slug,
-      name: contribution.name,
-      iconKey: contribution.iconKey,
-      description: contribution.description,
-    })
-    .from(contribution)
-    .where(eq(contribution.isActive, true))
-    .orderBy(asc(contribution.name));
+  return CONTRIBUTION_KEY_OPTIONS.map((key) => ({ key }));
 }
 
 export async function saveProfileStep(
@@ -400,40 +411,38 @@ export async function replaceUserContributions(
   userId: string,
   payload: OnboardingContributionsStepPayload,
 ) {
-  const selectedContributionIds = Array.from(new Set(payload.contributionIds));
-
-  if (selectedContributionIds.length > 0) {
-    const activeContributions = await db
-      .select({ id: contribution.id })
-      .from(contribution)
-      .where(
-        and(
-          eq(contribution.isActive, true),
-          inArray(contribution.id, selectedContributionIds),
-        ),
-      );
-
-    if (activeContributions.length !== selectedContributionIds.length) {
-      return {
-        ok: false as const,
-        error: "One or more contributions are invalid",
-      };
-    }
+  const selectedContributionKeys = Array.from(
+    new Set(payload.contributionKeys),
+  );
+  const allowedKeys = new Set(CONTRIBUTION_KEY_OPTIONS);
+  const hasInvalidKey = selectedContributionKeys.some(
+    (key) => !allowedKeys.has(key),
+  );
+  if (hasInvalidKey) {
+    return {
+      ok: false as const,
+      error: "One or more contributions are invalid",
+    };
   }
+
+  const contributionSelection = toContributionSelection(
+    selectedContributionKeys,
+  );
 
   await db.transaction(async (tx) => {
     await tx
-      .delete(userContribution)
-      .where(eq(userContribution.userId, userId));
-
-    if (selectedContributionIds.length > 0) {
-      await tx.insert(userContribution).values(
-        selectedContributionIds.map((contributionId) => ({
-          userId,
-          contributionId,
-        })),
-      );
-    }
+      .insert(userContributionOnboard)
+      .values({
+        userId,
+        ...contributionSelection,
+      })
+      .onConflictDoUpdate({
+        target: userContributionOnboard.userId,
+        set: {
+          ...contributionSelection,
+          updatedAt: new Date(),
+        },
+      });
 
     await tx
       .update(user)
