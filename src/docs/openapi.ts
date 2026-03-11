@@ -324,14 +324,16 @@ export const openApiDoc = {
       },
       OnboardingContributionsStepRequest: {
         type: "object",
-        description: "contributionIds is optional. If omitted, it defaults to an empty array.",
+        minProperties: 1,
+        description:
+          "Each contribution field is optional, but at least one selected field must be true.",
         properties: {
-          contributionIds: {
-            type: "array",
-            maxItems: 20,
-            items: { type: "string", format: "uuid" },
-          },
+          community_member: { type: "boolean", example: true },
+          find_volunteers: { type: "boolean", example: false },
+          launch_project: { type: "boolean", example: true },
+          organize_event: { type: "boolean", example: false },
         },
+        additionalProperties: false,
       },
       OnboardingProfile: {
         type: "object",
@@ -382,7 +384,7 @@ export const openApiDoc = {
               "user",
               "profile",
               "selectedInterestIds",
-              "selectedContributionIds",
+              "selectedContributionKeys",
               "progress",
             ],
             properties: {
@@ -409,9 +411,17 @@ export const openApiDoc = {
                 type: "array",
                 items: { type: "string", format: "uuid" },
               },
-              selectedContributionIds: {
+              selectedContributionKeys: {
                 type: "array",
-                items: { type: "string", format: "uuid" },
+                items: {
+                  type: "string",
+                  enum: [
+                    "community_member",
+                    "find_volunteers",
+                    "launch_project",
+                    "organize_event",
+                  ],
+                },
               },
               progress: {
                 type: "object",
@@ -454,13 +464,17 @@ export const openApiDoc = {
                 type: "array",
                 items: {
                   type: "object",
-                  required: ["id", "slug", "name", "iconKey", "description"],
+                  required: ["key"],
                   properties: {
-                    id: { type: "string", format: "uuid" },
-                    slug: { type: "string", example: "post-project" },
-                    name: { type: "string", example: "Post Project" },
-                    iconKey: { type: "string", example: "post_project" },
-                    description: { type: "string", nullable: true },
+                    key: {
+                      type: "string",
+                      enum: [
+                        "community_member",
+                        "find_volunteers",
+                        "launch_project",
+                        "organize_event",
+                      ],
+                    },
                   },
                 },
               },
@@ -512,13 +526,17 @@ export const openApiDoc = {
             type: "array",
             items: {
               type: "object",
-              required: ["id", "slug", "name", "iconKey", "description"],
+              required: ["key"],
               properties: {
-                id: { type: "string", format: "uuid" },
-                slug: { type: "string", example: "post-project" },
-                name: { type: "string", example: "Post Project" },
-                iconKey: { type: "string", example: "post_project" },
-                description: { type: "string", nullable: true },
+                key: {
+                  type: "string",
+                  enum: [
+                    "community_member",
+                    "find_volunteers",
+                    "launch_project",
+                    "organize_event",
+                  ],
+                },
               },
             },
           },

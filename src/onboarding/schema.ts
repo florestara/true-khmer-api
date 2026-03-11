@@ -18,8 +18,22 @@ export const onboardingInterestsStepSchema = z.object({
 });
 
 export const onboardingContributionsStepSchema = z.object({
-  contributionIds: z.array(uuidSchema).max(20).default([]),
-});
+  community_member: z.boolean().optional(),
+  find_volunteers: z.boolean().optional(),
+  launch_project: z.boolean().optional(),
+  organize_event: z.boolean().optional(),
+})
+  .strict()
+  .refine(
+    (payload) =>
+      payload.community_member === true ||
+      payload.find_volunteers === true ||
+      payload.launch_project === true ||
+      payload.organize_event === true,
+    {
+      message: "At least one contribution must be selected",
+    },
+  );
 
 export type OnboardingProfileStepPayload = z.infer<typeof onboardingProfileStepSchema>;
 export type OnboardingInterestsStepPayload = z.infer<typeof onboardingInterestsStepSchema>;

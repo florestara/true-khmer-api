@@ -136,50 +136,24 @@ export const userInterest = pgTable(
   ],
 );
 
-export const contribution = pgTable(
-  "contribution",
+export const userContributionOnboard = pgTable(
+  "user_contribution_onboard",
   {
-    id: uuid("id").defaultRandom().primaryKey(),
-    slug: varchar("slug", { length: 80 }).notNull(),
-    name: varchar("name", { length: 120 }).notNull(),
-    iconKey: varchar("icon_key", { length: 80 })
-      .default("basic_activities")
-      .notNull(),
-    description: text("description"),
-    isActive: boolean("is_active").default(true).notNull(),
+    userId: uuid("user_id")
+      .primaryKey()
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    communityMember: boolean("community_member").default(false).notNull(),
+    findVolunteers: boolean("find_volunteers").default(false).notNull(),
+    launchProject: boolean("launch_project").default(false).notNull(),
+    organizeEvent: boolean("organize_event").default(false).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
       .defaultNow()
       .$onUpdate(() => /* @__PURE__ */ new Date())
       .notNull(),
   },
-  (table) => [
-    uniqueIndex("contribution_slug_unique_idx").on(table.slug),
-    uniqueIndex("contribution_name_unique_idx").on(table.name),
-    index("contribution_active_idx").on(table.isActive),
-  ],
-);
-
-export const userContribution = pgTable(
-  "user_contribution",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    userId: uuid("user_id")
-      .notNull()
-      .references(() => user.id, { onDelete: "cascade" }),
-    contributionId: uuid("contribution_id")
-      .notNull()
-      .references(() => contribution.id, { onDelete: "cascade" }),
-    selectedAt: timestamp("selected_at").defaultNow().notNull(),
-  },
-  (table) => [
-    uniqueIndex("user_contribution_user_contribution_unique_idx").on(
-      table.userId,
-      table.contributionId,
-    ),
-    index("user_contribution_user_id_idx").on(table.userId),
-    index("user_contribution_contribution_id_idx").on(table.contributionId),
-  ],
+  (table) => [index("user_contribution_onboard_user_id_idx").on(table.userId)],
 );
 
 export const tier = pgTable(
@@ -287,20 +261,12 @@ export const userInterestRelations = relations(userInterest, ({ one }) => ({
   }),
 }));
 
-export const contributionRelations = relations(contribution, ({ many }) => ({
-  userContributions: many(userContribution),
-}));
-
-export const userContributionRelations = relations(
-  userContribution,
+export const userContributionOnboardRelations = relations(
+  userContributionOnboard,
   ({ one }) => ({
     user: one(user, {
-      fields: [userContribution.userId],
+      fields: [userContributionOnboard.userId],
       references: [user.id],
-    }),
-    contribution: one(contribution, {
-      fields: [userContribution.contributionId],
-      references: [contribution.id],
     }),
   }),
 );

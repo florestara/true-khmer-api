@@ -21,7 +21,7 @@ export type OnboardingStateDto = {
     updatedAt: Date;
   } | null;
   selectedInterestIds: string[];
-  selectedContributionIds: string[];
+  selectedContributionKeys: string[];
   progress: {
     totalPoints: number;
     tier: {
@@ -42,11 +42,7 @@ export type OnboardingOptionsDto = {
     icon: string;
   }>;
   contributions: Array<{
-    id: string;
-    slug: string;
-    name: string;
-    iconKey: string;
-    description: string | null;
+    key: string;
   }>;
   tiers: Array<{
     id: string;
@@ -66,11 +62,7 @@ export type InterestOptionDto = {
 };
 
 export type ContributionOptionDto = {
-  id: string;
-  slug: string;
-  name: string;
-  iconKey: string;
-  description: string | null;
+  key: string;
 };
 
 export type CountryListItemDto = {
