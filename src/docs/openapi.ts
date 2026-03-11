@@ -7,7 +7,7 @@ export const openApiDoc = {
   info: {
     title: "TrueKhmer API",
     version: "1.0.0",
-    description: "API documentation for currently mounted routes.",
+    description: "API documentation for True Khmer.",
   },
   servers: [{ url: defaultBaseUrl }],
   tags: [
