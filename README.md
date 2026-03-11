@@ -35,6 +35,7 @@ cp .env.example .env
 | -------------- | ---------------------------- | ----------------------------------------------------- |
 | `DATABASE_URL` | PostgreSQL connection string | `postgresql://user:password@localhost:5432/truekhmer` |
 | `PORT`         | Server port                  | `3000`                                                |
+| `DEFAULT_BASE_URL` | Base URL used in OpenAPI `servers` | `http://localhost:3000`                           |
 
 ### Database Setup
 
@@ -73,6 +74,15 @@ bun run start
 | Method | Endpoint | Description      |
 | ------ | -------- | ---------------- |
 | GET    | `/`      | API health check |
+
+### API Documentation
+
+| Method | Endpoint             | Description           |
+| ------ | -------------------- | --------------------- |
+| GET    | `/docs`              | Swagger UI            |
+| GET    | `/docs/openapi.json` | OpenAPI JSON document |
+
+Run the server and open `http://localhost:3000/docs`.
 
 ## Scripts
 
