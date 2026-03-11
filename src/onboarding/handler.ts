@@ -227,10 +227,7 @@ export async function handleSaveContributionsStep(
     );
   }
 
-  const result = await replaceUserContributions(userId, payload);
-  if (!result.ok) {
-    return c.json({ ok: false, error: result.error }, 400);
-  }
+  await replaceUserContributions(userId, payload);
 
   const state = await getOnboardingState(userId);
   return c.json({ ok: true, state });

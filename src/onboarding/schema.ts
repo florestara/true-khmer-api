@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { CONTRIBUTION_KEY_OPTIONS } from "./constants";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -19,11 +18,22 @@ export const onboardingInterestsStepSchema = z.object({
 });
 
 export const onboardingContributionsStepSchema = z.object({
-  contributionKeys: z
-    .array(z.enum(CONTRIBUTION_KEY_OPTIONS))
-    .min(1, "contributionKeys must contain at least 1 item")
-    .max(CONTRIBUTION_KEY_OPTIONS.length),
-});
+  community_member: z.boolean().optional(),
+  find_volunteers: z.boolean().optional(),
+  launch_project: z.boolean().optional(),
+  organize_event: z.boolean().optional(),
+})
+  .strict()
+  .refine(
+    (payload) =>
+      payload.community_member === true ||
+      payload.find_volunteers === true ||
+      payload.launch_project === true ||
+      payload.organize_event === true,
+    {
+      message: "At least one contribution must be selected",
+    },
+  );
 
 export type OnboardingProfileStepPayload = z.infer<typeof onboardingProfileStepSchema>;
 export type OnboardingInterestsStepPayload = z.infer<typeof onboardingInterestsStepSchema>;

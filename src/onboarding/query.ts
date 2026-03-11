@@ -47,16 +47,6 @@ const contributionKeyToColumnMap = {
   organize_event: "organizeEvent",
 } as const satisfies Record<ContributionKey, ContributionBooleanColumn>;
 
-function toContributionSelection(selectedKeys: readonly ContributionKey[]) {
-  const selectedKeySet = new Set(selectedKeys);
-  return Object.fromEntries(
-    CONTRIBUTION_KEY_OPTIONS.map((key) => [
-      contributionKeyToColumnMap[key],
-      selectedKeySet.has(key),
-    ]),
-  ) as Record<ContributionBooleanColumn, boolean>;
-}
-
 export async function listCountriesFromDb(): Promise<CountryListItemDto[]> {
   return db
     .select({
@@ -411,23 +401,12 @@ export async function replaceUserContributions(
   userId: string,
   payload: OnboardingContributionsStepPayload,
 ) {
-  const selectedContributionKeys = Array.from(
-    new Set(payload.contributionKeys),
-  );
-  const allowedKeys = new Set(CONTRIBUTION_KEY_OPTIONS);
-  const hasInvalidKey = selectedContributionKeys.some(
-    (key) => !allowedKeys.has(key),
-  );
-  if (hasInvalidKey) {
-    return {
-      ok: false as const,
-      error: "One or more contributions are invalid",
-    };
-  }
-
-  const contributionSelection = toContributionSelection(
-    selectedContributionKeys,
-  );
+  const contributionSelection = {
+    communityMember: payload.community_member === true,
+    findVolunteers: payload.find_volunteers === true,
+    launchProject: payload.launch_project === true,
+    organizeEvent: payload.organize_event === true,
+  } as const;
 
   await db.transaction(async (tx) => {
     await tx

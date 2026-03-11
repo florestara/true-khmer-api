@@ -324,24 +324,16 @@ export const openApiDoc = {
       },
       OnboardingContributionsStepRequest: {
         type: "object",
-        required: ["contributionKeys"],
-        description: "contributionKeys must contain at least 1 selected contribution key.",
+        minProperties: 1,
+        description:
+          "Each contribution field is optional, but at least one selected field must be true.",
         properties: {
-          contributionKeys: {
-            type: "array",
-            minItems: 1,
-            maxItems: 4,
-            items: {
-              type: "string",
-              enum: [
-                "community_member",
-                "find_volunteers",
-                "launch_project",
-                "organize_event",
-              ],
-            },
-          },
+          community_member: { type: "boolean", example: true },
+          find_volunteers: { type: "boolean", example: false },
+          launch_project: { type: "boolean", example: true },
+          organize_event: { type: "boolean", example: false },
         },
+        additionalProperties: false,
       },
       OnboardingProfile: {
         type: "object",
