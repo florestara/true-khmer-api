@@ -31,8 +31,7 @@ ENV NODE_ENV=production
 # Copy node_modules from deps and compiled output from builder
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
-COPY package.json drizzle.config.ts ./
-COPY drizzle ./drizzle
+COPY package.json ./
 
 EXPOSE 3000
 
