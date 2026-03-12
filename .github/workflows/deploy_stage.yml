@@ -21,22 +21,6 @@ jobs:
           username: ${{ secrets.LOCAL_REGISTRY_USERNAME }}
           password: ${{ secrets.LOCAL_REGISTRY_PASSWORD }}
 
-      - uses: actions/setup-node@v2
-        with:
-          node-version: "22.20.0"
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Migrate database
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL_STAGE }}
-        run: |
-          bun run db:migrate
-
       - name: Build and Push
         uses: docker/build-push-action@v4
         with:
