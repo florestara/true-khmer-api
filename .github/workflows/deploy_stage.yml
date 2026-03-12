@@ -34,7 +34,7 @@ jobs:
       - name: Migrate database
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL_STAGE }}
-        run: bun run db:migrate
+        run: bun run db:push
 
       - name: Build and Push
         uses: docker/build-push-action@v4
