@@ -1,0 +1,49 @@
+name: Production Deployment
+
+on:
+  push:
+    branches: [develop]
+
+jobs:
+  build_deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout V3
+        uses: actions/checkout@v3
+
+      - name: Log in to Docker Private Registry
+        uses: docker/login-action@v2
+        with:
+          registry: docker-registry-local.bongit.net
+          username: ${{ secrets.LOCAL_REGISTRY_USERNAME }}
+          password: ${{ secrets.LOCAL_REGISTRY_PASSWORD }}
+
+      - uses: actions/setup-node@v2
+        with:
+          node-version: "22.20.0"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Migrate database
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL_STAGE }}
+        run: bun run db:migrate
+
+      - name: Build and Push
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: docker-registry-local.bongit.net/true-khmer-api-stage:latest
+      - name: Deploy to Dokploy
+        run: |
+          curl --request GET 'https://dokploy.bongit.net/api/deploy/WadRfsy_hwOc6kkiFwyfe'

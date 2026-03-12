@@ -14,6 +14,7 @@ export const openApiDoc = {
     { name: "System" },
     { name: "Auth" },
     { name: "Forum Category" },
+    { name: "Forum Question" },
     { name: "Onboarding" },
     { name: "Uploads" },
   ],
@@ -83,6 +84,14 @@ export const openApiDoc = {
             items: { type: "string" },
             example: ["name is required and must be 1..120 characters"],
           },
+        },
+      },
+      OnboardingRequiredErrorResponse: {
+        type: "object",
+        required: ["error", "code"],
+        properties: {
+          error: { type: "string", enum: ["Onboarding required"], example: "Onboarding required" },
+          code: { type: "string", enum: ["ONBOARDING_REQUIRED"], example: "ONBOARDING_REQUIRED" },
         },
       },
       AuthValidationErrorResponse: {
@@ -298,6 +307,143 @@ export const openApiDoc = {
         properties: {
           ok: { type: "boolean", enum: [true], example: true },
           category: { $ref: "#/components/schemas/ForumCategory" },
+        },
+      },
+      CreateQuestionRequest: {
+        type: "object",
+        required: ["categoryId", "title", "body"],
+        properties: {
+          categoryId: {
+            type: "string",
+            format: "uuid",
+            example: "f28e0170-a5b2-4e69-b4f8-e9dc450ab322",
+          },
+          title: {
+            type: "string",
+            minLength: 1,
+            maxLength: 300,
+            example: "How can I start learning Khmer effectively?",
+          },
+          body: {
+            type: "string",
+            minLength: 1,
+            maxLength: 10000,
+            example: "I can read basic script but I struggle with listening and speaking.",
+          },
+          tags: {
+            oneOf: [
+              {
+                type: "array",
+                maxItems: 5,
+                items: { type: "string", minLength: 1, maxLength: 30 },
+              },
+              {
+                type: "string",
+                description: "Comma-separated tags; max 5 tags.",
+                example: "khmer,language,learning",
+              },
+            ],
+          },
+          status: {
+            type: "string",
+            enum: ["PUBLISHED"],
+            example: "PUBLISHED",
+          },
+        },
+      },
+      ForumQuestion: {
+        type: "object",
+        required: [
+          "id",
+          "categoryId",
+          "authorId",
+          "title",
+          "body",
+          "status",
+          "answerCount",
+          "createdAt",
+          "updatedAt",
+        ],
+        properties: {
+          id: { type: "string", format: "uuid" },
+          categoryId: { type: "string", format: "uuid" },
+          authorId: { type: "string", format: "uuid" },
+          title: { type: "string", maxLength: 300 },
+          body: { type: "string" },
+          status: { type: "string", enum: ["PUBLISHED", "CLOSED", "DELETED"], example: "PUBLISHED" },
+          answerCount: { type: "integer", example: 0 },
+          createdAt: { type: "string", format: "date-time" },
+          updatedAt: { type: "string", format: "date-time" },
+        },
+      },
+      CreateQuestionSuccessResponse: {
+        type: "object",
+        required: ["ok", "question"],
+        properties: {
+          ok: { type: "boolean", enum: [true], example: true },
+          question: { $ref: "#/components/schemas/ForumQuestionWithTags" },
+        },
+      },
+      ForumQuestionWithTags: {
+        allOf: [
+          { $ref: "#/components/schemas/ForumQuestion" },
+          {
+            type: "object",
+            required: ["tags"],
+            properties: {
+              tags: {
+                type: "array",
+                items: { type: "string" },
+                example: ["khmer", "language", "learning"],
+              },
+            },
+          },
+        ],
+      },
+      GetQuestionSuccessResponse: {
+        type: "object",
+        required: ["ok", "question"],
+        properties: {
+          ok: { type: "boolean", enum: [true], example: true },
+          question: { $ref: "#/components/schemas/ForumQuestionWithTags" },
+        },
+      },
+      GetQuestionsSuccessResponse: {
+        type: "object",
+        required: ["ok", "questions"],
+        properties: {
+          ok: { type: "boolean", enum: [true], example: true },
+          questions: {
+            type: "array",
+            items: { $ref: "#/components/schemas/ForumQuestionWithTags" },
+          },
+        },
+      },
+      GetQuestionsPageSuccessResponse: {
+        type: "object",
+        required: ["ok", "questions", "pagination"],
+        properties: {
+          ok: { type: "boolean", enum: [true], example: true },
+          questions: {
+            type: "array",
+            items: { $ref: "#/components/schemas/ForumQuestionWithTags" },
+          },
+          pagination: {
+            type: "object",
+            required: ["limit", "hasMore", "nextCursor"],
+            properties: {
+              limit: { type: "integer", minimum: 1, maximum: 50, example: 10 },
+              hasMore: { type: "boolean", example: true },
+              nextCursor: {
+                type: "string",
+                nullable: true,
+                description:
+                  "Opaque cursor for the next page. Pass it back as `cursor` query param.",
+                example:
+                  "eyJjcmVhdGVkQXQiOiIyMDI2LTAzLTEyVDEwOjAyOjAwLjAwMFoiLCJpZCI6IjAwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwMSJ9",
+              },
+            },
+          },
         },
       },
       OnboardingProfileStepRequest: {
@@ -1078,6 +1224,281 @@ export const openApiDoc = {
             content: {
               "application/json": {
                 schema: { $ref: "#/components/schemas/OkFalseErrorResponse" },
+              },
+            },
+          },
+          "500": {
+            description: "Internal server error",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [
+                    { $ref: "#/components/schemas/OkFalseErrorResponse" },
+                    { $ref: "#/components/schemas/InternalServerErrorResponse" },
+                  ],
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    "/api/forum/question/create-question": {
+      post: {
+        tags: ["Forum Question"],
+        summary: "Create question",
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/CreateQuestionRequest" },
+            },
+          },
+        },
+        responses: {
+          "201": {
+            description: "Question created",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/CreateQuestionSuccessResponse" },
+              },
+            },
+          },
+          "400": {
+            description: "Validation failed or invalid authenticated user id type",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [
+                    { $ref: "#/components/schemas/OkFalseValidationIssuesResponse" },
+                    { $ref: "#/components/schemas/OkFalseErrorResponse" },
+                  ],
+                },
+              },
+            },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [
+                    { $ref: "#/components/schemas/SimpleErrorResponse" },
+                    { $ref: "#/components/schemas/OkFalseErrorResponse" },
+                  ],
+                },
+              },
+            },
+          },
+          "403": {
+            description: "Onboarding required",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/OnboardingRequiredErrorResponse" },
+              },
+            },
+          },
+          "404": {
+            description: "Category not found",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/OkFalseErrorResponse" },
+              },
+            },
+          },
+          "409": {
+            description: "Questions can only be posted to active categories",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/OkFalseErrorResponse" },
+              },
+            },
+          },
+          "500": {
+            description: "Internal server error",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [
+                    { $ref: "#/components/schemas/OkFalseErrorResponse" },
+                    { $ref: "#/components/schemas/InternalServerErrorResponse" },
+                  ],
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    "/api/forum/question/get-question/{questionId}": {
+      get: {
+        tags: ["Forum Question"],
+        summary: "Get question by id",
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          {
+            in: "path",
+            name: "questionId",
+            required: true,
+            description: "Question UUID",
+            schema: { type: "string", format: "uuid" },
+          },
+        ],
+        responses: {
+          "200": {
+            description: "Question found",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/GetQuestionSuccessResponse" },
+              },
+            },
+          },
+          "400": {
+            description: "Validation failed",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/OkFalseValidationIssuesResponse" },
+              },
+            },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/SimpleErrorResponse" },
+              },
+            },
+          },
+          "403": {
+            description: "Onboarding required",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/OnboardingRequiredErrorResponse" },
+              },
+            },
+          },
+          "404": {
+            description: "Question not found",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/OkFalseErrorResponse" },
+              },
+            },
+          },
+          "500": {
+            description: "Internal server error",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [
+                    { $ref: "#/components/schemas/OkFalseErrorResponse" },
+                    { $ref: "#/components/schemas/InternalServerErrorResponse" },
+                  ],
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    "/api/forum/question/get-questions": {
+      get: {
+        tags: ["Forum Question"],
+        summary: "Get all questions",
+        security: [{ BearerAuth: [] }],
+        responses: {
+          "200": {
+            description: "Questions found",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/GetQuestionsSuccessResponse" },
+              },
+            },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/SimpleErrorResponse" },
+              },
+            },
+          },
+          "403": {
+            description: "Onboarding required",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/OnboardingRequiredErrorResponse" },
+              },
+            },
+          },
+          "500": {
+            description: "Internal server error",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [
+                    { $ref: "#/components/schemas/OkFalseErrorResponse" },
+                    { $ref: "#/components/schemas/InternalServerErrorResponse" },
+                  ],
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    "/api/forum/question/get-questions-page": {
+      get: {
+        tags: ["Forum Question"],
+        summary: "Get questions page (infinite scroll)",
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          {
+            in: "query",
+            name: "limit",
+            required: false,
+            description: "How many questions per request (1..50). Default is 10.",
+            schema: { type: "integer", minimum: 1, maximum: 50, default: 10 },
+          },
+          {
+            in: "query",
+            name: "cursor",
+            required: false,
+            description: "Opaque cursor from previous response `pagination.nextCursor`.",
+            schema: { type: "string" },
+          },
+        ],
+        responses: {
+          "200": {
+            description: "Questions page found",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/GetQuestionsPageSuccessResponse" },
+              },
+            },
+          },
+          "400": {
+            description: "Validation failed",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/OkFalseValidationIssuesResponse" },
+              },
+            },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/SimpleErrorResponse" },
+              },
+            },
+          },
+          "403": {
+            description: "Onboarding required",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/OnboardingRequiredErrorResponse" },
               },
             },
           },
