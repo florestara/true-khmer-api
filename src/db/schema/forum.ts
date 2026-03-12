@@ -64,7 +64,9 @@ export const forumQuestion = pgTable(
   "forum_question",
   {
     id: uuid("id").defaultRandom().primaryKey().notNull(),
-    categoryId: uuid("category_id").notNull(),
+    categoryId: uuid("category_id")
+      .notNull()
+      .references(() => forumCategory.id),
     authorId: uuid("author_id").notNull(),
     title: varchar("title", { length: 300 }).notNull(),
     body: text("body").notNull(),

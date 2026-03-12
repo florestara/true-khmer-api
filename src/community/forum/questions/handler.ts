@@ -76,19 +76,19 @@ export async function handleCreateQuestion(c: Context, data: CreateQuestionInput
     );
   }
 
-  const category = await findCategoryById(data.categoryId);
-  if (!category) {
-    return c.json({ ok: false, error: "Category not found" }, 404);
-  }
-
-  if (category.status !== "ACTIVE") {
-    return c.json(
-      { ok: false, error: "Questions can only be posted to active categories" },
-      409
-    );
-  }
-
   try {
+    const category = await findCategoryById(data.categoryId);
+    if (!category) {
+      return c.json({ ok: false, error: "Category not found" }, 404);
+    }
+
+    if (category.status !== "ACTIVE") {
+      return c.json(
+        { ok: false, error: "Questions can only be posted to active categories" },
+        409
+      );
+    }
+
     const newQuestion = await createQuestion(data, authorId);
     return c.json({ ok: true, question: newQuestion }, 201);
   } catch (err) {

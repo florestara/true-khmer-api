@@ -436,9 +436,11 @@ export const openApiDoc = {
               hasMore: { type: "boolean", example: true },
               nextCursor: {
                 type: "string",
-                format: "date-time",
                 nullable: true,
-                example: "2026-03-12T10:02:00.000Z",
+                description:
+                  "Opaque cursor for the next page. Pass it back as `cursor` query param.",
+                example:
+                  "eyJjcmVhdGVkQXQiOiIyMDI2LTAzLTEyVDEwOjAyOjAwLjAwMFoiLCJpZCI6IjAwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwMSJ9",
               },
             },
           },
@@ -1463,8 +1465,8 @@ export const openApiDoc = {
             in: "query",
             name: "cursor",
             required: false,
-            description: "Cursor from previous response `pagination.nextCursor`.",
-            schema: { type: "string", format: "date-time" },
+            description: "Opaque cursor from previous response `pagination.nextCursor`.",
+            schema: { type: "string" },
           },
         ],
         responses: {

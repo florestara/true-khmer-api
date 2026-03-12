@@ -68,6 +68,30 @@ export const getQuestionParamsSchema = z.object({
 
 export type GetQuestionParams = z.infer<typeof getQuestionParamsSchema>;
 
+const questionsPageCursorSchema = z.object({
+  createdAt: z.string().datetime({
+    offset: true,
+    message: "cursor.createdAt must be a valid ISO datetime",
+  }),
+  id: z.string().trim().regex(UUID_RE, "cursor.id must be a valid UUID"),
+});
+
+export type QuestionsPageCursor = z.infer<typeof questionsPageCursorSchema>;
+
+export function encodeQuestionsPageCursor(cursor: QuestionsPageCursor): string {
+  return Buffer.from(JSON.stringify(cursor), "utf8").toString("base64url");
+}
+
+function decodeQuestionsPageCursor(raw: string): QuestionsPageCursor | null {
+  try {
+    const parsed = JSON.parse(Buffer.from(raw, "base64url").toString("utf8"));
+    const cursor = questionsPageCursorSchema.safeParse(parsed);
+    return cursor.success ? cursor.data : null;
+  } catch {
+    return null;
+  }
+}
+
 export const getQuestionsPageQuerySchema = z.object({
   limit: z.coerce
     .number()
@@ -77,8 +101,23 @@ export const getQuestionsPageQuerySchema = z.object({
     .default(DEFAULT_QUESTIONS_PAGE_SIZE),
   cursor: z
     .string()
-    .datetime({ offset: true, message: "cursor must be a valid ISO datetime" })
-    .optional(),
+    .optional()
+    .transform((value, ctx) => {
+      if (value === undefined) {
+        return undefined;
+      }
+
+      const cursor = decodeQuestionsPageCursor(value);
+      if (!cursor) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "cursor must be a valid pagination cursor",
+        });
+        return z.NEVER;
+      }
+
+      return cursor;
+    }),
 });
 
 export type GetQuestionsPageQuery = z.infer<typeof getQuestionsPageQuerySchema>;

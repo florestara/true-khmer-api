@@ -1,4 +1,4 @@
-import { desc, eq, inArray, lt } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, or } from "drizzle-orm";
 import { db } from "../../../db/index";
 import {
   forumCategory,
@@ -6,7 +6,11 @@ import {
   forumQuestionTag,
   forumTag,
 } from "../../../db/schema";
-import type { CreateQuestionInput } from "./schema";
+import {
+  encodeQuestionsPageCursor,
+  type CreateQuestionInput,
+  type QuestionsPageCursor,
+} from "./schema";
 
 type ForumCategoryRow = typeof forumCategory.$inferSelect;
 type ForumQuestionRow = typeof forumQuestion.$inferSelect;
@@ -95,13 +99,20 @@ export async function findAllQuestions(): Promise<ForumQuestionWithTags[]> {
 
 export async function findQuestionsPage(
   limit: number,
-  cursor?: string
+  cursor?: QuestionsPageCursor
 ): Promise<QuestionsPageResult> {
   const rows = await db
     .select()
     .from(forumQuestion)
-    .where(cursor ? lt(forumQuestion.createdAt, cursor) : undefined)
-    .orderBy(desc(forumQuestion.createdAt))
+    .where(
+      cursor
+        ? or(
+            lt(forumQuestion.createdAt, cursor.createdAt),
+            and(eq(forumQuestion.createdAt, cursor.createdAt), lt(forumQuestion.id, cursor.id))
+          )
+        : undefined
+    )
+    .orderBy(desc(forumQuestion.createdAt), desc(forumQuestion.id))
     .limit(limit + 1);
 
   const hasMore = rows.length > limit;
@@ -144,7 +155,12 @@ export async function findQuestionsPage(
 
   return {
     questions,
-    nextCursor: hasMore ? pageRows[pageRows.length - 1].createdAt : null,
+    nextCursor: hasMore
+      ? encodeQuestionsPageCursor({
+          createdAt: pageRows[pageRows.length - 1].createdAt,
+          id: pageRows[pageRows.length - 1].id,
+        })
+      : null,
     hasMore,
   };
 }
