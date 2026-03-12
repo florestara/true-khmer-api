@@ -35,7 +35,6 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL_STAGE }}
         run: |
-          bun run db:generate
           bun run db:migrate
 
       - name: Build and Push
