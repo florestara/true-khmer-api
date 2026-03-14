@@ -14,7 +14,16 @@ export const onboardingProfileStepSchema = z
   });
 
 export const onboardingInterestsStepSchema = z.object({
-  interestIds: z.array(uuidSchema).min(2, "interestIds must contain at least 2 items").max(20),
+  interestIds: z
+    .array(uuidSchema)
+    .min(2, "interestIds must contain at least 2 items")
+    .max(20)
+    .refine(
+      (interestIds) =>
+        new Set(interestIds.map((interestId) => interestId.toLowerCase())).size ===
+        interestIds.length,
+      "interestIds must contain unique items",
+    ),
 });
 
 export const onboardingContributionsStepSchema = z.object({
