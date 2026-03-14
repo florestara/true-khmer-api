@@ -7,11 +7,10 @@
     "dev": "tsx watch src/index.ts",
     "build": "esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/index.mjs --packages=external",
     "start": "node dist/index.mjs",
-    "db:pull": "drizzle-kit pull",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:push": "drizzle-kit push",
     "db:seed:onboarding": "tsx src/onboarding/seed.ts",
+    "db:seed:forum-categories": "tsx src/community/forum/categories/seed.ts",
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
