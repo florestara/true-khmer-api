@@ -30,6 +30,11 @@ export const forumAnswerStatus = pgEnum("forum_answer_status", [
   "DELETED",
 ]);
 
+export const forumAnswerVoteType = pgEnum("forum_answer_vote_type", [
+  "UPVOTE",
+  "DOWNVOTE",
+]);
+
 export const forumCategory = pgTable(
   "forum_category",
   {
@@ -91,10 +96,39 @@ export const forumAnswer = pgTable(
   "forum_answer",
   {
     id: uuid("id").defaultRandom().primaryKey().notNull(),
-    questionId: uuid("question_id").notNull(),
+    questionId: uuid("question_id")
+      .notNull()
+      .references(() => forumQuestion.id, { onDelete: "cascade" }),
     authorId: uuid("author_id").notNull(),
     body: text("body").notNull(),
     status: forumAnswerStatus("status").default("PUBLISHED").notNull(),
+    upvoteCount: integer("upvote_count").default(0).notNull(),
+    downvoteCount: integer("downvote_count").default(0).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" })
+      .defaultNow()
+      .notNull(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true, mode: "string" }),
+  },
+  (table) => [
+    index("forum_answer_question_idx").using("btree", table.questionId),
+    index("forum_answer_author_idx").using("btree", table.authorId),
+    index("forum_answer_status_idx").using("btree", table.status),
+    index("forum_answer_created_idx").using("btree", table.createdAt),
+  ],
+);
+
+export const forumAnswerVote = pgTable(
+  "forum_answer_vote",
+  {
+    id: uuid("id").defaultRandom().primaryKey().notNull(),
+    answerId: uuid("answer_id")
+      .notNull()
+      .references(() => forumAnswer.id, { onDelete: "cascade" }),
+    voterId: uuid("voter_id").notNull(),
+    voteType: forumAnswerVoteType("vote_type").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
       .defaultNow()
       .notNull(),
@@ -103,9 +137,13 @@ export const forumAnswer = pgTable(
       .notNull(),
   },
   (table) => [
-    index("forum_answer_question_idx").using("btree", table.questionId),
-    index("forum_answer_author_idx").using("btree", table.authorId),
-    index("forum_answer_status_idx").using("btree", table.status),
-    index("forum_answer_created_idx").using("btree", table.createdAt),
+    uniqueIndex("forum_answer_vote_answer_voter_unique_idx").using(
+      "btree",
+      table.answerId,
+      table.voterId,
+    ),
+    index("forum_answer_vote_answer_idx").using("btree", table.answerId),
+    index("forum_answer_vote_voter_idx").using("btree", table.voterId),
+    index("forum_answer_vote_type_idx").using("btree", table.voteType),
   ],
 );

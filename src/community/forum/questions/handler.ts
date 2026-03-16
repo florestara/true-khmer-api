@@ -14,6 +14,8 @@ import {
   findQuestionsPage,
 } from "./query";
 
+const POSTGRES_FOREIGN_KEY_VIOLATION = "23503";
+
 export async function handleGetQuestions(c: Context) {
   try {
     const questions = await findAllQuestions();
@@ -93,7 +95,7 @@ export async function handleCreateQuestion(c: Context, data: CreateQuestionInput
     return c.json({ ok: true, question: newQuestion }, 201);
   } catch (err) {
     const code = (err as { code?: string } | null)?.code;
-    if (code === "23503") {
+    if (code === POSTGRES_FOREIGN_KEY_VIOLATION) {
       return c.json({ ok: false, error: "Category not found" }, 404);
     }
     console.error("Failed to create question", err);
