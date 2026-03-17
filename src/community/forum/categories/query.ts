@@ -1,6 +1,10 @@
 import { eq, sql } from "drizzle-orm";
 import { db } from "../../../db/index";
 import { forumCategory } from "../../../db/schema";
+import {
+  FORUM_ADVISORY_LOCK_NAMESPACE,
+  FORUM_CATEGORY_DISPLAY_ORDER_LOCK_KEY,
+} from "../constants";
 import type { CreateCategoryInput } from "./schema";
 
 type ForumCategoryRow = typeof forumCategory.$inferSelect;
@@ -24,8 +28,10 @@ export async function createCategory(
   data: CreateCategoryInput
 ): Promise<ForumCategoryRow> {
   return db.transaction(async (tx) => {
-    // Namespaced advisory lock: (100 = forum domain, 1 = category display order sequence).
-    await tx.execute(sql`select pg_advisory_xact_lock(100, 1)`);
+    // Serialize category display-order assignment inside the forum advisory-lock namespace.
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(${FORUM_ADVISORY_LOCK_NAMESPACE}, ${FORUM_CATEGORY_DISPLAY_ORDER_LOCK_KEY})`,
+    );
 
     const [orderRow] = await tx
       .select({

@@ -1,7 +1,5 @@
 import type { Context } from "hono";
-import { getAuthUserId, type AuthPayload } from "../../../auth/types";
 import {
-  UUID_RE,
   type CreateQuestionInput,
   type GetQuestionParams,
   type GetQuestionsPageQuery,
@@ -13,8 +11,8 @@ import {
   findQuestionById,
   findQuestionsPage,
 } from "./query";
-
-const POSTGRES_FOREIGN_KEY_VIOLATION = "23503";
+import { POSTGRES_FOREIGN_KEY_VIOLATION } from "../constants";
+import { getValidatedForumAuthUserId } from "../utils/auth";
 
 export async function handleGetQuestions(c: Context) {
   try {
@@ -61,21 +59,9 @@ export async function handleGetQuestion(c: Context, params: GetQuestionParams) {
 }
 
 export async function handleCreateQuestion(c: Context, data: CreateQuestionInput) {
-  const authPayload = c.get("auth") as AuthPayload | undefined;
-  const authorId = getAuthUserId(authPayload);
-  if (!authorId) {
-    return c.json({ ok: false, error: "Authenticated user id not found" }, 401);
-  }
-
-  if (!UUID_RE.test(authorId)) {
-    return c.json(
-      {
-        ok: false,
-        error:
-          "Authenticated user id is not UUID. Align forum author_id type with auth user id type.",
-      },
-      400
-    );
+  const authResult = getValidatedForumAuthUserId(c);
+  if (!authResult.ok) {
+    return authResult.response;
   }
 
   try {
@@ -91,7 +77,7 @@ export async function handleCreateQuestion(c: Context, data: CreateQuestionInput
       );
     }
 
-    const newQuestion = await createQuestion(data, authorId);
+    const newQuestion = await createQuestion(data, authResult.userId);
     return c.json({ ok: true, question: newQuestion }, 201);
   } catch (err) {
     const code = (err as { code?: string } | null)?.code;

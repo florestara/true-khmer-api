@@ -1,13 +1,15 @@
 import type { Context } from "hono";
-import { getAuthUserId, type AuthPayload } from "../../../auth/types";
+import {
+  POSTGRES_UNIQUE_VIOLATION,
+} from "../constants";
+import { getValidatedForumAuthUserId } from "../utils/auth";
 import { validateCreateCategoryInput, type CreateCategoryInput } from "./schema";
 import { createCategory, findCategoryByName } from "./query";
 
 export async function handleCreateCategory(c: Context) {
-  const authPayload = c.get("auth") as AuthPayload | undefined;
-  const userId = getAuthUserId(authPayload);
-  if (!userId) {
-    return c.json({ ok: false, error: "Unauthorized" }, 401);
+  const authResult = getValidatedForumAuthUserId(c);
+  if (!authResult.ok) {
+    return authResult.response;
   }
 
   const body = await c.req.json<unknown>().catch(() => undefined);
@@ -21,7 +23,7 @@ export async function handleCreateCategory(c: Context) {
 
   const data: CreateCategoryInput = {
     ...parsed.data,
-    createdBy: userId,
+    createdBy: authResult.userId,
   };
 
   const existing = await findCategoryByName(data.name);
@@ -34,7 +36,7 @@ export async function handleCreateCategory(c: Context) {
     return c.json({ ok: true, category: newCategory }, 201);
   } catch (err) {
     const code = (err as { code?: string } | null)?.code;
-    if (code === "23505") {
+    if (code === POSTGRES_UNIQUE_VIOLATION) {
       return c.json({ ok: false, error: "Category already exists" }, 409);
     }
     console.error("Failed to create category", err);
