@@ -15,6 +15,7 @@ export const openApiDoc = {
     { name: "Auth" },
     { name: "Forum Category" },
     { name: "Forum Question" },
+    { name: "Forum Answer" },
     { name: "Onboarding" },
     { name: "Uploads" },
   ],
@@ -444,6 +445,127 @@ export const openApiDoc = {
               },
             },
           },
+        },
+      },
+      CreateAnswerRequest: {
+        type: "object",
+        required: ["questionId", "body"],
+        properties: {
+          questionId: {
+            type: "string",
+            format: "uuid",
+            example: "f28e0170-a5b2-4e69-b4f8-e9dc450ab322",
+          },
+          body: {
+            type: "string",
+            minLength: 1,
+            maxLength: 10000,
+            example: "You can start with daily listening practice and short writing prompts.",
+          },
+        },
+      },
+      UpdateAnswerRequest: {
+        type: "object",
+        required: ["body"],
+        properties: {
+          body: {
+            type: "string",
+            minLength: 1,
+            maxLength: 10000,
+            example: "I updated this answer with clearer steps and resources.",
+          },
+        },
+      },
+      VoteAnswerRequest: {
+        type: "object",
+        required: ["voteType"],
+        properties: {
+          voteType: {
+            type: "string",
+            enum: ["UPVOTE", "DOWNVOTE", "NONE"],
+            example: "UPVOTE",
+            description:
+              "UPVOTE or DOWNVOTE sets the vote; NONE removes the current user's vote.",
+          },
+        },
+      },
+      ForumAnswer: {
+        type: "object",
+        required: [
+          "id",
+          "questionId",
+          "authorId",
+          "body",
+          "status",
+          "upvoteCount",
+          "downvoteCount",
+          "createdAt",
+          "updatedAt",
+          "deletedAt",
+        ],
+        properties: {
+          id: { type: "string", format: "uuid" },
+          questionId: { type: "string", format: "uuid" },
+          authorId: { type: "string", format: "uuid" },
+          body: { type: "string" },
+          status: { type: "string", enum: ["PUBLISHED", "DELETED"], example: "PUBLISHED" },
+          upvoteCount: { type: "integer", example: 12 },
+          downvoteCount: { type: "integer", example: 2 },
+          createdAt: { type: "string", format: "date-time" },
+          updatedAt: { type: "string", format: "date-time" },
+          deletedAt: { type: "string", format: "date-time", nullable: true },
+        },
+      },
+      ForumAnswerWithViewerVote: {
+        allOf: [
+          { $ref: "#/components/schemas/ForumAnswer" },
+          {
+            type: "object",
+            required: ["score", "viewerVote"],
+            properties: {
+              score: { type: "integer", example: 10 },
+              viewerVote: {
+                type: "string",
+                enum: ["UPVOTE", "DOWNVOTE"],
+                nullable: true,
+                example: "UPVOTE",
+              },
+            },
+          },
+        ],
+      },
+      CreateAnswerSuccessResponse: {
+        type: "object",
+        required: ["ok", "answer"],
+        properties: {
+          ok: { type: "boolean", enum: [true], example: true },
+          answer: { $ref: "#/components/schemas/ForumAnswerWithViewerVote" },
+        },
+      },
+      GetAnswersSuccessResponse: {
+        type: "object",
+        required: ["ok", "answers"],
+        properties: {
+          ok: { type: "boolean", enum: [true], example: true },
+          answers: {
+            type: "array",
+            items: { $ref: "#/components/schemas/ForumAnswerWithViewerVote" },
+          },
+        },
+      },
+      VoteAnswerSuccessResponse: {
+        type: "object",
+        required: ["ok", "answer"],
+        properties: {
+          ok: { type: "boolean", enum: [true], example: true },
+          answer: { $ref: "#/components/schemas/ForumAnswerWithViewerVote" },
+        },
+      },
+      OkTrueResponse: {
+        type: "object",
+        required: ["ok"],
+        properties: {
+          ok: { type: "boolean", enum: [true], example: true },
         },
       },
       OnboardingProfileStepRequest: {
@@ -1499,6 +1621,468 @@ export const openApiDoc = {
             content: {
               "application/json": {
                 schema: { $ref: "#/components/schemas/OnboardingRequiredErrorResponse" },
+              },
+            },
+          },
+          "500": {
+            description: "Internal server error",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [
+                    { $ref: "#/components/schemas/OkFalseErrorResponse" },
+                    { $ref: "#/components/schemas/InternalServerErrorResponse" },
+                  ],
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    "/api/forum/answer/get-answers/{questionId}": {
+      get: {
+        tags: ["Forum Answer"],
+        summary: "Get published answers by question id",
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          {
+            in: "path",
+            name: "questionId",
+            required: true,
+            description: "Question UUID",
+            schema: { type: "string", format: "uuid" },
+          },
+        ],
+        responses: {
+          "200": {
+            description: "Answers found",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/GetAnswersSuccessResponse" },
+              },
+            },
+          },
+          "400": {
+            description: "Validation failed or invalid authenticated user id type",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [
+                    { $ref: "#/components/schemas/OkFalseValidationIssuesResponse" },
+                    { $ref: "#/components/schemas/OkFalseErrorResponse" },
+                  ],
+                },
+              },
+            },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [
+                    { $ref: "#/components/schemas/SimpleErrorResponse" },
+                    { $ref: "#/components/schemas/OkFalseErrorResponse" },
+                  ],
+                },
+              },
+            },
+          },
+          "403": {
+            description: "Onboarding required",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/OnboardingRequiredErrorResponse" },
+              },
+            },
+          },
+          "404": {
+            description: "Question not found",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/OkFalseErrorResponse" },
+              },
+            },
+          },
+          "500": {
+            description: "Internal server error",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [
+                    { $ref: "#/components/schemas/OkFalseErrorResponse" },
+                    { $ref: "#/components/schemas/InternalServerErrorResponse" },
+                  ],
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    "/api/forum/answer/create-answer": {
+      post: {
+        tags: ["Forum Answer"],
+        summary: "Create answer",
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/CreateAnswerRequest" },
+            },
+          },
+        },
+        responses: {
+          "201": {
+            description: "Answer created",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/CreateAnswerSuccessResponse" },
+              },
+            },
+          },
+          "400": {
+            description: "Validation failed or invalid authenticated user id type",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [
+                    { $ref: "#/components/schemas/OkFalseValidationIssuesResponse" },
+                    { $ref: "#/components/schemas/OkFalseErrorResponse" },
+                  ],
+                },
+              },
+            },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [
+                    { $ref: "#/components/schemas/SimpleErrorResponse" },
+                    { $ref: "#/components/schemas/OkFalseErrorResponse" },
+                  ],
+                },
+              },
+            },
+          },
+          "403": {
+            description: "Onboarding required",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/OnboardingRequiredErrorResponse" },
+              },
+            },
+          },
+          "404": {
+            description: "Question not found",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/OkFalseErrorResponse" },
+              },
+            },
+          },
+          "409": {
+            description: "Answers can only be posted to published questions",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/OkFalseErrorResponse" },
+              },
+            },
+          },
+          "500": {
+            description: "Internal server error",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [
+                    { $ref: "#/components/schemas/OkFalseErrorResponse" },
+                    { $ref: "#/components/schemas/InternalServerErrorResponse" },
+                  ],
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    "/api/forum/answer/edit-answer/{answerId}": {
+      patch: {
+        tags: ["Forum Answer"],
+        summary: "Edit your own answer",
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          {
+            in: "path",
+            name: "answerId",
+            required: true,
+            description: "Answer UUID",
+            schema: { type: "string", format: "uuid" },
+          },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/UpdateAnswerRequest" },
+            },
+          },
+        },
+        responses: {
+          "200": {
+            description: "Answer updated",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/CreateAnswerSuccessResponse" },
+              },
+            },
+          },
+          "400": {
+            description: "Validation failed or invalid authenticated user id type",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [
+                    { $ref: "#/components/schemas/OkFalseValidationIssuesResponse" },
+                    { $ref: "#/components/schemas/OkFalseErrorResponse" },
+                  ],
+                },
+              },
+            },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [
+                    { $ref: "#/components/schemas/SimpleErrorResponse" },
+                    { $ref: "#/components/schemas/OkFalseErrorResponse" },
+                  ],
+                },
+              },
+            },
+          },
+          "403": {
+            description: "Forbidden (not your answer) or onboarding required",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [
+                    { $ref: "#/components/schemas/OnboardingRequiredErrorResponse" },
+                    { $ref: "#/components/schemas/OkFalseErrorResponse" },
+                  ],
+                },
+              },
+            },
+          },
+          "404": {
+            description: "Answer not found",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/OkFalseErrorResponse" },
+              },
+            },
+          },
+          "409": {
+            description: "Only published answers can be edited",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/OkFalseErrorResponse" },
+              },
+            },
+          },
+          "500": {
+            description: "Internal server error",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [
+                    { $ref: "#/components/schemas/OkFalseErrorResponse" },
+                    { $ref: "#/components/schemas/InternalServerErrorResponse" },
+                  ],
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    "/api/forum/answer/delete-answer/{answerId}": {
+      delete: {
+        tags: ["Forum Answer"],
+        summary: "Delete your own answer",
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          {
+            in: "path",
+            name: "answerId",
+            required: true,
+            description: "Answer UUID",
+            schema: { type: "string", format: "uuid" },
+          },
+        ],
+        responses: {
+          "200": {
+            description: "Answer deleted",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/OkTrueResponse" },
+              },
+            },
+          },
+          "400": {
+            description: "Validation failed or invalid authenticated user id type",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [
+                    { $ref: "#/components/schemas/OkFalseValidationIssuesResponse" },
+                    { $ref: "#/components/schemas/OkFalseErrorResponse" },
+                  ],
+                },
+              },
+            },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [
+                    { $ref: "#/components/schemas/SimpleErrorResponse" },
+                    { $ref: "#/components/schemas/OkFalseErrorResponse" },
+                  ],
+                },
+              },
+            },
+          },
+          "403": {
+            description: "Forbidden (not your answer) or onboarding required",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [
+                    { $ref: "#/components/schemas/OnboardingRequiredErrorResponse" },
+                    { $ref: "#/components/schemas/OkFalseErrorResponse" },
+                  ],
+                },
+              },
+            },
+          },
+          "404": {
+            description: "Answer not found",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/OkFalseErrorResponse" },
+              },
+            },
+          },
+          "409": {
+            description: "Answer is already deleted",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/OkFalseErrorResponse" },
+              },
+            },
+          },
+          "500": {
+            description: "Internal server error",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [
+                    { $ref: "#/components/schemas/OkFalseErrorResponse" },
+                    { $ref: "#/components/schemas/InternalServerErrorResponse" },
+                  ],
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    "/api/forum/answer/vote-answer/{answerId}": {
+      post: {
+        tags: ["Forum Answer"],
+        summary: "Vote answer (upvote/downvote/remove)",
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          {
+            in: "path",
+            name: "answerId",
+            required: true,
+            description: "Answer UUID",
+            schema: { type: "string", format: "uuid" },
+          },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/VoteAnswerRequest" },
+            },
+          },
+        },
+        responses: {
+          "200": {
+            description: "Vote applied",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/VoteAnswerSuccessResponse" },
+              },
+            },
+          },
+          "400": {
+            description: "Validation failed or invalid authenticated user id type",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [
+                    { $ref: "#/components/schemas/OkFalseValidationIssuesResponse" },
+                    { $ref: "#/components/schemas/OkFalseErrorResponse" },
+                  ],
+                },
+              },
+            },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [
+                    { $ref: "#/components/schemas/SimpleErrorResponse" },
+                    { $ref: "#/components/schemas/OkFalseErrorResponse" },
+                  ],
+                },
+              },
+            },
+          },
+          "403": {
+            description: "Onboarding required",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/OnboardingRequiredErrorResponse" },
+              },
+            },
+          },
+          "404": {
+            description: "Answer not found",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/OkFalseErrorResponse" },
+              },
+            },
+          },
+          "409": {
+            description: "Cannot vote your own answer or vote on deleted answer",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/OkFalseErrorResponse" },
               },
             },
           },
