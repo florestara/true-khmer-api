@@ -2,7 +2,7 @@ import { validator } from "hono/validator";
 import {
   createQuestionSchema,
   getQuestionParamsSchema,
-  getQuestionsPageQuerySchema,
+  getQuestionsQuerySchema,
 } from "./schema";
 
 export const createQuestionValidator = validator("json", (value, c) => {
@@ -39,8 +39,8 @@ export const getQuestionParamsValidator = validator("param", (value, c) => {
   return parsed.data;
 });
 
-export const getQuestionsPageQueryValidator = validator("query", (value, c) => {
-  const parsed = getQuestionsPageQuerySchema.safeParse(value);
+export const getQuestionsQueryValidator = validator("query", (value, c) => {
+  const parsed = getQuestionsQuerySchema.safeParse(value);
 
   if (!parsed.success) {
     return c.json(

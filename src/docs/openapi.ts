@@ -411,17 +411,6 @@ export const openApiDoc = {
       },
       GetQuestionsSuccessResponse: {
         type: "object",
-        required: ["ok", "questions"],
-        properties: {
-          ok: { type: "boolean", enum: [true], example: true },
-          questions: {
-            type: "array",
-            items: { $ref: "#/components/schemas/ForumQuestionWithTags" },
-          },
-        },
-      },
-      GetQuestionsPageSuccessResponse: {
-        type: "object",
         required: ["ok", "questions", "pagination"],
         properties: {
           ok: { type: "boolean", enum: [true], example: true },
@@ -1365,7 +1354,92 @@ export const openApiDoc = {
         },
       },
     },
-    "/api/forum/question/create-question": {
+    "/api/forum/questions": {
+      get: {
+        tags: ["Forum Question"],
+        summary: "List questions",
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          {
+            in: "query",
+            name: "categoryId",
+            required: false,
+            description: "Filter questions by category UUID.",
+            schema: { type: "string", format: "uuid" },
+          },
+          {
+            in: "query",
+            name: "limit",
+            required: false,
+            description:
+              "How many questions per request (1..50). Defaults to 10 when omitted.",
+            schema: { type: "integer", minimum: 1, maximum: 50, example: 10 },
+          },
+          {
+            in: "query",
+            name: "cursor",
+            required: false,
+            description:
+              "Opaque cursor from the previous response `pagination.nextCursor`.",
+            schema: { type: "string" },
+          },
+        ],
+        responses: {
+          "200": {
+            description: "Questions found",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/GetQuestionsSuccessResponse" },
+              },
+            },
+          },
+          "400": {
+            description: "Validation failed",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/OkFalseValidationIssuesResponse" },
+              },
+            },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/SimpleErrorResponse" },
+              },
+            },
+          },
+          "403": {
+            description: "Onboarding required",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/OnboardingRequiredErrorResponse" },
+              },
+            },
+          },
+          "404": {
+            description: "Category not found",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/OkFalseErrorResponse" },
+              },
+            },
+          },
+          "500": {
+            description: "Internal server error",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [
+                    { $ref: "#/components/schemas/OkFalseErrorResponse" },
+                    { $ref: "#/components/schemas/InternalServerErrorResponse" },
+                  ],
+                },
+              },
+            },
+          },
+        },
+      },
       post: {
         tags: ["Forum Question"],
         summary: "Create question",
@@ -1453,7 +1527,7 @@ export const openApiDoc = {
         },
       },
     },
-    "/api/forum/question/get-question/{questionId}": {
+    "/api/forum/questions/{questionId}": {
       get: {
         tags: ["Forum Question"],
         summary: "Get question by id",
@@ -1505,122 +1579,6 @@ export const openApiDoc = {
             content: {
               "application/json": {
                 schema: { $ref: "#/components/schemas/OkFalseErrorResponse" },
-              },
-            },
-          },
-          "500": {
-            description: "Internal server error",
-            content: {
-              "application/json": {
-                schema: {
-                  oneOf: [
-                    { $ref: "#/components/schemas/OkFalseErrorResponse" },
-                    { $ref: "#/components/schemas/InternalServerErrorResponse" },
-                  ],
-                },
-              },
-            },
-          },
-        },
-      },
-    },
-    "/api/forum/question/get-questions": {
-      get: {
-        tags: ["Forum Question"],
-        summary: "Get all questions",
-        security: [{ BearerAuth: [] }],
-        responses: {
-          "200": {
-            description: "Questions found",
-            content: {
-              "application/json": {
-                schema: { $ref: "#/components/schemas/GetQuestionsSuccessResponse" },
-              },
-            },
-          },
-          "401": {
-            description: "Unauthorized",
-            content: {
-              "application/json": {
-                schema: { $ref: "#/components/schemas/SimpleErrorResponse" },
-              },
-            },
-          },
-          "403": {
-            description: "Onboarding required",
-            content: {
-              "application/json": {
-                schema: { $ref: "#/components/schemas/OnboardingRequiredErrorResponse" },
-              },
-            },
-          },
-          "500": {
-            description: "Internal server error",
-            content: {
-              "application/json": {
-                schema: {
-                  oneOf: [
-                    { $ref: "#/components/schemas/OkFalseErrorResponse" },
-                    { $ref: "#/components/schemas/InternalServerErrorResponse" },
-                  ],
-                },
-              },
-            },
-          },
-        },
-      },
-    },
-    "/api/forum/question/get-questions-page": {
-      get: {
-        tags: ["Forum Question"],
-        summary: "Get questions page (infinite scroll)",
-        security: [{ BearerAuth: [] }],
-        parameters: [
-          {
-            in: "query",
-            name: "limit",
-            required: false,
-            description: "How many questions per request (1..50). Default is 10.",
-            schema: { type: "integer", minimum: 1, maximum: 50, default: 10 },
-          },
-          {
-            in: "query",
-            name: "cursor",
-            required: false,
-            description: "Opaque cursor from previous response `pagination.nextCursor`.",
-            schema: { type: "string" },
-          },
-        ],
-        responses: {
-          "200": {
-            description: "Questions page found",
-            content: {
-              "application/json": {
-                schema: { $ref: "#/components/schemas/GetQuestionsPageSuccessResponse" },
-              },
-            },
-          },
-          "400": {
-            description: "Validation failed",
-            content: {
-              "application/json": {
-                schema: { $ref: "#/components/schemas/OkFalseValidationIssuesResponse" },
-              },
-            },
-          },
-          "401": {
-            description: "Unauthorized",
-            content: {
-              "application/json": {
-                schema: { $ref: "#/components/schemas/SimpleErrorResponse" },
-              },
-            },
-          },
-          "403": {
-            description: "Onboarding required",
-            content: {
-              "application/json": {
-                schema: { $ref: "#/components/schemas/OnboardingRequiredErrorResponse" },
               },
             },
           },

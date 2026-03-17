@@ -9,7 +9,7 @@ import uploadRoute from "../uploads";
 const routes = new Hono();
 
 routes.route("/forum/category", communityForumFeature);
-routes.route("/forum/question", communityForumQuestionFeature);
+routes.route("/forum/questions", communityForumQuestionFeature);
 routes.route("/forum/answer", communityForumAnswerFeature);
 routes.route("/auth", authRoute);
 routes.route("/onboarding", onboardingRoute);

@@ -90,35 +90,46 @@ function decodeQuestionsPageCursor(raw: string): QuestionsPageCursor | null {
   }
 }
 
-export const getQuestionsPageQuerySchema = z.object({
-  limit: z.coerce
-    .number()
-    .int()
-    .min(1, "limit must be between 1 and 50")
-    .max(MAX_QUESTIONS_PAGE_SIZE, "limit must be between 1 and 50")
-    .default(DEFAULT_QUESTIONS_PAGE_SIZE),
-  cursor: z
-    .string()
-    .optional()
-    .transform((value, ctx) => {
-      if (value === undefined) {
-        return undefined;
-      }
+export const getQuestionsQuerySchema = z
+  .object({
+    categoryId: z
+      .string()
+      .trim()
+      .regex(FORUM_UUID_RE, "categoryId must be a valid UUID")
+      .optional(),
+    limit: z.coerce
+      .number()
+      .int()
+      .min(1, "limit must be between 1 and 50")
+      .max(MAX_QUESTIONS_PAGE_SIZE, "limit must be between 1 and 50")
+      .default(DEFAULT_QUESTIONS_PAGE_SIZE),
+    cursor: z
+      .string()
+      .optional()
+      .transform((value, ctx) => {
+        if (value === undefined) {
+          return undefined;
+        }
 
-      const cursor = decodeQuestionsPageCursor(value);
-      if (!cursor) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "cursor must be a valid pagination cursor",
-        });
-        return z.NEVER;
-      }
+        const cursor = decodeQuestionsPageCursor(value);
+        if (!cursor) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "cursor must be a valid pagination cursor",
+          });
+          return z.NEVER;
+        }
 
-      return cursor;
-    }),
-});
+        return cursor;
+      }),
+  })
+  .transform((value) => ({
+    categoryId: value.categoryId,
+    limit: value.limit,
+    cursor: value.cursor,
+  }));
 
-export type GetQuestionsPageQuery = z.infer<typeof getQuestionsPageQuerySchema>;
+export type GetQuestionsQuery = z.infer<typeof getQuestionsQuerySchema>;
 
 export const createQuestionSchema = z
   .object({

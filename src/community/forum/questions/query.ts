@@ -1,36 +1,86 @@
 import { and, desc, eq, inArray, lt, or } from "drizzle-orm";
 import { db } from "../../../db/index";
-import {
-  forumCategory,
-  forumQuestion,
-  forumQuestionTag,
-  forumTag,
-} from "../../../db/schema";
+import { forumQuestion, forumQuestionTag, forumTag } from "../../../db/schema";
 import {
   encodeQuestionsPageCursor,
   type CreateQuestionInput,
+  type GetQuestionsQuery,
   type QuestionsPageCursor,
 } from "./schema";
 
-type ForumCategoryRow = typeof forumCategory.$inferSelect;
 type ForumQuestionRow = typeof forumQuestion.$inferSelect;
 type ForumQuestionInsert = typeof forumQuestion.$inferInsert;
 type ForumQuestionTagInsert = typeof forumQuestionTag.$inferInsert;
 type ForumTagInsert = typeof forumTag.$inferInsert;
 type ForumQuestionWithTags = ForumQuestionRow & { tags: string[] };
-type QuestionsPageResult = {
-  questions: ForumQuestionWithTags[];
-  nextCursor: string | null;
+type QuestionsPagination = {
+  limit: number;
   hasMore: boolean;
+  nextCursor: string | null;
+};
+
+type QuestionsListResult = {
+  questions: ForumQuestionWithTags[];
+  pagination: QuestionsPagination;
 };
 
 function normalizeTagName(value: string): string {
   return value.trim().replace(/\s+/g, " ").toLowerCase();
 }
 
-export async function findCategoryById(id: string): Promise<ForumCategoryRow | null> {
-  const rows = await db.select().from(forumCategory).where(eq(forumCategory.id, id));
-  return rows[0] ?? null;
+function buildQuestionsWhereClause(categoryId?: string, cursor?: QuestionsPageCursor) {
+  const filters = [];
+
+  if (categoryId) {
+    filters.push(eq(forumQuestion.categoryId, categoryId));
+  }
+
+  if (cursor) {
+    filters.push(
+      or(
+        lt(forumQuestion.createdAt, cursor.createdAt),
+        and(eq(forumQuestion.createdAt, cursor.createdAt), lt(forumQuestion.id, cursor.id))
+      )
+    );
+  }
+
+  return filters.length > 0 ? and(...filters) : undefined;
+}
+
+async function attachTagsToQuestions(
+  questions: ForumQuestionRow[]
+): Promise<ForumQuestionWithTags[]> {
+  if (questions.length === 0) {
+    return [];
+  }
+
+  const questionIds = questions.map((question) => question.id);
+  const tagRows = await db
+    .select({
+      questionId: forumQuestionTag.questionId,
+      tagName: forumTag.name,
+    })
+    .from(forumQuestionTag)
+    .innerJoin(forumTag, eq(forumTag.id, forumQuestionTag.tagId))
+    .where(inArray(forumQuestionTag.questionId, questionIds));
+
+  const tagsByQuestionId = new Map<string, string[]>();
+  for (const row of tagRows) {
+    const current = tagsByQuestionId.get(row.questionId);
+    if (!current) {
+      tagsByQuestionId.set(row.questionId, [row.tagName]);
+      continue;
+    }
+
+    if (!current.includes(row.tagName)) {
+      current.push(row.tagName);
+    }
+  }
+
+  return questions.map((question) => ({
+    ...question,
+    tags: tagsByQuestionId.get(question.id) ?? [],
+  }));
 }
 
 export async function findQuestionById(id: string): Promise<ForumQuestionWithTags | null> {
@@ -63,105 +113,36 @@ export async function findQuestionById(id: string): Promise<ForumQuestionWithTag
   };
 }
 
-export async function findAllQuestions(): Promise<ForumQuestionWithTags[]> {
-  const rows = await db
-    .select({
-      question: forumQuestion,
-      tagName: forumTag.name,
-    })
-    .from(forumQuestion)
-    .leftJoin(forumQuestionTag, eq(forumQuestionTag.questionId, forumQuestion.id))
-    .leftJoin(forumTag, eq(forumTag.id, forumQuestionTag.tagId))
-    .orderBy(desc(forumQuestion.createdAt));
-
-  const questionById = new Map<string, ForumQuestionWithTags>();
-
-  for (const row of rows) {
-    const existing = questionById.get(row.question.id);
-    const tagName =
-      typeof row.tagName === "string" && row.tagName.length > 0 ? row.tagName : null;
-
-    if (!existing) {
-      questionById.set(row.question.id, {
-        ...row.question,
-        tags: tagName ? [tagName] : [],
-      });
-      continue;
-    }
-
-    if (tagName && !existing.tags.includes(tagName)) {
-      existing.tags.push(tagName);
-    }
-  }
-
-  return Array.from(questionById.values());
-}
-
-export async function findQuestionsPage(
-  limit: number,
-  cursor?: QuestionsPageCursor
-): Promise<QuestionsPageResult> {
-  const rows = await db
+export async function findQuestions({
+  categoryId,
+  limit,
+  cursor,
+}: GetQuestionsQuery): Promise<QuestionsListResult> {
+  const whereClause = buildQuestionsWhereClause(categoryId, cursor);
+  const baseQuery = db
     .select()
     .from(forumQuestion)
-    .where(
-      cursor
-        ? or(
-            lt(forumQuestion.createdAt, cursor.createdAt),
-            and(eq(forumQuestion.createdAt, cursor.createdAt), lt(forumQuestion.id, cursor.id))
-          )
-        : undefined
-    )
-    .orderBy(desc(forumQuestion.createdAt), desc(forumQuestion.id))
-    .limit(limit + 1);
+    .where(whereClause)
+    .orderBy(desc(forumQuestion.createdAt), desc(forumQuestion.id));
 
+  const rows = await baseQuery.limit(limit + 1);
   const hasMore = rows.length > limit;
-  const pageRows = hasMore ? rows.slice(0, limit) : rows;
-
-  if (pageRows.length === 0) {
-    return {
-      questions: [],
-      nextCursor: null,
-      hasMore: false,
-    };
-  }
-
-  const questionIds = pageRows.map((question) => question.id);
-  const tagRows = await db
-    .select({
-      questionId: forumQuestionTag.questionId,
-      tagName: forumTag.name,
-    })
-    .from(forumQuestionTag)
-    .innerJoin(forumTag, eq(forumTag.id, forumQuestionTag.tagId))
-    .where(inArray(forumQuestionTag.questionId, questionIds));
-
-  const tagsByQuestionId = new Map<string, string[]>();
-  for (const row of tagRows) {
-    const current = tagsByQuestionId.get(row.questionId);
-    if (!current) {
-      tagsByQuestionId.set(row.questionId, [row.tagName]);
-      continue;
-    }
-    if (!current.includes(row.tagName)) {
-      current.push(row.tagName);
-    }
-  }
-
-  const questions = pageRows.map((question) => ({
-    ...question,
-    tags: tagsByQuestionId.get(question.id) ?? [],
-  }));
+  const questionRows = hasMore ? rows.slice(0, limit) : rows;
+  const questions = await attachTagsToQuestions(questionRows);
 
   return {
     questions,
-    nextCursor: hasMore
-      ? encodeQuestionsPageCursor({
-          createdAt: pageRows[pageRows.length - 1].createdAt,
-          id: pageRows[pageRows.length - 1].id,
-        })
-      : null,
-    hasMore,
+    pagination: {
+      limit,
+      hasMore,
+      nextCursor:
+        hasMore && questionRows.length > 0
+          ? encodeQuestionsPageCursor({
+              createdAt: questionRows[questionRows.length - 1].createdAt,
+              id: questionRows[questionRows.length - 1].id,
+            })
+          : null,
+    },
   };
 }
 
