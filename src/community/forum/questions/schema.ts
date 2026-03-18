@@ -1,11 +1,9 @@
 import { z } from "zod";
+import { FORUM_UUID_RE } from "../constants";
 
 export type ValidationResult<T> =
   | { ok: true; data: T }
   | { ok: false; issues: string[] };
-
-export const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const MAX_TAGS_PER_QUESTION = 5;
 const MAX_TAG_LENGTH = 30;
@@ -63,7 +61,7 @@ const tagsSchema = rawTagsSchema
   });
 
 export const getQuestionParamsSchema = z.object({
-  questionId: z.string().trim().regex(UUID_RE, "questionId must be a valid UUID"),
+  questionId: z.string().trim().regex(FORUM_UUID_RE, "questionId must be a valid UUID"),
 });
 
 export type GetQuestionParams = z.infer<typeof getQuestionParamsSchema>;
@@ -73,7 +71,7 @@ const questionsPageCursorSchema = z.object({
     offset: true,
     message: "cursor.createdAt must be a valid ISO datetime",
   }),
-  id: z.string().trim().regex(UUID_RE, "cursor.id must be a valid UUID"),
+  id: z.string().trim().regex(FORUM_UUID_RE, "cursor.id must be a valid UUID"),
 });
 
 export type QuestionsPageCursor = z.infer<typeof questionsPageCursorSchema>;
@@ -127,7 +125,7 @@ export const createQuestionSchema = z
     categoryId: z
       .string()
       .trim()
-      .regex(UUID_RE, "categoryId is required and must be a valid UUID"),
+      .regex(FORUM_UUID_RE, "categoryId is required and must be a valid UUID"),
     title: z
       .string()
       .trim()

@@ -1,6 +1,7 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "../../../db/index";
 import { forumAnswer, forumAnswerVote, forumQuestion } from "../../../db/schema";
+import { FORUM_ADVISORY_LOCK_NAMESPACE } from "../constants";
 import type {
   AnswerVoteType,
   CreateAnswerInput,
@@ -165,8 +166,10 @@ export async function setAnswerVote(
   voteIntent: VoteIntent,
 ): Promise<ForumAnswerWithViewerVote | null> {
   return db.transaction(async (tx) => {
-    // Namespaced advisory lock: (100 = forum domain, hash(answerId) = per-answer vote serialisation).
-    await tx.execute(sql`select pg_advisory_xact_lock(100, hashtext(${answerId}))`);
+    // Serialize vote updates per answer inside the forum advisory-lock namespace.
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(${FORUM_ADVISORY_LOCK_NAMESPACE}, hashtext(${answerId}))`,
+    );
 
     const [answer] = await tx
       .select()
