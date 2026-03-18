@@ -1,6 +1,13 @@
 import { and, desc, eq, inArray, lt, or } from "drizzle-orm";
 import { db } from "../../../db/index";
-import { forumQuestion, forumQuestionTag, forumTag } from "../../../db/schema";
+import {
+  forumCategory,
+  forumQuestion,
+  forumQuestionTag,
+  forumTag,
+  user,
+  userProfile,
+} from "../../../db/schema";
 import {
   encodeQuestionsPageCursor,
   type CreateQuestionInput,
@@ -12,7 +19,22 @@ type ForumQuestionRow = typeof forumQuestion.$inferSelect;
 type ForumQuestionInsert = typeof forumQuestion.$inferInsert;
 type ForumQuestionTagInsert = typeof forumQuestionTag.$inferInsert;
 type ForumTagInsert = typeof forumTag.$inferInsert;
-type ForumQuestionWithTags = ForumQuestionRow & { tags: string[] };
+type QuestionHydrationRow = {
+  question: ForumQuestionRow;
+  categoryName: string;
+  authorDisplayName: string | null;
+  authorFullName: string;
+  authorAvatarKey: string | null;
+};
+type ForumQuestionWithTags = Omit<ForumQuestionRow, "categoryId" | "authorId"> & {
+  categoryName: string;
+  author: {
+    id: string;
+    name: string;
+    avatarKey: string | null;
+  };
+  tags: string[];
+};
 type QuestionsPagination = {
   limit: number;
   hasMore: boolean;
@@ -26,6 +48,42 @@ type QuestionsListResult = {
 
 function normalizeTagName(value: string): string {
   return value.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function resolveAuthorName(row: QuestionHydrationRow): string {
+  const displayName = row.authorDisplayName?.trim();
+  const fullName = row.authorFullName.trim();
+  return displayName && displayName.length > 0 ? displayName : fullName;
+}
+
+function hydrateQuestion(row: QuestionHydrationRow, tags: string[]): ForumQuestionWithTags {
+  const { categoryId: _categoryId, authorId, ...question } = row.question;
+
+  return {
+    ...question,
+    categoryName: row.categoryName,
+    author: {
+      id: authorId,
+      name: resolveAuthorName(row),
+      avatarKey: row.authorAvatarKey,
+    },
+    tags,
+  };
+}
+
+function buildQuestionsBaseQuery() {
+  return db
+    .select({
+      question: forumQuestion,
+      categoryName: forumCategory.name,
+      authorDisplayName: userProfile.displayName,
+      authorFullName: user.name,
+      authorAvatarKey: userProfile.avatarKey,
+    })
+    .from(forumQuestion)
+    .innerJoin(forumCategory, eq(forumCategory.id, forumQuestion.categoryId))
+    .innerJoin(user, eq(user.id, forumQuestion.authorId))
+    .leftJoin(userProfile, eq(userProfile.userId, user.id));
 }
 
 function buildQuestionsWhereClause(categoryId?: string, cursor?: QuestionsPageCursor) {
@@ -48,13 +106,13 @@ function buildQuestionsWhereClause(categoryId?: string, cursor?: QuestionsPageCu
 }
 
 async function attachTagsToQuestions(
-  questions: ForumQuestionRow[]
+  questions: QuestionHydrationRow[]
 ): Promise<ForumQuestionWithTags[]> {
   if (questions.length === 0) {
     return [];
   }
 
-  const questionIds = questions.map((question) => question.id);
+  const questionIds = questions.map((row) => row.question.id);
   const tagRows = await db
     .select({
       questionId: forumQuestionTag.questionId,
@@ -77,19 +135,25 @@ async function attachTagsToQuestions(
     }
   }
 
-  return questions.map((question) => ({
-    ...question,
-    tags: tagsByQuestionId.get(question.id) ?? [],
-  }));
+  return questions.map((row) =>
+    hydrateQuestion(row, tagsByQuestionId.get(row.question.id) ?? [])
+  );
 }
 
 export async function findQuestionById(id: string): Promise<ForumQuestionWithTags | null> {
   const rows = await db
     .select({
       question: forumQuestion,
+      categoryName: forumCategory.name,
+      authorDisplayName: userProfile.displayName,
+      authorFullName: user.name,
+      authorAvatarKey: userProfile.avatarKey,
       tagName: forumTag.name,
     })
     .from(forumQuestion)
+    .innerJoin(forumCategory, eq(forumCategory.id, forumQuestion.categoryId))
+    .innerJoin(user, eq(user.id, forumQuestion.authorId))
+    .leftJoin(userProfile, eq(userProfile.userId, user.id))
     .leftJoin(forumQuestionTag, eq(forumQuestionTag.questionId, forumQuestion.id))
     .leftJoin(forumTag, eq(forumTag.id, forumQuestionTag.tagId))
     .where(eq(forumQuestion.id, id));
@@ -98,7 +162,13 @@ export async function findQuestionById(id: string): Promise<ForumQuestionWithTag
     return null;
   }
 
-  const question = rows[0].question;
+  const questionRow: QuestionHydrationRow = {
+    question: rows[0].question,
+    categoryName: rows[0].categoryName,
+    authorDisplayName: rows[0].authorDisplayName,
+    authorFullName: rows[0].authorFullName,
+    authorAvatarKey: rows[0].authorAvatarKey,
+  };
   const tags = Array.from(
     new Set(
       rows
@@ -107,10 +177,7 @@ export async function findQuestionById(id: string): Promise<ForumQuestionWithTag
     )
   );
 
-  return {
-    ...question,
-    tags,
-  };
+  return hydrateQuestion(questionRow, tags);
 }
 
 export async function findQuestions({
@@ -119,9 +186,7 @@ export async function findQuestions({
   cursor,
 }: GetQuestionsQuery): Promise<QuestionsListResult> {
   const whereClause = buildQuestionsWhereClause(categoryId, cursor);
-  const baseQuery = db
-    .select()
-    .from(forumQuestion)
+  const baseQuery = buildQuestionsBaseQuery()
     .where(whereClause)
     .orderBy(desc(forumQuestion.createdAt), desc(forumQuestion.id));
 
@@ -138,8 +203,8 @@ export async function findQuestions({
       nextCursor:
         hasMore && questionRows.length > 0
           ? encodeQuestionsPageCursor({
-              createdAt: questionRows[questionRows.length - 1].createdAt,
-              id: questionRows[questionRows.length - 1].id,
+              createdAt: questionRows[questionRows.length - 1].question.createdAt,
+              id: questionRows[questionRows.length - 1].question.id,
             })
           : null,
     },
@@ -150,7 +215,7 @@ export async function createQuestion(
   data: CreateQuestionInput,
   authorId: string
 ): Promise<ForumQuestionWithTags> {
-  return db.transaction(async (tx) => {
+  const newQuestionId = await db.transaction(async (tx) => {
     const insertData: ForumQuestionInsert = {
       categoryId: data.categoryId,
       authorId,
@@ -169,7 +234,7 @@ export async function createQuestion(
     ).map(([normalizedName, name]) => ({ normalizedName, name }));
 
     if (normalizedTags.length === 0) {
-      return { ...newQuestion, tags: [] };
+      return newQuestion.id;
     }
 
     const tagInsertValues: ForumTagInsert[] = normalizedTags.map((tag) => ({
@@ -197,7 +262,7 @@ export async function createQuestion(
       );
 
     if (tagRows.length === 0) {
-      return { ...newQuestion, tags: [] };
+      return newQuestion.id;
     }
 
     const questionTagValues: ForumQuestionTagInsert[] = tagRows.map((tag) => ({
@@ -212,13 +277,13 @@ export async function createQuestion(
         target: [forumQuestionTag.questionId, forumQuestionTag.tagId],
       });
 
-    const tagNameByNormalizedName = new Map(
-      tagRows.map((tag) => [tag.normalizedName, tag.name])
-    );
-    const tags = normalizedTags.map(
-      (tag) => tagNameByNormalizedName.get(tag.normalizedName) ?? tag.name
-    );
-
-    return { ...newQuestion, tags };
+    return newQuestion.id;
   });
+
+  const createdQuestion = await findQuestionById(newQuestionId);
+  if (!createdQuestion) {
+    throw new Error("Created question could not be loaded");
+  }
+
+  return createdQuestion;
 }

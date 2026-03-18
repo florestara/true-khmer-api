@@ -9,7 +9,7 @@ export const openApiDoc = {
     version: "1.0.0",
     description: "API documentation for True Khmer.",
   },
-  servers: [{ url: defaultBaseUrl }],
+  servers: [{ url: defaultBaseUrl + "/v1" }],
   tags: [
     { name: "System" },
     { name: "Auth" },
@@ -302,6 +302,17 @@ export const openApiDoc = {
           archivedAt: { type: "string", format: "date-time", nullable: true },
         },
       },
+      GetCategoriesSuccessResponse: {
+        type: "object",
+        required: ["ok", "categories"],
+        properties: {
+          ok: { type: "boolean", enum: [true], example: true },
+          categories: {
+            type: "array",
+            items: { $ref: "#/components/schemas/ForumCategory" },
+          },
+        },
+      },
       CreateCategorySuccessResponse: {
         type: "object",
         required: ["ok", "category"],
@@ -356,8 +367,8 @@ export const openApiDoc = {
         type: "object",
         required: [
           "id",
-          "categoryId",
-          "authorId",
+          "categoryName",
+          "author",
           "title",
           "body",
           "status",
@@ -367,8 +378,20 @@ export const openApiDoc = {
         ],
         properties: {
           id: { type: "string", format: "uuid" },
-          categoryId: { type: "string", format: "uuid" },
-          authorId: { type: "string", format: "uuid" },
+          categoryName: { type: "string", example: "Tech & Innovation" },
+          author: {
+            type: "object",
+            required: ["id", "name", "avatarKey"],
+            properties: {
+              id: { type: "string", format: "uuid" },
+              name: { type: "string", example: "Virak Hou" },
+              avatarKey: {
+                type: "string",
+                nullable: true,
+                example: "avatars/user-id/123-abc.png",
+              },
+            },
+          },
           title: { type: "string", maxLength: 300 },
           body: { type: "string" },
           status: { type: "string", enum: ["PUBLISHED", "CLOSED", "DELETED"], example: "PUBLISHED" },
@@ -950,7 +973,7 @@ export const openApiDoc = {
         },
       },
     },
-    "/api/auth/register": {
+    "/auth/register": {
       post: {
         tags: ["Auth"],
         summary: "Register a new user",
@@ -1017,7 +1040,7 @@ export const openApiDoc = {
         },
       },
     },
-    "/api/auth/register/verify-otp": {
+    "/auth/register/verify-otp": {
       post: {
         tags: ["Auth"],
         summary: "Verify registration OTP",
@@ -1084,7 +1107,7 @@ export const openApiDoc = {
         },
       },
     },
-    "/api/auth/register/resend-otp": {
+    "/auth/register/resend-otp": {
       post: {
         tags: ["Auth"],
         summary: "Resend registration OTP",
@@ -1129,7 +1152,7 @@ export const openApiDoc = {
         },
       },
     },
-    "/api/auth/login": {
+    "/auth/login": {
       post: {
         tags: ["Auth"],
         summary: "Login with email and password",
@@ -1209,7 +1232,7 @@ export const openApiDoc = {
         },
       },
     },
-    "/api/auth/refresh": {
+    "/auth/refresh": {
       post: {
         tags: ["Auth"],
         summary: "Refresh access token",
@@ -1284,7 +1307,51 @@ export const openApiDoc = {
         },
       },
     },
-    "/api/forum/category/create-category": {
+    "/forum/category": {
+      get: {
+        tags: ["Forum Category"],
+        summary: "List categories",
+        security: [{ BearerAuth: [] }],
+        responses: {
+          "200": {
+            description: "Categories found",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/GetCategoriesSuccessResponse" },
+              },
+            },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/SimpleErrorResponse" },
+              },
+            },
+          },
+          "403": {
+            description: "Onboarding required",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/OnboardingRequiredErrorResponse" },
+              },
+            },
+          },
+          "500": {
+            description: "Internal server error",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [
+                    { $ref: "#/components/schemas/OkFalseErrorResponse" },
+                    { $ref: "#/components/schemas/InternalServerErrorResponse" },
+                  ],
+                },
+              },
+            },
+          },
+        },
+      },
       post: {
         tags: ["Forum Category"],
         summary: "Create category",
@@ -1354,7 +1421,7 @@ export const openApiDoc = {
         },
       },
     },
-    "/api/forum/questions": {
+    "/forum/questions": {
       get: {
         tags: ["Forum Question"],
         summary: "List questions",
@@ -1527,7 +1594,7 @@ export const openApiDoc = {
         },
       },
     },
-    "/api/forum/questions/{questionId}": {
+    "/forum/questions/{questionId}": {
       get: {
         tags: ["Forum Question"],
         summary: "Get question by id",
@@ -1598,7 +1665,7 @@ export const openApiDoc = {
         },
       },
     },
-    "/api/forum/answer/get-answers/{questionId}": {
+    "/forum/answer/get-answers/{questionId}": {
       get: {
         tags: ["Forum Answer"],
         summary: "Get published answers by question id",
@@ -1679,7 +1746,7 @@ export const openApiDoc = {
         },
       },
     },
-    "/api/forum/answer/create-answer": {
+    "/forum/answer/create-answer": {
       post: {
         tags: ["Forum Answer"],
         summary: "Create answer",
@@ -1767,7 +1834,7 @@ export const openApiDoc = {
         },
       },
     },
-    "/api/forum/answer/edit-answer/{answerId}": {
+    "/forum/answer/edit-answer/{answerId}": {
       patch: {
         tags: ["Forum Answer"],
         summary: "Edit your own answer",
@@ -1869,7 +1936,7 @@ export const openApiDoc = {
         },
       },
     },
-    "/api/forum/answer/delete-answer/{answerId}": {
+    "/forum/answer/delete-answer/{answerId}": {
       delete: {
         tags: ["Forum Answer"],
         summary: "Delete your own answer",
@@ -1963,7 +2030,7 @@ export const openApiDoc = {
         },
       },
     },
-    "/api/forum/answer/vote-answer/{answerId}": {
+    "/forum/answer/vote-answer/{answerId}": {
       post: {
         tags: ["Forum Answer"],
         summary: "Vote answer (upvote/downvote/remove)",
@@ -2060,7 +2127,7 @@ export const openApiDoc = {
         },
       },
     },
-    "/api/onboarding/options": {
+    "/onboarding/options": {
       get: {
         tags: ["Onboarding"],
         summary: "Get onboarding lookup options",
@@ -2093,7 +2160,7 @@ export const openApiDoc = {
         },
       },
     },
-    "/api/onboarding/interests": {
+    "/onboarding/interests": {
       get: {
         tags: ["Onboarding"],
         summary: "Get onboarding interest options",
@@ -2126,7 +2193,7 @@ export const openApiDoc = {
         },
       },
     },
-    "/api/onboarding/contributions": {
+    "/onboarding/contributions": {
       get: {
         tags: ["Onboarding"],
         summary: "Get onboarding contribution options",
@@ -2159,7 +2226,7 @@ export const openApiDoc = {
         },
       },
     },
-    "/api/onboarding/locations/countries": {
+    "/onboarding/locations/countries": {
       get: {
         tags: ["Onboarding"],
         summary: "Get seeded active countries",
@@ -2192,7 +2259,7 @@ export const openApiDoc = {
         },
       },
     },
-    "/api/onboarding/locations/cities": {
+    "/onboarding/locations/cities": {
       get: {
         tags: ["Onboarding"],
         summary: "Get seeded active cities for a selected country",
@@ -2249,7 +2316,7 @@ export const openApiDoc = {
         },
       },
     },
-    "/api/onboarding/state": {
+    "/onboarding/state": {
       get: {
         tags: ["Onboarding"],
         summary: "Get saved onboarding state for current user",
@@ -2290,7 +2357,7 @@ export const openApiDoc = {
         },
       },
     },
-    "/api/onboarding/step-1-profile": {
+    "/onboarding/step-1-profile": {
       put: {
         tags: ["Onboarding"],
         summary: "Save onboarding step 1 (profile)",
@@ -2352,7 +2419,7 @@ export const openApiDoc = {
         },
       },
     },
-    "/api/onboarding/step-2-interests": {
+    "/onboarding/step-2-interests": {
       put: {
         tags: ["Onboarding"],
         summary: "Save onboarding step 2 (interests)",
@@ -2414,7 +2481,7 @@ export const openApiDoc = {
         },
       },
     },
-    "/api/onboarding/step-3-contributions": {
+    "/onboarding/step-3-contributions": {
       put: {
         tags: ["Onboarding"],
         summary: "Save onboarding step 3 (contributions)",
@@ -2476,7 +2543,7 @@ export const openApiDoc = {
         },
       },
     },
-    "/api/onboarding/step-4-complete": {
+    "/onboarding/step-4-complete": {
       put: {
         tags: ["Onboarding"],
         summary: "Complete onboarding step 4",
@@ -2517,7 +2584,7 @@ export const openApiDoc = {
         },
       },
     },
-    "/api/uploads/avatar/presign": {
+    "/uploads/avatar/presign": {
       post: {
         tags: ["Uploads"],
         summary: "Get a presigned R2 upload URL for avatar image",
