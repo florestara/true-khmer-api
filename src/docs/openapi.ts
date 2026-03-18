@@ -367,7 +367,7 @@ export const openApiDoc = {
         type: "object",
         required: [
           "id",
-          "categoryName",
+          "category",
           "author",
           "title",
           "body",
@@ -378,7 +378,14 @@ export const openApiDoc = {
         ],
         properties: {
           id: { type: "string", format: "uuid" },
-          categoryName: { type: "string", example: "Tech & Innovation" },
+          category: {
+            type: "object",
+            required: ["id", "name"],
+            properties: {
+              id: { type: "string", format: "uuid" },
+              name: { type: "string", example: "Tech & Innovation" },
+            },
+          },
           author: {
             type: "object",
             required: ["id", "name", "avatarKey"],

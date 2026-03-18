@@ -27,7 +27,10 @@ type QuestionHydrationRow = {
   authorAvatarKey: string | null;
 };
 type ForumQuestionWithTags = Omit<ForumQuestionRow, "categoryId" | "authorId"> & {
-  categoryName: string;
+  category: {
+    id: string;
+    name: string;
+  };
   author: {
     id: string;
     name: string;
@@ -57,11 +60,14 @@ function resolveAuthorName(row: QuestionHydrationRow): string {
 }
 
 function hydrateQuestion(row: QuestionHydrationRow, tags: string[]): ForumQuestionWithTags {
-  const { categoryId: _categoryId, authorId, ...question } = row.question;
+  const { categoryId, authorId, ...question } = row.question;
 
   return {
     ...question,
-    categoryName: row.categoryName,
+    category: {
+      id: categoryId,
+      name: row.categoryName,
+    },
     author: {
       id: authorId,
       name: resolveAuthorName(row),
