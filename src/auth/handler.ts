@@ -144,14 +144,11 @@ export async function handleRegister(c: Context) {
 
   const existingUser = await findUserByEmail(parsed.data.email);
   if (existingUser) {
-    return c.json(
-      {
-        error: "Email already exists",
-        details: {
-          emailVerified: existingUser.emailVerified,
-        },
-      },
-      409
+    return authProviderError(
+      c,
+      409,
+      { error: "Email already exists" },
+      "Registration failed"
     );
   }
 
