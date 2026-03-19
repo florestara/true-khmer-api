@@ -142,6 +142,19 @@ export async function handleRegister(c: Context) {
     return parsed.response;
   }
 
+  const existingUser = await findUserByEmail(parsed.data.email);
+  if (existingUser) {
+    return c.json(
+      {
+        error: "Email already exists",
+        details: {
+          emailVerified: existingUser.emailVerified,
+        },
+      },
+      409
+    );
+  }
+
   const registerResult = await signUpWithEmailPassword(parsed.data);
 
   if (!registerResult.ok) {
