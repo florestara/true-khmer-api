@@ -11,7 +11,11 @@ type ForumCategoryRow = typeof forumCategory.$inferSelect;
 type ForumCategoryInsert = typeof forumCategory.$inferInsert;
 
 export async function getCategories(): Promise<ForumCategoryRow[]> {
-  return db.select().from(forumCategory).orderBy(forumCategory.displayOrder);
+  return db
+    .select()
+    .from(forumCategory)
+    .where(eq(forumCategory.status, "ACTIVE"))
+    .orderBy(forumCategory.displayOrder);
 }
 
 export async function findCategoryById(id: string): Promise<ForumCategoryRow | null> {
