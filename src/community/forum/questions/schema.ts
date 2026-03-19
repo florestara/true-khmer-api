@@ -67,9 +67,17 @@ export const getQuestionParamsSchema = z.object({
 export type GetQuestionParams = z.infer<typeof getQuestionParamsSchema>;
 
 const questionsPageCursorSchema = z.object({
-  createdAt: z.string().datetime({
-    offset: true,
-    message: "cursor.createdAt must be a valid ISO datetime",
+  createdAt: z.string().trim().transform((value, ctx) => {
+    const normalized = normalizeQuestionsCursorTimestamp(value);
+    if (!normalized) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "cursor.createdAt must be a valid ISO datetime",
+      });
+      return z.NEVER;
+    }
+
+    return normalized;
   }),
   id: z.string().trim().regex(FORUM_UUID_RE, "cursor.id must be a valid UUID"),
 });
@@ -77,7 +85,18 @@ const questionsPageCursorSchema = z.object({
 export type QuestionsPageCursor = z.infer<typeof questionsPageCursorSchema>;
 
 export function encodeQuestionsPageCursor(cursor: QuestionsPageCursor): string {
-  return Buffer.from(JSON.stringify(cursor), "utf8").toString("base64url");
+  const normalizedCreatedAt = normalizeQuestionsCursorTimestamp(cursor.createdAt);
+  if (!normalizedCreatedAt) {
+    throw new Error("Cannot encode question page cursor with invalid createdAt");
+  }
+
+  return Buffer.from(
+    JSON.stringify({
+      createdAt: normalizedCreatedAt,
+      id: cursor.id,
+    }),
+    "utf8"
+  ).toString("base64url");
 }
 
 function decodeQuestionsPageCursor(raw: string): QuestionsPageCursor | null {
@@ -88,6 +107,25 @@ function decodeQuestionsPageCursor(raw: string): QuestionsPageCursor | null {
   } catch {
     return null;
   }
+}
+
+function normalizeQuestionsCursorTimestamp(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const normalized = trimmed
+    .replace(" ", "T")
+    .replace(/\.(\d{3})\d+(?=[+-Z])/, ".$1")
+    .replace(/([+-]\d{2})$/, "$1:00");
+  const parsed = new Date(normalized);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return parsed.toISOString();
 }
 
 export const getQuestionsQuerySchema = z
