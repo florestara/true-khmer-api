@@ -4,7 +4,17 @@ import {
 } from "../constants";
 import { getValidatedForumAuthUserId } from "../utils/auth";
 import { validateCreateCategoryInput, type CreateCategoryInput } from "./schema";
-import { createCategory, findCategoryByName } from "./query";
+import { createCategory, findCategoryByName, getCategories } from "./query";
+
+export async function handleGetCategories(c: Context) {
+  try {
+    const categories = await getCategories();
+    return c.json({ ok: true, categories }, 200);
+  } catch (err) {
+    console.error("Failed to get categories", err);
+    return c.json({ ok: false, error: "Internal server error" }, 500);
+  }
+}
 
 export async function handleCreateCategory(c: Context) {
   const authResult = getValidatedForumAuthUserId(c);

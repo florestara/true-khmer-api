@@ -302,6 +302,17 @@ export const openApiDoc = {
           archivedAt: { type: "string", format: "date-time", nullable: true },
         },
       },
+      GetCategoriesSuccessResponse: {
+        type: "object",
+        required: ["ok", "categories"],
+        properties: {
+          ok: { type: "boolean", enum: [true], example: true },
+          categories: {
+            type: "array",
+            items: { $ref: "#/components/schemas/ForumCategory" },
+          },
+        },
+      },
       CreateCategorySuccessResponse: {
         type: "object",
         required: ["ok", "category"],
@@ -1295,7 +1306,51 @@ export const openApiDoc = {
         },
       },
     },
-    "/api/forum/category/create-category": {
+    "/api/forum/category": {
+      get: {
+        tags: ["Forum Category"],
+        summary: "List categories",
+        security: [{ BearerAuth: [] }],
+        responses: {
+          "200": {
+            description: "Categories found",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/GetCategoriesSuccessResponse" },
+              },
+            },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/SimpleErrorResponse" },
+              },
+            },
+          },
+          "403": {
+            description: "Onboarding required",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/OnboardingRequiredErrorResponse" },
+              },
+            },
+          },
+          "500": {
+            description: "Internal server error",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [
+                    { $ref: "#/components/schemas/OkFalseErrorResponse" },
+                    { $ref: "#/components/schemas/InternalServerErrorResponse" },
+                  ],
+                },
+              },
+            },
+          },
+        },
+      },
       post: {
         tags: ["Forum Category"],
         summary: "Create category",

@@ -10,6 +10,14 @@ import type { CreateCategoryInput } from "./schema";
 type ForumCategoryRow = typeof forumCategory.$inferSelect;
 type ForumCategoryInsert = typeof forumCategory.$inferInsert;
 
+export async function getCategories(): Promise<ForumCategoryRow[]> {
+  return db
+    .select()
+    .from(forumCategory)
+    .where(eq(forumCategory.status, "ACTIVE"))
+    .orderBy(forumCategory.displayOrder);
+}
+
 export async function findCategoryById(id: string): Promise<ForumCategoryRow | null> {
   const rows = await db.select().from(forumCategory).where(eq(forumCategory.id, id));
   return rows[0] ?? null;

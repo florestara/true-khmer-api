@@ -1,9 +1,11 @@
 // App Entry Point for Community Forum Feature
 
 import { Hono } from "hono";
-import { requireAdmin } from "../../../auth/middleware";
-import { handleCreateCategory } from "./handler";
+import { requireAdmin, requireAccessToken } from "../../../auth/middleware";
+import { handleCreateCategory, handleGetCategories } from "./handler";
+
 
 export const communityForumFeature = new Hono();
 
-communityForumFeature.post("/create-category", requireAdmin, handleCreateCategory);
+communityForumFeature.get("/", requireAccessToken, handleGetCategories);
+communityForumFeature.post("/", requireAdmin, handleCreateCategory);
