@@ -5,128 +5,120 @@ import {
   forumQuestion,
   forumQuestionTag,
   forumTag,
+  user,
+  userProfile,
 } from "../../../db/schema";
 import {
   encodeQuestionsPageCursor,
   type CreateQuestionInput,
+  type GetQuestionsQuery,
   type QuestionsPageCursor,
 } from "./schema";
 
-type ForumCategoryRow = typeof forumCategory.$inferSelect;
 type ForumQuestionRow = typeof forumQuestion.$inferSelect;
 type ForumQuestionInsert = typeof forumQuestion.$inferInsert;
 type ForumQuestionTagInsert = typeof forumQuestionTag.$inferInsert;
 type ForumTagInsert = typeof forumTag.$inferInsert;
-type ForumQuestionWithTags = ForumQuestionRow & { tags: string[] };
-type QuestionsPageResult = {
-  questions: ForumQuestionWithTags[];
-  nextCursor: string | null;
+type QuestionHydrationRow = {
+  question: ForumQuestionRow;
+  categoryName: string;
+  authorDisplayName: string | null;
+  authorFullName: string;
+  authorAvatarKey: string | null;
+};
+type ForumQuestionWithTags = Omit<ForumQuestionRow, "categoryId" | "authorId"> & {
+  category: {
+    id: string;
+    name: string;
+  };
+  author: {
+    id: string;
+    name: string;
+    avatarKey: string | null;
+  };
+  tags: string[];
+};
+type QuestionsPagination = {
+  limit: number;
   hasMore: boolean;
+  nextCursor: string | null;
+};
+
+type QuestionsListResult = {
+  questions: ForumQuestionWithTags[];
+  pagination: QuestionsPagination;
 };
 
 function normalizeTagName(value: string): string {
   return value.trim().replace(/\s+/g, " ").toLowerCase();
 }
 
-export async function findCategoryById(id: string): Promise<ForumCategoryRow | null> {
-  const rows = await db.select().from(forumCategory).where(eq(forumCategory.id, id));
-  return rows[0] ?? null;
+function resolveAuthorName(row: QuestionHydrationRow): string {
+  const displayName = row.authorDisplayName?.trim();
+  const fullName = row.authorFullName.trim();
+  return displayName && displayName.length > 0 ? displayName : fullName;
 }
 
-export async function findQuestionById(id: string): Promise<ForumQuestionWithTags | null> {
-  const rows = await db
-    .select({
-      question: forumQuestion,
-      tagName: forumTag.name,
-    })
-    .from(forumQuestion)
-    .leftJoin(forumQuestionTag, eq(forumQuestionTag.questionId, forumQuestion.id))
-    .leftJoin(forumTag, eq(forumTag.id, forumQuestionTag.tagId))
-    .where(eq(forumQuestion.id, id));
-
-  if (rows.length === 0) {
-    return null;
-  }
-
-  const question = rows[0].question;
-  const tags = Array.from(
-    new Set(
-      rows
-        .map((row) => row.tagName)
-        .filter((tag): tag is string => typeof tag === "string" && tag.length > 0)
-    )
-  );
+function hydrateQuestion(row: QuestionHydrationRow, tags: string[]): ForumQuestionWithTags {
+  const { categoryId, authorId, ...question } = row.question;
 
   return {
     ...question,
+    category: {
+      id: categoryId,
+      name: row.categoryName,
+    },
+    author: {
+      id: authorId,
+      name: resolveAuthorName(row),
+      avatarKey: row.authorAvatarKey,
+    },
     tags,
   };
 }
 
-export async function findAllQuestions(): Promise<ForumQuestionWithTags[]> {
-  const rows = await db
+function buildQuestionsBaseQuery() {
+  return db
     .select({
       question: forumQuestion,
-      tagName: forumTag.name,
+      categoryName: forumCategory.name,
+      authorDisplayName: userProfile.displayName,
+      authorFullName: user.name,
+      authorAvatarKey: userProfile.avatarKey,
     })
     .from(forumQuestion)
-    .leftJoin(forumQuestionTag, eq(forumQuestionTag.questionId, forumQuestion.id))
-    .leftJoin(forumTag, eq(forumTag.id, forumQuestionTag.tagId))
-    .orderBy(desc(forumQuestion.createdAt));
-
-  const questionById = new Map<string, ForumQuestionWithTags>();
-
-  for (const row of rows) {
-    const existing = questionById.get(row.question.id);
-    const tagName =
-      typeof row.tagName === "string" && row.tagName.length > 0 ? row.tagName : null;
-
-    if (!existing) {
-      questionById.set(row.question.id, {
-        ...row.question,
-        tags: tagName ? [tagName] : [],
-      });
-      continue;
-    }
-
-    if (tagName && !existing.tags.includes(tagName)) {
-      existing.tags.push(tagName);
-    }
-  }
-
-  return Array.from(questionById.values());
+    .innerJoin(forumCategory, eq(forumCategory.id, forumQuestion.categoryId))
+    .innerJoin(user, eq(user.id, forumQuestion.authorId))
+    .leftJoin(userProfile, eq(userProfile.userId, user.id));
 }
 
-export async function findQuestionsPage(
-  limit: number,
-  cursor?: QuestionsPageCursor
-): Promise<QuestionsPageResult> {
-  const rows = await db
-    .select()
-    .from(forumQuestion)
-    .where(
-      cursor
-        ? or(
-            lt(forumQuestion.createdAt, cursor.createdAt),
-            and(eq(forumQuestion.createdAt, cursor.createdAt), lt(forumQuestion.id, cursor.id))
-          )
-        : undefined
-    )
-    .orderBy(desc(forumQuestion.createdAt), desc(forumQuestion.id))
-    .limit(limit + 1);
+function buildQuestionsWhereClause(categoryId?: string, cursor?: QuestionsPageCursor) {
+  const filters = [];
 
-  const hasMore = rows.length > limit;
-  const pageRows = hasMore ? rows.slice(0, limit) : rows;
-
-  if (pageRows.length === 0) {
-    return {
-      questions: [],
-      nextCursor: null,
-      hasMore: false,
-    };
+  if (categoryId) {
+    filters.push(eq(forumQuestion.categoryId, categoryId));
   }
 
-  const questionIds = pageRows.map((question) => question.id);
+  if (cursor) {
+    filters.push(
+      or(
+        lt(forumQuestion.createdAt, cursor.createdAt),
+        and(eq(forumQuestion.createdAt, cursor.createdAt), lt(forumQuestion.id, cursor.id))
+      )
+    );
+  }
+
+  return filters.length > 0 ? and(...filters) : undefined;
+}
+
+async function attachTagsToQuestions(
+  questions: QuestionHydrationRow[]
+): Promise<ForumQuestionWithTags[]> {
+  if (questions.length === 0) {
+    return [];
+  }
+
+  const questionIds = questions.map((row) => row.question.id);
   const tagRows = await db
     .select({
       questionId: forumQuestionTag.questionId,
@@ -143,25 +135,85 @@ export async function findQuestionsPage(
       tagsByQuestionId.set(row.questionId, [row.tagName]);
       continue;
     }
+
     if (!current.includes(row.tagName)) {
       current.push(row.tagName);
     }
   }
 
-  const questions = pageRows.map((question) => ({
-    ...question,
-    tags: tagsByQuestionId.get(question.id) ?? [],
-  }));
+  return questions.map((row) =>
+    hydrateQuestion(row, tagsByQuestionId.get(row.question.id) ?? [])
+  );
+}
+
+export async function findQuestionById(id: string): Promise<ForumQuestionWithTags | null> {
+  const rows = await db
+    .select({
+      question: forumQuestion,
+      categoryName: forumCategory.name,
+      authorDisplayName: userProfile.displayName,
+      authorFullName: user.name,
+      authorAvatarKey: userProfile.avatarKey,
+      tagName: forumTag.name,
+    })
+    .from(forumQuestion)
+    .innerJoin(forumCategory, eq(forumCategory.id, forumQuestion.categoryId))
+    .innerJoin(user, eq(user.id, forumQuestion.authorId))
+    .leftJoin(userProfile, eq(userProfile.userId, user.id))
+    .leftJoin(forumQuestionTag, eq(forumQuestionTag.questionId, forumQuestion.id))
+    .leftJoin(forumTag, eq(forumTag.id, forumQuestionTag.tagId))
+    .where(eq(forumQuestion.id, id));
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  const questionRow: QuestionHydrationRow = {
+    question: rows[0].question,
+    categoryName: rows[0].categoryName,
+    authorDisplayName: rows[0].authorDisplayName,
+    authorFullName: rows[0].authorFullName,
+    authorAvatarKey: rows[0].authorAvatarKey,
+  };
+  const tags = Array.from(
+    new Set(
+      rows
+        .map((row) => row.tagName)
+        .filter((tag): tag is string => typeof tag === "string" && tag.length > 0)
+    )
+  );
+
+  return hydrateQuestion(questionRow, tags);
+}
+
+export async function findQuestions({
+  categoryId,
+  limit,
+  cursor,
+}: GetQuestionsQuery): Promise<QuestionsListResult> {
+  const whereClause = buildQuestionsWhereClause(categoryId, cursor);
+  const baseQuery = buildQuestionsBaseQuery()
+    .where(whereClause)
+    .orderBy(desc(forumQuestion.createdAt), desc(forumQuestion.id));
+
+  const rows = await baseQuery.limit(limit + 1);
+  const hasMore = rows.length > limit;
+  const questionRows = hasMore ? rows.slice(0, limit) : rows;
+  const questions = await attachTagsToQuestions(questionRows);
 
   return {
     questions,
-    nextCursor: hasMore
-      ? encodeQuestionsPageCursor({
-          createdAt: pageRows[pageRows.length - 1].createdAt,
-          id: pageRows[pageRows.length - 1].id,
-        })
-      : null,
-    hasMore,
+    pagination: {
+      limit,
+      hasMore,
+      nextCursor:
+        hasMore && questionRows.length > 0
+          ? encodeQuestionsPageCursor({
+              createdAt: questionRows[questionRows.length - 1].question.createdAt,
+              id: questionRows[questionRows.length - 1].question.id,
+            })
+          : null,
+    },
   };
 }
 
@@ -169,7 +221,7 @@ export async function createQuestion(
   data: CreateQuestionInput,
   authorId: string
 ): Promise<ForumQuestionWithTags> {
-  return db.transaction(async (tx) => {
+  const newQuestionId = await db.transaction(async (tx) => {
     const insertData: ForumQuestionInsert = {
       categoryId: data.categoryId,
       authorId,
@@ -188,7 +240,7 @@ export async function createQuestion(
     ).map(([normalizedName, name]) => ({ normalizedName, name }));
 
     if (normalizedTags.length === 0) {
-      return { ...newQuestion, tags: [] };
+      return newQuestion.id;
     }
 
     const tagInsertValues: ForumTagInsert[] = normalizedTags.map((tag) => ({
@@ -216,7 +268,7 @@ export async function createQuestion(
       );
 
     if (tagRows.length === 0) {
-      return { ...newQuestion, tags: [] };
+      return newQuestion.id;
     }
 
     const questionTagValues: ForumQuestionTagInsert[] = tagRows.map((tag) => ({
@@ -231,13 +283,13 @@ export async function createQuestion(
         target: [forumQuestionTag.questionId, forumQuestionTag.tagId],
       });
 
-    const tagNameByNormalizedName = new Map(
-      tagRows.map((tag) => [tag.normalizedName, tag.name])
-    );
-    const tags = normalizedTags.map(
-      (tag) => tagNameByNormalizedName.get(tag.normalizedName) ?? tag.name
-    );
-
-    return { ...newQuestion, tags };
+    return newQuestion.id;
   });
+
+  const createdQuestion = await findQuestionById(newQuestionId);
+  if (!createdQuestion) {
+    throw new Error("Created question could not be loaded");
+  }
+
+  return createdQuestion;
 }

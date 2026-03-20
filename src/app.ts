@@ -22,7 +22,7 @@ app.get("/", (c) => {
 });
 
 // API routes
-app.route("/api", routes);
+app.route("/v1", routes);
 
 // API documentation
 app.get("/docs/openapi.json", (c) => c.json(openApiDoc));

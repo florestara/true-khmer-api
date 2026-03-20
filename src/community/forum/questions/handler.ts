@@ -2,45 +2,32 @@ import type { Context } from "hono";
 import {
   type CreateQuestionInput,
   type GetQuestionParams,
-  type GetQuestionsPageQuery,
+  type GetQuestionsQuery,
 } from "./schema";
-import {
-  createQuestion,
-  findAllQuestions,
-  findCategoryById,
-  findQuestionById,
-  findQuestionsPage,
-} from "./query";
+import { createQuestion, findQuestionById, findQuestions } from "./query";
+import { findCategoryById } from "../categories/query";
 import { POSTGRES_FOREIGN_KEY_VIOLATION } from "../constants";
 import { getValidatedForumAuthUserId } from "../utils/auth";
 
-export async function handleGetQuestions(c: Context) {
+export async function handleGetQuestions(c: Context, query: GetQuestionsQuery) {
   try {
-    const questions = await findAllQuestions();
-    return c.json({ ok: true, questions }, 200);
-  } catch (err) {
-    console.error("Failed to get questions", err);
-    return c.json({ ok: false, error: "Internal server error" }, 500);
-  }
-}
+    if (query.categoryId) {
+      const category = await findCategoryById(query.categoryId);
+      if (!category) {
+        return c.json({ ok: false, error: "Category not found" }, 404);
+      }
+    }
 
-export async function handleGetQuestionsPage(c: Context, query: GetQuestionsPageQuery) {
-  try {
-    const page = await findQuestionsPage(query.limit, query.cursor);
+    const result = await findQuestions(query);
     return c.json(
       {
         ok: true,
-        questions: page.questions,
-        pagination: {
-          limit: query.limit,
-          hasMore: page.hasMore,
-          nextCursor: page.nextCursor,
-        },
+        ...result,
       },
       200
     );
   } catch (err) {
-    console.error("Failed to get questions page", err);
+    console.error("Failed to get questions", err);
     return c.json({ ok: false, error: "Internal server error" }, 500);
   }
 }
