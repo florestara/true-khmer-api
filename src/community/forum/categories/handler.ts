@@ -2,7 +2,7 @@ import type { Context } from "hono";
 import {
   POSTGRES_UNIQUE_VIOLATION,
 } from "../constants";
-import { getValidatedForumAuthUserId } from "../utils/auth";
+import { getAuthUserId } from "../../../auth/utils/get-auth";
 import { validateCreateCategoryInput, type CreateCategoryInput } from "./schema";
 import { createCategory, findCategoryByName, getCategories } from "./query";
 
@@ -17,7 +17,7 @@ export async function handleGetCategories(c: Context) {
 }
 
 export async function handleCreateCategory(c: Context) {
-  const authResult = getValidatedForumAuthUserId(c);
+  const authResult = getAuthUserId(c);
   if (!authResult.ok) {
     return authResult.response;
   }

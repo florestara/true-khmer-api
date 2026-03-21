@@ -7,7 +7,7 @@ import {
 import { createQuestion, findQuestionById, findQuestions } from "./query";
 import { findCategoryById } from "../categories/query";
 import { POSTGRES_FOREIGN_KEY_VIOLATION } from "../constants";
-import { getValidatedForumAuthUserId } from "../utils/auth";
+import { getAuthUserId } from "../../../auth/utils/get-auth";
 
 export async function handleGetQuestions(c: Context, query: GetQuestionsQuery) {
   try {
@@ -46,7 +46,7 @@ export async function handleGetQuestion(c: Context, params: GetQuestionParams) {
 }
 
 export async function handleCreateQuestion(c: Context, data: CreateQuestionInput) {
-  const authResult = getValidatedForumAuthUserId(c);
+  const authResult = getAuthUserId(c);
   if (!authResult.ok) {
     return authResult.response;
   }

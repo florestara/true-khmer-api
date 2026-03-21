@@ -1,9 +1,12 @@
 import { createMiddleware } from "hono/factory";
-import { getAuthUserId, type AuthPayload } from "./types";
+import type { AuthContext, AuthPayload } from "./types";
 import { verifyJwtToken } from "./helper";
 import { findUserOnboardingStatusById, findUserRoleById } from "./query";
 import { ONBOARDING_COMPLETE_STEP } from "../onboarding/constants";
 import type { Context } from "hono";
+
+const AUTH_USER_ID_UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function isAccessTokenPayload(payload: Record<string, unknown>) {
   const tokenType = payload.type ?? payload.tokenType ?? payload.token_type;
@@ -44,12 +47,22 @@ async function authenticateAccessToken(c: Context) {
     return c.json({ error: "Access token required" }, 401);
   }
 
-  const userId = getAuthUserId(verifyResult.payload as AuthPayload);
-  if (!userId) {
+  const sub = (verifyResult.payload as AuthPayload).sub;
+  if (typeof sub !== "string" || sub.trim().length === 0) {
     return c.json({ error: "Invalid access token payload" }, 401);
   }
 
-  c.set("auth", verifyResult.payload);
+  const userId = sub.trim();
+  if (!AUTH_USER_ID_UUID_RE.test(userId)) {
+    return c.json(
+      {
+        error: "User identifier must be a valid UUID",
+      },
+      401,
+    );
+  }
+
+  c.set("auth", { userId } satisfies AuthContext);
   return null;
 }
 
@@ -60,18 +73,13 @@ function createRequireAccessTokenMiddleware(options?: { allowIncompleteOnboardin
       return authError;
     }
 
-    const authPayload = c.get("auth") as AuthPayload | undefined;
-    if (!authPayload) {
-      return c.json({ error: "Invalid access token payload" }, 401);
-    }
-
-    const userId = getAuthUserId(authPayload);
-    if (!userId) {
+    const auth = c.get("auth") as AuthContext | undefined;
+    if (!auth) {
       return c.json({ error: "Invalid access token payload" }, 401);
     }
 
     if (!options?.allowIncompleteOnboarding) {
-      const onboardingStatus = await findUserOnboardingStatusById(userId);
+      const onboardingStatus = await findUserOnboardingStatusById(auth.userId);
 
       if (!onboardingStatus) {
         return c.json({ error: "User not found" }, 401);
@@ -109,17 +117,12 @@ export const requireAdmin = createMiddleware(async (c, next) => {
     return authError;
   }
 
-  const authPayload = c.get("auth") as AuthPayload | undefined;
-  if (!authPayload) {
+  const auth = c.get("auth") as AuthContext | undefined;
+  if (!auth) {
     return c.json({ error: "Invalid access token payload" }, 401);
   }
 
-  const userId = getAuthUserId(authPayload);
-  if (!userId) {
-    return c.json({ error: "Invalid access token payload" }, 401);
-  }
-
-  const user = await findUserRoleById(userId);
+  const user = await findUserRoleById(auth.userId);
 
   if (!user) {
     return c.json({ error: "User not found" }, 401);

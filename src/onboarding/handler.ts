@@ -1,5 +1,5 @@
 import type { Context } from "hono";
-import { getAuthUserId, type AuthPayload } from "../auth/types";
+import { getAuthUserId } from "../auth/utils/get-auth";
 import {
   ONBOARDING_CONTRIBUTIONS_STEP,
   ONBOARDING_INTERESTS_STEP,
@@ -24,17 +24,6 @@ import {
   replaceUserContributions,
   saveProfileStep,
 } from "./query";
-
-function getUserId(c: Context) {
-  const authPayload = c.get("auth") as AuthPayload | undefined;
-  const userId = getAuthUserId(authPayload);
-
-  if (!userId) {
-    return null;
-  }
-
-  return userId;
-}
 
 function normalizeBaseUrl(value: string) {
   return value.endsWith("/") ? value.slice(0, -1) : value;
@@ -114,12 +103,12 @@ export async function handleGetCities(c: Context) {
 }
 
 export async function handleGetOnboardingState(c: Context) {
-  const userId = getUserId(c);
-  if (!userId) {
-    return c.json({ ok: false, error: "Unauthorized" }, 401);
+  const authResult = getAuthUserId(c);
+  if (!authResult.ok) {
+    return authResult.response;
   }
 
-  const state = await getOnboardingState(userId);
+  const state = await getOnboardingState(authResult.userId);
   if (!state) {
     return c.json({ ok: false, error: "User not found" }, 404);
   }
@@ -131,17 +120,17 @@ export async function handleSaveProfileStep(
   c: Context,
   payload: OnboardingProfileStepPayload,
 ) {
-  const userId = getUserId(c);
-  if (!userId) {
-    return c.json({ ok: false, error: "Unauthorized" }, 401);
+  const authResult = getAuthUserId(c);
+  if (!authResult.ok) {
+    return authResult.response;
   }
 
-  const existingUser = await findUserById(userId);
+  const existingUser = await findUserById(authResult.userId);
   if (!existingUser) {
     return c.json({ ok: false, error: "User not found" }, 404);
   }
 
-  if (!isAvatarKeyOwnedByUser(userId, payload.avatarKey)) {
+  if (!isAvatarKeyOwnedByUser(authResult.userId, payload.avatarKey)) {
     return c.json(
       { ok: false, error: "avatarKey does not belong to current user" },
       400,
@@ -159,13 +148,13 @@ export async function handleSaveProfileStep(
   }
 
   await saveProfileStep(
-    userId,
+    authResult.userId,
     payload,
     avatarUrl,
     locationResult.countryId,
     locationResult.cityId,
   );
-  const state = await getOnboardingState(userId);
+  const state = await getOnboardingState(authResult.userId);
 
   return c.json({ ok: true, state });
 }
@@ -174,12 +163,12 @@ export async function handleSaveInterestsStep(
   c: Context,
   payload: OnboardingInterestsStepPayload,
 ) {
-  const userId = getUserId(c);
-  if (!userId) {
-    return c.json({ ok: false, error: "Unauthorized" }, 401);
+  const authResult = getAuthUserId(c);
+  if (!authResult.ok) {
+    return authResult.response;
   }
 
-  const existingUser = await findUserById(userId);
+  const existingUser = await findUserById(authResult.userId);
   if (!existingUser) {
     return c.json({ ok: false, error: "User not found" }, 404);
   }
@@ -194,12 +183,12 @@ export async function handleSaveInterestsStep(
     );
   }
 
-  const result = await replaceUserInterests(userId, payload);
+  const result = await replaceUserInterests(authResult.userId, payload);
   if (!result.ok) {
     return c.json({ ok: false, error: result.error }, 400);
   }
 
-  const state = await getOnboardingState(userId);
+  const state = await getOnboardingState(authResult.userId);
   return c.json({ ok: true, state });
 }
 
@@ -207,12 +196,12 @@ export async function handleSaveContributionsStep(
   c: Context,
   payload: OnboardingContributionsStepPayload,
 ) {
-  const userId = getUserId(c);
-  if (!userId) {
-    return c.json({ ok: false, error: "Unauthorized" }, 401);
+  const authResult = getAuthUserId(c);
+  if (!authResult.ok) {
+    return authResult.response;
   }
 
-  const existingUser = await findUserById(userId);
+  const existingUser = await findUserById(authResult.userId);
   if (!existingUser) {
     return c.json({ ok: false, error: "User not found" }, 404);
   }
@@ -227,19 +216,19 @@ export async function handleSaveContributionsStep(
     );
   }
 
-  await replaceUserContributions(userId, payload);
+  await replaceUserContributions(authResult.userId, payload);
 
-  const state = await getOnboardingState(userId);
+  const state = await getOnboardingState(authResult.userId);
   return c.json({ ok: true, state });
 }
 
 export async function handleCompleteOnboarding(c: Context) {
-  const userId = getUserId(c);
-  if (!userId) {
-    return c.json({ ok: false, error: "Unauthorized" }, 401);
+  const authResult = getAuthUserId(c);
+  if (!authResult.ok) {
+    return authResult.response;
   }
 
-  const currentState = await getOnboardingState(userId);
+  const currentState = await getOnboardingState(authResult.userId);
   if (
     !currentState ||
     currentState.user.onboardingStep < ONBOARDING_CONTRIBUTIONS_STEP
@@ -254,8 +243,8 @@ export async function handleCompleteOnboarding(c: Context) {
     );
   }
 
-  await completeOnboarding(userId);
-  const state = await getOnboardingState(userId);
+  await completeOnboarding(authResult.userId);
+  const state = await getOnboardingState(authResult.userId);
 
   return c.json({ ok: true, state });
 }
