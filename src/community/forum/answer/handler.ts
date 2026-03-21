@@ -16,10 +16,10 @@ import {
   updateAnswer,
 } from "./query";
 import { POSTGRES_FOREIGN_KEY_VIOLATION } from "../constants";
-import { getValidatedForumAuthUserId } from "../utils/auth";
+import { getAuthUserId } from "../../../auth/utils/get-auth";
 
 export async function handleGetAnswers(c: Context, params: QuestionIdParams) {
-  const authResult = getValidatedForumAuthUserId(c);
+  const authResult = getAuthUserId(c);
   if (!authResult.ok) {
     return authResult.response;
   }
@@ -39,7 +39,7 @@ export async function handleGetAnswers(c: Context, params: QuestionIdParams) {
 }
 
 export async function handleCreateAnswer(c: Context, data: CreateAnswerInput) {
-  const authResult = getValidatedForumAuthUserId(c);
+  const authResult = getAuthUserId(c);
   if (!authResult.ok) {
     return authResult.response;
   }
@@ -74,7 +74,7 @@ export async function handleEditAnswer(
   params: AnswerIdParams,
   data: UpdateAnswerInput,
 ) {
-  const authResult = getValidatedForumAuthUserId(c);
+  const authResult = getAuthUserId(c);
   if (!authResult.ok) {
     return authResult.response;
   }
@@ -106,7 +106,7 @@ export async function handleEditAnswer(
 }
 
 export async function handleDeleteAnswer(c: Context, params: AnswerIdParams) {
-  const authResult = getValidatedForumAuthUserId(c);
+  const authResult = getAuthUserId(c);
   if (!authResult.ok) {
     return authResult.response;
   }
@@ -142,7 +142,7 @@ export async function handleVoteAnswer(
   params: AnswerIdParams,
   data: VoteAnswerInput,
 ) {
-  const authResult = getValidatedForumAuthUserId(c);
+  const authResult = getAuthUserId(c);
   if (!authResult.ok) {
     return authResult.response;
   }

@@ -1,16 +1,11 @@
 import { createHmac, createHash, randomUUID } from "node:crypto";
 import type { Context } from "hono";
-import { getAuthUserId, type AuthPayload } from "../auth/types";
+import { getAuthUserId } from "../auth/utils/get-auth";
 import type { PresignAvatarUploadPayload } from "./schema";
 import type { PresignAvatarUploadResponse } from "./types";
 
 const R2_REGION = "auto";
 const PRESIGN_EXPIRY_SECONDS = 600;
-
-function getUserId(c: Context) {
-  const authPayload = c.get("auth") as AuthPayload | undefined;
-  return getAuthUserId(authPayload);
-}
 
 function getEnv(name: string) {
   const value = process.env[name]?.trim();
@@ -155,13 +150,13 @@ export async function handlePresignAvatarUpload(
   c: Context,
   payload: PresignAvatarUploadPayload,
 ) {
-  const userId = getUserId(c);
-  if (!userId) {
-    return c.json({ ok: false, error: "Unauthorized" }, 401);
+  const authResult = getAuthUserId(c);
+  if (!authResult.ok) {
+    return authResult.response;
   }
 
   try {
-    const avatarKey = buildAvatarKey(userId, payload.fileName);
+    const avatarKey = buildAvatarKey(authResult.userId, payload.fileName);
     const presigned = buildPresignedPutUrl(
       avatarKey,
       payload.contentType,
