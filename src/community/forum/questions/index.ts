@@ -21,7 +21,7 @@ communityForumQuestionFeature.get(
   async (c) => {
     const query = c.req.valid("query");
     return handleGetQuestions(c, query);
-  }
+  },
 );
 
 communityForumQuestionFeature.get(
@@ -30,14 +30,19 @@ communityForumQuestionFeature.get(
   async (c) => {
     const params = c.req.valid("param");
     return handleGetQuestion(c, params);
-  }
+  },
 );
 
-communityForumQuestionFeature.post(
-  "/",
-  createQuestionValidator,
+communityForumQuestionFeature.delete(
+  "/:questionId",
+  getQuestionParamsValidator,
   async (c) => {
-    const data = c.req.valid("json");
-    return handleCreateQuestion(c, data);
-  }
+    const params = c.req.valid("param");
+    return handleGetQuestion(c, params);
+  },
 );
+
+communityForumQuestionFeature.post("/", createQuestionValidator, async (c) => {
+  const data = c.req.valid("json");
+  return handleCreateQuestion(c, data);
+});

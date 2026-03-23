@@ -9,6 +9,10 @@ import { createCategory, findCategoryByName, getCategories } from "./query";
 export async function handleGetCategories(c: Context) {
   try {
     const categories = await getCategories();
+
+
+
+    
     return c.json({ ok: true, categories }, 200);
   } catch (err) {
     console.error("Failed to get categories", err);

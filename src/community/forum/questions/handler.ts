@@ -24,7 +24,7 @@ export async function handleGetQuestions(c: Context, query: GetQuestionsQuery) {
         ok: true,
         ...result,
       },
-      200
+      200,
     );
   } catch (err) {
     console.error("Failed to get questions", err);
@@ -45,7 +45,10 @@ export async function handleGetQuestion(c: Context, params: GetQuestionParams) {
   }
 }
 
-export async function handleCreateQuestion(c: Context, data: CreateQuestionInput) {
+export async function handleCreateQuestion(
+  c: Context,
+  data: CreateQuestionInput,
+) {
   const authResult = getAuthUserId(c);
   if (!authResult.ok) {
     return authResult.response;
@@ -59,8 +62,11 @@ export async function handleCreateQuestion(c: Context, data: CreateQuestionInput
 
     if (category.status !== "ACTIVE") {
       return c.json(
-        { ok: false, error: "Questions can only be posted to active categories" },
-        409
+        {
+          ok: false,
+          error: "Questions can only be posted to active categories",
+        },
+        409,
       );
     }
 
@@ -72,6 +78,26 @@ export async function handleCreateQuestion(c: Context, data: CreateQuestionInput
       return c.json({ ok: false, error: "Category not found" }, 404);
     }
     console.error("Failed to create question", err);
+    return c.json({ ok: false, error: "Internal server error" }, 500);
+  }
+}
+
+export async function handleDeleteQuestion(
+  c: Context,
+  params: GetQuestionParams,
+) {
+  try {
+    const authResult = getAuthUserId(c);
+    if (!authResult.ok) {
+      return authResult.response;
+    }
+    const question = await findQuestionById(params.questionId);
+    if (!question) {
+      return c.json({ ok: false, error: "Question not found" }, 404);
+    }
+    return c.json({ ok: true, question }, 200);
+  } catch (err) {
+    console.error("Failed to get question", err);
     return c.json({ ok: false, error: "Internal server error" }, 500);
   }
 }

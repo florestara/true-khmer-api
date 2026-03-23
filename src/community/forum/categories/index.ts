@@ -7,5 +7,6 @@ import { handleCreateCategory, handleGetCategories } from "./handler";
 
 export const communityForumFeature = new Hono();
 
+
 communityForumFeature.get("/", requireAccessToken, handleGetCategories);
 communityForumFeature.post("/", requireAdmin, handleCreateCategory);

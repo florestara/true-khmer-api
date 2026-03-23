@@ -18,12 +18,19 @@ export async function getCategories(): Promise<ForumCategoryRow[]> {
     .orderBy(forumCategory.displayOrder);
 }
 
-export async function findCategoryById(id: string): Promise<ForumCategoryRow | null> {
-  const rows = await db.select().from(forumCategory).where(eq(forumCategory.id, id));
+export async function findCategoryById(
+  id: string,
+): Promise<ForumCategoryRow | null> {
+  const rows = await db
+    .select()
+    .from(forumCategory)
+    .where(eq(forumCategory.id, id));
   return rows[0] ?? null;
 }
 
-export async function findCategoryByName(name: string): Promise<ForumCategoryRow | null> {
+export async function findCategoryByName(
+  name: string,
+): Promise<ForumCategoryRow | null> {
   const normalizedName = name.toLowerCase();
   const rows = await db
     .select()
@@ -33,7 +40,7 @@ export async function findCategoryByName(name: string): Promise<ForumCategoryRow
 }
 
 export async function createCategory(
-  data: CreateCategoryInput
+  data: CreateCategoryInput,
 ): Promise<ForumCategoryRow> {
   return db.transaction(async (tx) => {
     // Serialize category display-order assignment inside the forum advisory-lock namespace.
@@ -66,14 +73,17 @@ export async function createCategory(
       createdBy: data.createdBy,
     };
 
-    const [newCategory] = await tx.insert(forumCategory).values(insertData).returning();
+    const [newCategory] = await tx
+      .insert(forumCategory)
+      .values(insertData)
+      .returning();
     return newCategory;
   });
 }
 
 export async function updateCategory(
   id: string,
-  data: Partial<ForumCategoryInsert>
+  data: Partial<ForumCategoryInsert>,
 ): Promise<ForumCategoryRow | null> {
   const [updatedCategory] = await db
     .update(forumCategory)
@@ -84,7 +94,7 @@ export async function updateCategory(
 }
 
 export async function archiveCategory(
-  id: string
+  id: string,
 ): Promise<ForumCategoryRow | null> {
   const [updatedCategory] = await db
     .update(forumCategory)
