@@ -1664,19 +1664,6 @@
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
-        },
-        "forum_answer_author_id_user_id_fk": {
-          "name": "forum_answer_author_id_user_id_fk",
-          "tableFrom": "forum_answer",
-          "tableTo": "user",
-          "columnsFrom": [
-            "author_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1810,19 +1797,6 @@
             "id"
           ],
           "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "forum_answer_vote_voter_id_user_id_fk": {
-          "name": "forum_answer_vote_voter_id_user_id_fk",
-          "tableFrom": "forum_answer_vote",
-          "tableTo": "user",
-          "columnsFrom": [
-            "voter_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
           "onUpdate": "no action"
         }
       },
@@ -2055,20 +2029,6 @@
           "notNull": true,
           "default": 0
         },
-        "upvote_count": {
-          "name": "upvote_count",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "downvote_count": {
-          "name": "downvote_count",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -2082,12 +2042,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
-        },
-        "deleted_at": {
-          "name": "deleted_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {
@@ -2159,166 +2113,6 @@
           "tableTo": "forum_category",
           "columnsFrom": [
             "category_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "forum_question_author_id_user_id_fk": {
-          "name": "forum_question_author_id_user_id_fk",
-          "tableFrom": "forum_question",
-          "tableTo": "user",
-          "columnsFrom": [
-            "author_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.forum_question_vote": {
-      "name": "forum_question_vote",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "question_id": {
-          "name": "question_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "voter_id": {
-          "name": "voter_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "vote_type": {
-          "name": "vote_type",
-          "type": "forum_question_vote_type",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "forum_question_vote_question_voter_unique_idx": {
-          "name": "forum_question_vote_question_voter_unique_idx",
-          "columns": [
-            {
-              "expression": "question_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "voter_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "forum_question_vote_question_idx": {
-          "name": "forum_question_vote_question_idx",
-          "columns": [
-            {
-              "expression": "question_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "forum_question_vote_voter_idx": {
-          "name": "forum_question_vote_voter_idx",
-          "columns": [
-            {
-              "expression": "voter_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "forum_question_vote_type_idx": {
-          "name": "forum_question_vote_type_idx",
-          "columns": [
-            {
-              "expression": "vote_type",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "forum_question_vote_question_id_forum_question_id_fk": {
-          "name": "forum_question_vote_question_id_forum_question_id_fk",
-          "tableFrom": "forum_question_vote",
-          "tableTo": "forum_question",
-          "columnsFrom": [
-            "question_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "forum_question_vote_voter_id_user_id_fk": {
-          "name": "forum_question_vote_voter_id_user_id_fk",
-          "tableFrom": "forum_question_vote",
-          "tableTo": "user",
-          "columnsFrom": [
-            "voter_id"
           ],
           "columnsTo": [
             "id"
@@ -2577,14 +2371,6 @@
         "PUBLISHED",
         "CLOSED",
         "DELETED"
-      ]
-    },
-    "public.forum_question_vote_type": {
-      "name": "forum_question_vote_type",
-      "schema": "public",
-      "values": [
-        "UPVOTE",
-        "DOWNVOTE"
       ]
     }
   },
