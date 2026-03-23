@@ -1,7 +1,9 @@
 import { validator } from "hono/validator";
 import type { ZodTypeAny } from "zod";
 
-export const createJsonSchemaValidator = <TSchema extends ZodTypeAny>(schema: TSchema) =>
+export const createJsonSchemaValidator = <TSchema extends ZodTypeAny>(
+  schema: TSchema,
+) =>
   validator("json", (value, c) => {
     const parsed = schema.safeParse(value);
 
