@@ -73,3 +73,8 @@ communityForumQuestionFeature.post(
     return handleVoteQuestion(c, params, data);
   },
 );
+
+communityForumQuestionFeature.post("/", createQuestionValidator, async (c) => {
+  const data = c.req.valid("json");
+  return handleCreateQuestion(c, data);
+});
