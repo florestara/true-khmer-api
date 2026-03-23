@@ -35,6 +35,11 @@ export const forumAnswerVoteType = pgEnum("forum_answer_vote_type", [
   "DOWNVOTE",
 ]);
 
+export const forumQuestionVoteType = pgEnum("forum_question_vote_type", [
+  "UPVOTE",
+  "DOWNVOTE",
+]);
+
 export const forumCategory = pgTable(
   "forum_category",
   {
@@ -77,6 +82,33 @@ export const forumQuestion = pgTable(
     body: text("body").notNull(),
     status: forumQuestionStatus("status").default("PUBLISHED").notNull(),
     answerCount: integer("answer_count").default(0).notNull(),
+    upvoteCount: integer("upvote_count").default(0).notNull(),
+    downvoteCount: integer("downvote_count").default(0).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" })
+      .defaultNow()
+      .notNull(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true, mode: "string" }),
+  },
+  (table) => [
+    index("forum_question_category_idx").using("btree", table.categoryId),
+    index("forum_question_author_idx").using("btree", table.authorId),
+    index("forum_question_status_idx").using("btree", table.status),
+    index("forum_question_created_idx").using("btree", table.createdAt),
+  ],
+);
+
+export const forumQuestionVote = pgTable(
+  "forum_question_vote",
+  {
+    id: uuid("id").defaultRandom().primaryKey().notNull(),
+    questionId: uuid("question_id")
+      .notNull()
+      .references(() => forumQuestion.id, { onDelete: "cascade" }),
+    voterId: uuid("voter_id").notNull(),
+    voteType: forumQuestionVoteType("vote_type").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
       .defaultNow()
       .notNull(),
@@ -85,10 +117,14 @@ export const forumQuestion = pgTable(
       .notNull(),
   },
   (table) => [
-    index("forum_question_category_idx").using("btree", table.categoryId),
-    index("forum_question_author_idx").using("btree", table.authorId),
-    index("forum_question_status_idx").using("btree", table.status),
-    index("forum_question_created_idx").using("btree", table.createdAt),
+    uniqueIndex("forum_question_vote_question_voter_unique_idx").using(
+      "btree",
+      table.questionId,
+      table.voterId,
+    ),
+    index("forum_question_vote_question_idx").using("btree", table.questionId),
+    index("forum_question_vote_voter_idx").using("btree", table.voterId),
+    index("forum_question_vote_type_idx").using("btree", table.voteType),
   ],
 );
 
