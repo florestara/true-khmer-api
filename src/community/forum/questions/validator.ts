@@ -1,6 +1,7 @@
 import { validator } from "hono/validator";
 import {
   createQuestionSchema,
+  editQuestionSchema,
   getQuestionParamsSchema,
   getQuestionsQuerySchema,
   voteQuestionSchema,
@@ -8,6 +9,23 @@ import {
 
 export const createQuestionValidator = validator("json", (value, c) => {
   const parsed = createQuestionSchema.safeParse(value);
+
+  if (!parsed.success) {
+    return c.json(
+      {
+        ok: false,
+        error: "Validation failed",
+        issues: parsed.error.issues.map((issue) => issue.message),
+      },
+      400
+    );
+  }
+
+  return parsed.data;
+});
+
+export const editQuestionValidator = validator("json", (value, c) => {
+  const parsed = editQuestionSchema.safeParse(value);
 
   if (!parsed.success) {
     return c.json(
