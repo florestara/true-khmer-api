@@ -1,15 +1,28 @@
 import type { Context } from "hono";
 import {
   type CreateQuestionInput,
-  type GetQuestionParams,
   type GetQuestionsQuery,
+  type QuestionIdParams,
+  type VoteQuestionInput,
 } from "./schema";
-import { createQuestion, findQuestionById, findQuestions } from "./query";
+import {
+  createQuestion,
+  findQuestionById,
+  findQuestionRowById,
+  findQuestions,
+  setQuestionVote,
+  softDeleteQuestion,
+} from "./query";
 import { findCategoryById } from "../categories/query";
 import { POSTGRES_FOREIGN_KEY_VIOLATION } from "../constants";
 import { getAuthUserId } from "../../../auth/utils/get-auth";
 
 export async function handleGetQuestions(c: Context, query: GetQuestionsQuery) {
+  const authResult = getAuthUserId(c);
+  if (!authResult.ok) {
+    return authResult.response;
+  }
+
   try {
     if (query.categoryId) {
       const category = await findCategoryById(query.categoryId);
@@ -18,7 +31,7 @@ export async function handleGetQuestions(c: Context, query: GetQuestionsQuery) {
       }
     }
 
-    const result = await findQuestions(query);
+    const result = await findQuestions(query, authResult.userId);
     return c.json(
       {
         ok: true,
@@ -32,9 +45,14 @@ export async function handleGetQuestions(c: Context, query: GetQuestionsQuery) {
   }
 }
 
-export async function handleGetQuestion(c: Context, params: GetQuestionParams) {
+export async function handleGetQuestion(c: Context, params: QuestionIdParams) {
+  const authResult = getAuthUserId(c);
+  if (!authResult.ok) {
+    return authResult.response;
+  }
+
   try {
-    const question = await findQuestionById(params.questionId);
+    const question = await findQuestionById(params.questionId, authResult.userId);
     if (!question) {
       return c.json({ ok: false, error: "Question not found" }, 404);
     }
@@ -72,6 +90,84 @@ export async function handleCreateQuestion(c: Context, data: CreateQuestionInput
       return c.json({ ok: false, error: "Category not found" }, 404);
     }
     console.error("Failed to create question", err);
+    return c.json({ ok: false, error: "Internal server error" }, 500);
+  }
+}
+
+export async function handleDeleteQuestion(c: Context, params: QuestionIdParams) {
+  const authResult = getAuthUserId(c);
+  if (!authResult.ok) {
+    return authResult.response;
+  }
+
+  try {
+    const existingQuestion = await findQuestionRowById(params.questionId);
+    if (!existingQuestion) {
+      return c.json({ ok: false, error: "Question not found" }, 404);
+    }
+
+    if (existingQuestion.authorId !== authResult.userId) {
+      return c.json({ ok: false, error: "You can only delete your own question" }, 403);
+    }
+
+    if (existingQuestion.status === "DELETED") {
+      return c.json({ ok: false, error: "Question is already deleted" }, 409);
+    }
+
+    const deletedQuestion = await softDeleteQuestion(params.questionId, authResult.userId);
+    if (!deletedQuestion) {
+      return c.json({ ok: false, error: "Question not found" }, 404);
+    }
+
+    return c.json({ ok: true }, 200);
+  } catch (err) {
+    console.error("Failed to delete question", err);
+    return c.json({ ok: false, error: "Internal server error" }, 500);
+  }
+}
+
+export async function handleVoteQuestion(
+  c: Context,
+  params: QuestionIdParams,
+  data: VoteQuestionInput,
+) {
+  const authResult = getAuthUserId(c);
+  if (!authResult.ok) {
+    return authResult.response;
+  }
+
+  try {
+    const existingQuestion = await findQuestionRowById(params.questionId);
+    if (!existingQuestion) {
+      return c.json({ ok: false, error: "Question not found" }, 404);
+    }
+
+    if (existingQuestion.status !== "PUBLISHED") {
+      return c.json({ ok: false, error: "Only published questions can be voted on" }, 409);
+    }
+
+    if (existingQuestion.authorId === authResult.userId) {
+      return c.json({ ok: false, error: "You cannot vote on your own question" }, 409);
+    }
+
+    const votedQuestion = await setQuestionVote(
+      params.questionId,
+      authResult.userId,
+      data.voteType,
+    );
+    if (!votedQuestion) {
+      return c.json({ ok: false, error: "Question not found" }, 404);
+    }
+
+    return c.json(
+      {
+        ok: true,
+        question: votedQuestion,
+      },
+      200,
+    );
+  } catch (err) {
+    console.error("Failed to vote question", err);
     return c.json({ ok: false, error: "Internal server error" }, 500);
   }
 }

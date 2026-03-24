@@ -373,8 +373,12 @@ export const openApiDoc = {
           "body",
           "status",
           "answerCount",
+          "upvoteCount",
+          "downvoteCount",
           "createdAt",
           "updatedAt",
+          "score",
+          "viewerVote",
         ],
         properties: {
           id: { type: "string", format: "uuid" },
@@ -403,8 +407,17 @@ export const openApiDoc = {
           body: { type: "string" },
           status: { type: "string", enum: ["PUBLISHED", "CLOSED", "DELETED"], example: "PUBLISHED" },
           answerCount: { type: "integer", example: 0 },
+          upvoteCount: { type: "integer", example: 12 },
+          downvoteCount: { type: "integer", example: 2 },
           createdAt: { type: "string", format: "date-time" },
           updatedAt: { type: "string", format: "date-time" },
+          score: { type: "integer", example: 10 },
+          viewerVote: {
+            type: "string",
+            enum: ["UPVOTE", "DOWNVOTE"],
+            nullable: true,
+            example: "UPVOTE",
+          },
         },
       },
       CreateQuestionSuccessResponse: {
@@ -464,6 +477,27 @@ export const openApiDoc = {
               },
             },
           },
+        },
+      },
+      VoteQuestionRequest: {
+        type: "object",
+        required: ["voteType"],
+        properties: {
+          voteType: {
+            type: "string",
+            enum: ["UPVOTE", "DOWNVOTE", "NONE"],
+            example: "UPVOTE",
+            description:
+              "UPVOTE or DOWNVOTE sets the vote; NONE removes the current user's vote.",
+          },
+        },
+      },
+      VoteQuestionSuccessResponse: {
+        type: "object",
+        required: ["ok", "question"],
+        properties: {
+          ok: { type: "boolean", enum: [true], example: true },
+          question: { $ref: "#/components/schemas/ForumQuestionWithTags" },
         },
       },
       CreateAnswerRequest: {
@@ -1650,6 +1684,197 @@ export const openApiDoc = {
           },
           "404": {
             description: "Question not found",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/OkFalseErrorResponse" },
+              },
+            },
+          },
+          "500": {
+            description: "Internal server error",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [
+                    { $ref: "#/components/schemas/OkFalseErrorResponse" },
+                    { $ref: "#/components/schemas/InternalServerErrorResponse" },
+                  ],
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    "/forum/questions/delete-question/{questionId}": {
+      delete: {
+        tags: ["Forum Question"],
+        summary: "Delete your own question",
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          {
+            in: "path",
+            name: "questionId",
+            required: true,
+            description: "Question UUID",
+            schema: { type: "string", format: "uuid" },
+          },
+        ],
+        responses: {
+          "200": {
+            description: "Question deleted",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/OkTrueResponse" },
+              },
+            },
+          },
+          "400": {
+            description: "Validation failed or invalid authenticated user id type",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [
+                    { $ref: "#/components/schemas/OkFalseValidationIssuesResponse" },
+                    { $ref: "#/components/schemas/OkFalseErrorResponse" },
+                  ],
+                },
+              },
+            },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [
+                    { $ref: "#/components/schemas/SimpleErrorResponse" },
+                    { $ref: "#/components/schemas/OkFalseErrorResponse" },
+                  ],
+                },
+              },
+            },
+          },
+          "403": {
+            description: "Forbidden (not your question) or onboarding required",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [
+                    { $ref: "#/components/schemas/OnboardingRequiredErrorResponse" },
+                    { $ref: "#/components/schemas/OkFalseErrorResponse" },
+                  ],
+                },
+              },
+            },
+          },
+          "404": {
+            description: "Question not found",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/OkFalseErrorResponse" },
+              },
+            },
+          },
+          "409": {
+            description: "Question is already deleted",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/OkFalseErrorResponse" },
+              },
+            },
+          },
+          "500": {
+            description: "Internal server error",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [
+                    { $ref: "#/components/schemas/OkFalseErrorResponse" },
+                    { $ref: "#/components/schemas/InternalServerErrorResponse" },
+                  ],
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    "/forum/questions/vote-question/{questionId}": {
+      post: {
+        tags: ["Forum Question"],
+        summary: "Vote question (upvote/downvote/remove)",
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          {
+            in: "path",
+            name: "questionId",
+            required: true,
+            description: "Question UUID",
+            schema: { type: "string", format: "uuid" },
+          },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/VoteQuestionRequest" },
+            },
+          },
+        },
+        responses: {
+          "200": {
+            description: "Vote applied",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/VoteQuestionSuccessResponse" },
+              },
+            },
+          },
+          "400": {
+            description: "Validation failed or invalid authenticated user id type",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [
+                    { $ref: "#/components/schemas/OkFalseValidationIssuesResponse" },
+                    { $ref: "#/components/schemas/OkFalseErrorResponse" },
+                  ],
+                },
+              },
+            },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [
+                    { $ref: "#/components/schemas/SimpleErrorResponse" },
+                    { $ref: "#/components/schemas/OkFalseErrorResponse" },
+                  ],
+                },
+              },
+            },
+          },
+          "403": {
+            description: "Onboarding required",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/OnboardingRequiredErrorResponse" },
+              },
+            },
+          },
+          "404": {
+            description: "Question not found",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/OkFalseErrorResponse" },
+              },
+            },
+          },
+          "409": {
+            description: "Only published questions can be voted on or you cannot vote on your own question",
             content: {
               "application/json": {
                 schema: { $ref: "#/components/schemas/OkFalseErrorResponse" },

@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import {
   index,
   integer,
@@ -10,6 +10,7 @@ import {
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
+import { user } from "./user";
 
 // MVP forum schema: categories, questions, and answers.
 
@@ -31,6 +32,11 @@ export const forumAnswerStatus = pgEnum("forum_answer_status", [
 ]);
 
 export const forumAnswerVoteType = pgEnum("forum_answer_vote_type", [
+  "UPVOTE",
+  "DOWNVOTE",
+]);
+
+export const forumQuestionVoteType = pgEnum("forum_question_vote_type", [
   "UPVOTE",
   "DOWNVOTE",
 ]);
@@ -72,11 +78,42 @@ export const forumQuestion = pgTable(
     categoryId: uuid("category_id")
       .notNull()
       .references(() => forumCategory.id),
-    authorId: uuid("author_id").notNull(),
+    authorId: uuid("author_id")
+      .notNull()
+      .references(() => user.id),
     title: varchar("title", { length: 300 }).notNull(),
     body: text("body").notNull(),
     status: forumQuestionStatus("status").default("PUBLISHED").notNull(),
     answerCount: integer("answer_count").default(0).notNull(),
+    upvoteCount: integer("upvote_count").default(0).notNull(),
+    downvoteCount: integer("downvote_count").default(0).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" })
+      .defaultNow()
+      .notNull(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true, mode: "string" }),
+  },
+  (table) => [
+    index("forum_question_category_idx").using("btree", table.categoryId),
+    index("forum_question_author_idx").using("btree", table.authorId),
+    index("forum_question_status_idx").using("btree", table.status),
+    index("forum_question_created_idx").using("btree", table.createdAt),
+  ],
+);
+
+export const forumQuestionVote = pgTable(
+  "forum_question_vote",
+  {
+    id: uuid("id").defaultRandom().primaryKey().notNull(),
+    questionId: uuid("question_id")
+      .notNull()
+      .references(() => forumQuestion.id, { onDelete: "cascade" }),
+    voterId: uuid("voter_id")
+      .notNull()
+      .references(() => user.id),
+    voteType: forumQuestionVoteType("vote_type").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
       .defaultNow()
       .notNull(),
@@ -85,10 +122,14 @@ export const forumQuestion = pgTable(
       .notNull(),
   },
   (table) => [
-    index("forum_question_category_idx").using("btree", table.categoryId),
-    index("forum_question_author_idx").using("btree", table.authorId),
-    index("forum_question_status_idx").using("btree", table.status),
-    index("forum_question_created_idx").using("btree", table.createdAt),
+    uniqueIndex("forum_question_vote_question_voter_unique_idx").using(
+      "btree",
+      table.questionId,
+      table.voterId,
+    ),
+    index("forum_question_vote_question_idx").using("btree", table.questionId),
+    index("forum_question_vote_voter_idx").using("btree", table.voterId),
+    index("forum_question_vote_type_idx").using("btree", table.voteType),
   ],
 );
 
@@ -99,7 +140,9 @@ export const forumAnswer = pgTable(
     questionId: uuid("question_id")
       .notNull()
       .references(() => forumQuestion.id, { onDelete: "cascade" }),
-    authorId: uuid("author_id").notNull(),
+    authorId: uuid("author_id")
+      .notNull()
+      .references(() => user.id),
     body: text("body").notNull(),
     status: forumAnswerStatus("status").default("PUBLISHED").notNull(),
     upvoteCount: integer("upvote_count").default(0).notNull(),
@@ -127,7 +170,9 @@ export const forumAnswerVote = pgTable(
     answerId: uuid("answer_id")
       .notNull()
       .references(() => forumAnswer.id, { onDelete: "cascade" }),
-    voterId: uuid("voter_id").notNull(),
+    voterId: uuid("voter_id")
+      .notNull()
+      .references(() => user.id),
     voteType: forumAnswerVoteType("vote_type").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
       .defaultNow()
@@ -147,3 +192,54 @@ export const forumAnswerVote = pgTable(
     index("forum_answer_vote_type_idx").using("btree", table.voteType),
   ],
 );
+
+export const forumCategoryRelations = relations(forumCategory, ({ many }) => ({
+  questions: many(forumQuestion),
+}));
+
+export const forumQuestionRelations = relations(forumQuestion, ({ one, many }) => ({
+  category: one(forumCategory, {
+    fields: [forumQuestion.categoryId],
+    references: [forumCategory.id],
+  }),
+  author: one(user, {
+    fields: [forumQuestion.authorId],
+    references: [user.id],
+  }),
+  answers: many(forumAnswer),
+  votes: many(forumQuestionVote),
+}));
+
+export const forumQuestionVoteRelations = relations(forumQuestionVote, ({ one }) => ({
+  question: one(forumQuestion, {
+    fields: [forumQuestionVote.questionId],
+    references: [forumQuestion.id],
+  }),
+  voter: one(user, {
+    fields: [forumQuestionVote.voterId],
+    references: [user.id],
+  }),
+}));
+
+export const forumAnswerRelations = relations(forumAnswer, ({ one, many }) => ({
+  question: one(forumQuestion, {
+    fields: [forumAnswer.questionId],
+    references: [forumQuestion.id],
+  }),
+  author: one(user, {
+    fields: [forumAnswer.authorId],
+    references: [user.id],
+  }),
+  votes: many(forumAnswerVote),
+}));
+
+export const forumAnswerVoteRelations = relations(forumAnswerVote, ({ one }) => ({
+  answer: one(forumAnswer, {
+    fields: [forumAnswerVote.answerId],
+    references: [forumAnswer.id],
+  }),
+  voter: one(user, {
+    fields: [forumAnswerVote.voterId],
+    references: [user.id],
+  }),
+}));

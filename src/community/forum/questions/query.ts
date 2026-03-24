@@ -1,23 +1,28 @@
-import { and, desc, eq, inArray, lt, or } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, or, sql } from "drizzle-orm";
 import { db } from "../../../db/index";
 import {
   forumCategory,
   forumQuestion,
   forumQuestionTag,
+  forumQuestionVote,
   forumTag,
   user,
   userProfile,
 } from "../../../db/schema";
+import { FORUM_ADVISORY_LOCK_NAMESPACE } from "../constants";
 import {
   encodeQuestionsPageCursor,
   type CreateQuestionInput,
   type GetQuestionsQuery,
+  type QuestionVoteType,
   type QuestionsPageCursor,
+  type VoteIntent,
 } from "./schema";
 
 type ForumQuestionRow = typeof forumQuestion.$inferSelect;
 type ForumQuestionInsert = typeof forumQuestion.$inferInsert;
 type ForumQuestionTagInsert = typeof forumQuestionTag.$inferInsert;
+type ForumQuestionVoteInsert = typeof forumQuestionVote.$inferInsert;
 type ForumTagInsert = typeof forumTag.$inferInsert;
 type QuestionHydrationRow = {
   question: ForumQuestionRow;
@@ -25,8 +30,14 @@ type QuestionHydrationRow = {
   authorDisplayName: string | null;
   authorFullName: string;
   authorAvatarKey: string | null;
+  viewerVoteType: string | null;
 };
-type ForumQuestionWithTags = Omit<ForumQuestionRow, "categoryId" | "authorId"> & {
+type ForumQuestionWithTags = Omit<
+  ForumQuestionRow,
+  "categoryId" | "authorId" | "deletedAt"
+> & {
+  score: number;
+  viewerVote: QuestionVoteType | null;
   category: {
     id: string;
     name: string;
@@ -49,8 +60,15 @@ type QuestionsListResult = {
   pagination: QuestionsPagination;
 };
 
+const VISIBLE_QUESTION_STATUSES = ["PUBLISHED", "CLOSED"] as const;
+
 function normalizeTagName(value: string): string {
   return value.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function toInteger(value: unknown, fallback = 0): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
 }
 
 function resolveAuthorName(row: QuestionHydrationRow): string {
@@ -60,10 +78,12 @@ function resolveAuthorName(row: QuestionHydrationRow): string {
 }
 
 function hydrateQuestion(row: QuestionHydrationRow, tags: string[]): ForumQuestionWithTags {
-  const { categoryId, authorId, ...question } = row.question;
+  const { categoryId, authorId, deletedAt: _deletedAt, ...question } = row.question;
 
   return {
     ...question,
+    score: question.upvoteCount - question.downvoteCount,
+    viewerVote: row.viewerVoteType ? (row.viewerVoteType as QuestionVoteType) : null,
     category: {
       id: categoryId,
       name: row.categoryName,
@@ -77,7 +97,7 @@ function hydrateQuestion(row: QuestionHydrationRow, tags: string[]): ForumQuesti
   };
 }
 
-function buildQuestionsBaseQuery() {
+function buildQuestionsBaseQuery(viewerId: string) {
   return db
     .select({
       question: forumQuestion,
@@ -85,30 +105,43 @@ function buildQuestionsBaseQuery() {
       authorDisplayName: userProfile.displayName,
       authorFullName: user.name,
       authorAvatarKey: userProfile.avatarKey,
+      viewerVoteType: forumQuestionVote.voteType,
     })
     .from(forumQuestion)
     .innerJoin(forumCategory, eq(forumCategory.id, forumQuestion.categoryId))
     .innerJoin(user, eq(user.id, forumQuestion.authorId))
-    .leftJoin(userProfile, eq(userProfile.userId, user.id));
+    .leftJoin(userProfile, eq(userProfile.userId, user.id))
+    .leftJoin(
+      forumQuestionVote,
+      and(
+        eq(forumQuestionVote.questionId, forumQuestion.id),
+        eq(forumQuestionVote.voterId, viewerId),
+      ),
+    );
 }
 
 function buildQuestionsWhereClause(categoryId?: string, cursor?: QuestionsPageCursor) {
-  const filters = [];
+  const filters = [inArray(forumQuestion.status, VISIBLE_QUESTION_STATUSES)];
 
   if (categoryId) {
     filters.push(eq(forumQuestion.categoryId, categoryId));
   }
 
   if (cursor) {
-    filters.push(
-      or(
-        lt(forumQuestion.createdAt, cursor.createdAt),
-        and(eq(forumQuestion.createdAt, cursor.createdAt), lt(forumQuestion.id, cursor.id))
-      )
+    const cursorFilter = or(
+      lt(forumQuestion.createdAt, cursor.createdAt),
+      and(
+        eq(forumQuestion.createdAt, cursor.createdAt),
+        lt(forumQuestion.id, cursor.id),
+      ),
     );
+
+    if (cursorFilter) {
+      filters.push(cursorFilter);
+    }
   }
 
-  return filters.length > 0 ? and(...filters) : undefined;
+  return and(...filters);
 }
 
 async function attachTagsToQuestions(
@@ -146,7 +179,15 @@ async function attachTagsToQuestions(
   );
 }
 
-export async function findQuestionById(id: string): Promise<ForumQuestionWithTags | null> {
+export async function findQuestionRowById(id: string): Promise<ForumQuestionRow | null> {
+  const rows = await db.select().from(forumQuestion).where(eq(forumQuestion.id, id));
+  return rows[0] ?? null;
+}
+
+export async function findQuestionById(
+  id: string,
+  viewerId: string
+): Promise<ForumQuestionWithTags | null> {
   const rows = await db
     .select({
       question: forumQuestion,
@@ -154,15 +195,28 @@ export async function findQuestionById(id: string): Promise<ForumQuestionWithTag
       authorDisplayName: userProfile.displayName,
       authorFullName: user.name,
       authorAvatarKey: userProfile.avatarKey,
+      viewerVoteType: forumQuestionVote.voteType,
       tagName: forumTag.name,
     })
     .from(forumQuestion)
     .innerJoin(forumCategory, eq(forumCategory.id, forumQuestion.categoryId))
     .innerJoin(user, eq(user.id, forumQuestion.authorId))
     .leftJoin(userProfile, eq(userProfile.userId, user.id))
+    .leftJoin(
+      forumQuestionVote,
+      and(
+        eq(forumQuestionVote.questionId, forumQuestion.id),
+        eq(forumQuestionVote.voterId, viewerId),
+      ),
+    )
     .leftJoin(forumQuestionTag, eq(forumQuestionTag.questionId, forumQuestion.id))
     .leftJoin(forumTag, eq(forumTag.id, forumQuestionTag.tagId))
-    .where(eq(forumQuestion.id, id));
+    .where(
+      and(
+        eq(forumQuestion.id, id),
+        inArray(forumQuestion.status, VISIBLE_QUESTION_STATUSES),
+      )
+    );
 
   if (rows.length === 0) {
     return null;
@@ -174,6 +228,7 @@ export async function findQuestionById(id: string): Promise<ForumQuestionWithTag
     authorDisplayName: rows[0].authorDisplayName,
     authorFullName: rows[0].authorFullName,
     authorAvatarKey: rows[0].authorAvatarKey,
+    viewerVoteType: rows[0].viewerVoteType,
   };
   const tags = Array.from(
     new Set(
@@ -186,13 +241,12 @@ export async function findQuestionById(id: string): Promise<ForumQuestionWithTag
   return hydrateQuestion(questionRow, tags);
 }
 
-export async function findQuestions({
-  categoryId,
-  limit,
-  cursor,
-}: GetQuestionsQuery): Promise<QuestionsListResult> {
+export async function findQuestions(
+  { categoryId, limit, cursor }: GetQuestionsQuery,
+  viewerId: string
+): Promise<QuestionsListResult> {
   const whereClause = buildQuestionsWhereClause(categoryId, cursor);
-  const baseQuery = buildQuestionsBaseQuery()
+  const baseQuery = buildQuestionsBaseQuery(viewerId)
     .where(whereClause)
     .orderBy(desc(forumQuestion.createdAt), desc(forumQuestion.id));
 
@@ -228,6 +282,8 @@ export async function createQuestion(
       title: data.title,
       body: data.body,
       status: data.status ?? "PUBLISHED",
+      upvoteCount: 0,
+      downvoteCount: 0,
     };
 
     const [newQuestion] = await tx
@@ -286,10 +342,124 @@ export async function createQuestion(
     return newQuestion.id;
   });
 
-  const createdQuestion = await findQuestionById(newQuestionId);
+  const createdQuestion = await findQuestionById(newQuestionId, authorId);
   if (!createdQuestion) {
     throw new Error("Created question could not be loaded");
   }
 
   return createdQuestion;
+}
+
+export async function softDeleteQuestion(
+  questionId: string,
+  authorId: string
+): Promise<ForumQuestionRow | null> {
+  const [deletedQuestion] = await db
+    .update(forumQuestion)
+    .set({
+      status: "DELETED",
+      deletedAt: sql`now()`,
+      updatedAt: sql`now()`,
+    })
+    .where(
+      and(
+        eq(forumQuestion.id, questionId),
+        eq(forumQuestion.authorId, authorId),
+        inArray(forumQuestion.status, VISIBLE_QUESTION_STATUSES),
+      )
+    )
+    .returning();
+
+  return deletedQuestion ?? null;
+}
+
+export async function setQuestionVote(
+  questionId: string,
+  voterId: string,
+  voteIntent: VoteIntent
+): Promise<ForumQuestionWithTags | null> {
+  const updatedQuestionId = await db.transaction(async (tx) => {
+    // Serialize vote updates per question inside the forum advisory-lock namespace.
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(${FORUM_ADVISORY_LOCK_NAMESPACE}, hashtext(${questionId}))`,
+    );
+
+    const [question] = await tx
+      .select()
+      .from(forumQuestion)
+      .where(
+        and(
+          eq(forumQuestion.id, questionId),
+          eq(forumQuestion.status, "PUBLISHED"),
+        )
+      );
+
+    if (!question) {
+      return null;
+    }
+
+    if (voteIntent === "NONE") {
+      await tx
+        .delete(forumQuestionVote)
+        .where(
+          and(
+            eq(forumQuestionVote.questionId, questionId),
+            eq(forumQuestionVote.voterId, voterId),
+          ),
+        );
+    } else {
+      const voteInsertData: ForumQuestionVoteInsert = {
+        questionId,
+        voterId,
+        voteType: voteIntent,
+      };
+
+      await tx
+        .insert(forumQuestionVote)
+        .values(voteInsertData)
+        .onConflictDoUpdate({
+          target: [forumQuestionVote.questionId, forumQuestionVote.voterId],
+          set: {
+            voteType: voteIntent,
+            updatedAt: sql`now()`,
+          },
+        });
+    }
+
+    const [voteCountRow] = await tx
+      .select({
+        upvoteCount:
+          sql`coalesce(sum(case when ${forumQuestionVote.voteType} = 'UPVOTE' then 1 else 0 end), 0)`,
+        downvoteCount:
+          sql`coalesce(sum(case when ${forumQuestionVote.voteType} = 'DOWNVOTE' then 1 else 0 end), 0)`,
+      })
+      .from(forumQuestionVote)
+      .where(eq(forumQuestionVote.questionId, questionId));
+
+    const normalizedUpvoteCount = toInteger(voteCountRow?.upvoteCount);
+    const normalizedDownvoteCount = toInteger(voteCountRow?.downvoteCount);
+
+    const [updatedQuestion] = await tx
+      .update(forumQuestion)
+      .set({
+        upvoteCount: normalizedUpvoteCount,
+        downvoteCount: normalizedDownvoteCount,
+        updatedAt: sql`now()`,
+      })
+      .where(eq(forumQuestion.id, questionId))
+      .returning({ id: forumQuestion.id });
+
+    return updatedQuestion?.id ?? null;
+  });
+
+  if (!updatedQuestionId) {
+    return null;
+  }
+
+  const votedQuestion = await findQuestionById(updatedQuestionId, voterId);
+  if (!votedQuestion) {
+    throw new Error("Voted question could not be loaded");
+  }
+
+  return votedQuestion;
 }

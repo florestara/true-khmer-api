@@ -15,6 +15,18 @@ function normalizeTagText(value: string): string {
   return value.trim().replace(/\s+/g, " ");
 }
 
+const questionTitleSchema = z
+  .string()
+  .trim()
+  .min(1, "title is required and must be 1..300 characters")
+  .max(300, "title is required and must be 1..300 characters");
+
+const questionBodySchema = z
+  .string()
+  .trim()
+  .min(1, "body is required and must be 1..10000 characters")
+  .max(MAX_BODY_LENGTH, `body is required and must be 1..${MAX_BODY_LENGTH} characters`);
+
 const forumQuestionStatusSchema = z.enum(["PUBLISHED", "CLOSED", "DELETED"]);
 export type ForumQuestionStatus = z.infer<typeof forumQuestionStatusSchema>;
 
@@ -64,7 +76,8 @@ export const getQuestionParamsSchema = z.object({
   questionId: z.string().trim().regex(FORUM_UUID_RE, "questionId must be a valid UUID"),
 });
 
-export type GetQuestionParams = z.infer<typeof getQuestionParamsSchema>;
+export type QuestionIdParams = z.infer<typeof getQuestionParamsSchema>;
+export type GetQuestionParams = QuestionIdParams;
 
 const questionsPageCursorSchema = z.object({
   createdAt: z.string().trim().transform((value, ctx) => {
@@ -175,16 +188,8 @@ export const createQuestionSchema = z
       .string()
       .trim()
       .regex(FORUM_UUID_RE, "categoryId is required and must be a valid UUID"),
-    title: z
-      .string()
-      .trim()
-      .min(1, "title is required and must be 1..300 characters")
-      .max(300, "title is required and must be 1..300 characters"),
-    body: z
-      .string()
-      .trim()
-      .min(1, "body is required and must be 1..10000 characters")
-      .max(MAX_BODY_LENGTH, `body is required and must be 1..${MAX_BODY_LENGTH} characters`),
+    title: questionTitleSchema,
+    body: questionBodySchema,
     tags: tagsSchema,
     status: normalizedStatusSchema.optional(),
   })
@@ -206,6 +211,27 @@ export const createQuestionSchema = z
   }));
 
 export type CreateQuestionInput = z.infer<typeof createQuestionSchema>;
+
+const voteIntentSchema = z.enum(["UPVOTE", "DOWNVOTE", "NONE"]);
+
+export type VoteIntent = z.infer<typeof voteIntentSchema>;
+export type QuestionVoteType = Exclude<VoteIntent, "NONE">;
+
+const normalizedVoteIntentSchema = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .pipe(voteIntentSchema);
+
+export const voteQuestionSchema = z
+  .object({
+    voteType: normalizedVoteIntentSchema,
+  })
+  .transform((value) => ({
+    voteType: value.voteType,
+  }));
+
+export type VoteQuestionInput = z.infer<typeof voteQuestionSchema>;
 
 export function validateCreateQuestionInput(
   input: unknown
