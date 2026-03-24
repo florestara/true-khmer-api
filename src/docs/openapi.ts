@@ -377,7 +377,6 @@ export const openApiDoc = {
           "downvoteCount",
           "createdAt",
           "updatedAt",
-          "deletedAt",
           "score",
           "viewerVote",
         ],
@@ -412,7 +411,6 @@ export const openApiDoc = {
           downvoteCount: { type: "integer", example: 2 },
           createdAt: { type: "string", format: "date-time" },
           updatedAt: { type: "string", format: "date-time" },
-          deletedAt: { type: "string", format: "date-time", nullable: true },
           score: { type: "integer", example: 10 },
           viewerVote: {
             type: "string",

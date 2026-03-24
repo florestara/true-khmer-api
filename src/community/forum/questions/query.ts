@@ -32,7 +32,10 @@ type QuestionHydrationRow = {
   authorAvatarKey: string | null;
   viewerVoteType: string | null;
 };
-type ForumQuestionWithTags = Omit<ForumQuestionRow, "categoryId" | "authorId"> & {
+type ForumQuestionWithTags = Omit<
+  ForumQuestionRow,
+  "categoryId" | "authorId" | "deletedAt"
+> & {
   score: number;
   viewerVote: QuestionVoteType | null;
   category: {
@@ -75,7 +78,7 @@ function resolveAuthorName(row: QuestionHydrationRow): string {
 }
 
 function hydrateQuestion(row: QuestionHydrationRow, tags: string[]): ForumQuestionWithTags {
-  const { categoryId, authorId, ...question } = row.question;
+  const { categoryId, authorId, deletedAt: _deletedAt, ...question } = row.question;
 
   return {
     ...question,
