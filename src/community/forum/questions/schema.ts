@@ -75,6 +75,64 @@ const tagsSchema = rawTagsSchema
     message: `a question can have at most ${MAX_TAGS_PER_QUESTION} tags`,
   });
 
+const editTagsSchema = z
+  .union([z.array(z.string()), z.string().trim()])
+  .optional()
+  .transform((value) => {
+    if (value === undefined) {
+      return undefined;
+    }
+    return typeof value === "string" ? value.split(",") : value;
+  })
+  .transform((tags) => {
+    if (tags === undefined) {
+      return undefined;
+    }
+    return tags.map((tag) => normalizeTagText(tag));
+  })
+  .superRefine((tags, ctx) => {
+    if (tags === undefined) {
+      return;
+    }
+
+    for (const tag of tags) {
+      if (!tag) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "tag cannot be empty",
+        });
+      }
+
+      if (tag.length > MAX_TAG_LENGTH) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `tag must be <= ${MAX_TAG_LENGTH} characters`,
+        });
+      }
+    }
+  })
+  .transform((tags) => {
+    if (tags === undefined) {
+      return undefined;
+    }
+
+    return Array.from(
+      new Map(tags.map((tag) => [tag.toLowerCase(), tag])).values(),
+    );
+  })
+  .superRefine((tags, ctx) => {
+    if (tags === undefined) {
+      return;
+    }
+
+    if (tags.length > MAX_TAGS_PER_QUESTION) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `a question can have at most ${MAX_TAGS_PER_QUESTION} tags`,
+      });
+    }
+  });
+
 export const getQuestionParamsSchema = z.object({
   questionId: z
     .string()
@@ -234,7 +292,7 @@ export const editQuestionSchema = z
       .optional(),
     title: questionTitleSchema.optional(),
     body: questionBodySchema.optional(),
-    tags: tagsSchema.optional(),
+    tags: editTagsSchema,
     status: normalizedStatusSchema.optional(),
   })
   .superRefine((value, ctx) => {
