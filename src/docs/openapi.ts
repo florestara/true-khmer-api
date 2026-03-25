@@ -79,7 +79,11 @@ export const openApiDoc = {
         required: ["ok", "error", "issues"],
         properties: {
           ok: { type: "boolean", enum: [false], example: false },
-          error: { type: "string", enum: ["Validation failed"], example: "Validation failed" },
+          error: {
+            type: "string",
+            enum: ["Validation failed"],
+            example: "Validation failed",
+          },
           issues: {
             type: "array",
             items: { type: "string" },
@@ -91,15 +95,27 @@ export const openApiDoc = {
         type: "object",
         required: ["error", "code"],
         properties: {
-          error: { type: "string", enum: ["Onboarding required"], example: "Onboarding required" },
-          code: { type: "string", enum: ["ONBOARDING_REQUIRED"], example: "ONBOARDING_REQUIRED" },
+          error: {
+            type: "string",
+            enum: ["Onboarding required"],
+            example: "Onboarding required",
+          },
+          code: {
+            type: "string",
+            enum: ["ONBOARDING_REQUIRED"],
+            example: "ONBOARDING_REQUIRED",
+          },
         },
       },
       AuthValidationErrorResponse: {
         type: "object",
         required: ["error", "message"],
         properties: {
-          error: { type: "string", enum: ["Validation failed"], example: "Validation failed" },
+          error: {
+            type: "string",
+            enum: ["Validation failed"],
+            example: "Validation failed",
+          },
           message: { type: "string", example: "email must be a valid email" },
           fieldErrors: {
             type: "object",
@@ -124,7 +140,14 @@ export const openApiDoc = {
       },
       AuthUser: {
         type: "object",
-        required: ["id", "email", "emailVerified", "name", "createdAt", "updatedAt"],
+        required: [
+          "id",
+          "email",
+          "emailVerified",
+          "name",
+          "createdAt",
+          "updatedAt",
+        ],
         additionalProperties: true,
         properties: {
           id: { type: "string", format: "uuid" },
@@ -134,11 +157,19 @@ export const openApiDoc = {
           image: { type: "string", nullable: true, format: "uri" },
           firstName: { type: "string", example: "Socheata" },
           lastName: { type: "string", example: "Mean" },
-          gender: { type: "string", enum: ["male", "female", "other"], example: "female" },
+          gender: {
+            type: "string",
+            enum: ["male", "female", "other"],
+            example: "female",
+          },
           occupation: { type: "string", example: "Strategist" },
           role: { type: "string", example: "user" },
           onboardingStep: { type: "integer", example: 0 },
-          onboardingCompletedAt: { type: "string", format: "date-time", nullable: true },
+          onboardingCompletedAt: {
+            type: "string",
+            format: "date-time",
+            nullable: true,
+          },
           createdAt: { type: "string", format: "date-time" },
           updatedAt: { type: "string", format: "date-time" },
         },
@@ -172,7 +203,8 @@ export const openApiDoc = {
           success: { type: "boolean", enum: [true], example: true },
           message: {
             type: "string",
-            example: "If this email is eligible, we sent an OTP code. Please check your inbox.",
+            example:
+              "If this email is eligible, we sent an OTP code. Please check your inbox.",
           },
         },
       },
@@ -180,8 +212,16 @@ export const openApiDoc = {
         type: "object",
         required: ["error", "code", "otpSent", "message"],
         properties: {
-          error: { type: "string", enum: ["Email not verified"], example: "Email not verified" },
-          code: { type: "string", enum: ["EMAIL_NOT_VERIFIED"], example: "EMAIL_NOT_VERIFIED" },
+          error: {
+            type: "string",
+            enum: ["Email not verified"],
+            example: "Email not verified",
+          },
+          code: {
+            type: "string",
+            enum: ["EMAIL_NOT_VERIFIED"],
+            example: "EMAIL_NOT_VERIFIED",
+          },
           otpSent: { type: "boolean", example: true },
           message: {
             type: "string",
@@ -199,7 +239,14 @@ export const openApiDoc = {
       },
       RegisterRequest: {
         type: "object",
-        required: ["firstName", "lastName", "gender", "occupation", "email", "password"],
+        required: [
+          "firstName",
+          "lastName",
+          "gender",
+          "occupation",
+          "email",
+          "password",
+        ],
         properties: {
           firstName: {
             type: "string",
@@ -216,15 +263,29 @@ export const openApiDoc = {
             pattern: "^[\\p{L}\\p{M}]+(?:[\\s'-][\\p{L}\\p{M}]+)*$",
             example: "Mean",
           },
-          gender: { type: "string", enum: ["male", "female", "other"], example: "female" },
-          occupation: { type: "string", minLength: 1, maxLength: 120, example: "Strategist" },
-          email: { type: "string", format: "email", example: "user@example.com" },
+          gender: {
+            type: "string",
+            enum: ["male", "female", "other"],
+            example: "female",
+          },
+          occupation: {
+            type: "string",
+            minLength: 1,
+            maxLength: 120,
+            example: "Strategist",
+          },
+          email: {
+            type: "string",
+            format: "email",
+            example: "user@example.com",
+          },
           password: {
             // Password must be at least 8 characters long, contain no whitespace,
             // include at least one lowercase letter, one uppercase letter, and one special character.
             type: "string",
             minLength: 8,
-            pattern: "^(?=\\S+$)(?=.*[a-z])(?=.*[A-Z])(?=.*[^A-Za-z0-9\\s]).{8,}$",
+            pattern:
+              "^(?=\\S+$)(?=.*[a-z])(?=.*[A-Z])(?=.*[^A-Za-z0-9\\s]).{8,}$",
             example: "StrongP@ssw0rd",
           },
         },
@@ -233,22 +294,39 @@ export const openApiDoc = {
         type: "object",
         required: ["email", "otp"],
         properties: {
-          email: { type: "string", format: "email", example: "user@example.com" },
-          otp: { type: "string", minLength: 6, maxLength: 6, example: "123456" },
+          email: {
+            type: "string",
+            format: "email",
+            example: "user@example.com",
+          },
+          otp: {
+            type: "string",
+            minLength: 6,
+            maxLength: 6,
+            example: "123456",
+          },
         },
       },
       ResendOtpRequest: {
         type: "object",
         required: ["email"],
         properties: {
-          email: { type: "string", format: "email", example: "user@example.com" },
+          email: {
+            type: "string",
+            format: "email",
+            example: "user@example.com",
+          },
         },
       },
       LoginRequest: {
         type: "object",
         required: ["email", "password"],
         properties: {
-          email: { type: "string", format: "email", example: "user@example.com" },
+          email: {
+            type: "string",
+            format: "email",
+            example: "user@example.com",
+          },
           password: { type: "string", minLength: 1, example: "StrongP@ssw0rd" },
         },
       },
@@ -256,15 +334,29 @@ export const openApiDoc = {
         type: "object",
         required: ["refreshToken"],
         properties: {
-          refreshToken: { type: "string", minLength: 1, example: "refresh_token_here" },
+          refreshToken: {
+            type: "string",
+            minLength: 1,
+            example: "refresh_token_here",
+          },
         },
       },
       CreateCategoryRequest: {
         type: "object",
         required: ["name", "slug"],
         properties: {
-          name: { type: "string", minLength: 1, maxLength: 120, example: "General" },
-          slug: { type: "string", minLength: 1, maxLength: 255, example: "general" },
+          name: {
+            type: "string",
+            minLength: 1,
+            maxLength: 120,
+            example: "General",
+          },
+          slug: {
+            type: "string",
+            minLength: 1,
+            maxLength: 255,
+            example: "general",
+          },
           description: {
             type: "string",
             maxLength: 1000,
@@ -294,7 +386,11 @@ export const openApiDoc = {
           slug: { type: "string", maxLength: 255 },
           description: { type: "string", nullable: true },
           displayOrder: { type: "integer", example: 0 },
-          status: { type: "string", enum: ["ACTIVE", "ARCHIVED", "HIDDEN"], example: "ACTIVE" },
+          status: {
+            type: "string",
+            enum: ["ACTIVE", "ARCHIVED", "HIDDEN"],
+            example: "ACTIVE",
+          },
           createdBy: { type: "string", format: "uuid" },
           updatedBy: { type: "string", format: "uuid", nullable: true },
           createdAt: { type: "string", format: "date-time" },
@@ -340,7 +436,8 @@ export const openApiDoc = {
             type: "string",
             minLength: 1,
             maxLength: 10000,
-            example: "I can read basic script but I struggle with listening and speaking.",
+            example:
+              "I can read basic script but I struggle with listening and speaking.",
           },
           tags: {
             oneOf: [
@@ -359,6 +456,48 @@ export const openApiDoc = {
           status: {
             type: "string",
             enum: ["PUBLISHED"],
+            example: "PUBLISHED",
+          },
+        },
+      },
+      EditQuestionRequest: {
+        type: "object",
+        properties: {
+          categoryId: {
+            type: "string",
+            format: "uuid",
+            example: "f28e0170-a5b2-4e69-b4f8-e9dc450ab322",
+          },
+          title: {
+            type: "string",
+            minLength: 1,
+            maxLength: 300,
+            example: "Updated: How can I start learning Khmer effectively?",
+          },
+          body: {
+            type: "string",
+            minLength: 1,
+            maxLength: 10000,
+            example:
+              "Updated content: I can read basic script but I struggle with listening and speaking.",
+          },
+          tags: {
+            oneOf: [
+              {
+                type: "array",
+                maxItems: 5,
+                items: { type: "string", minLength: 1, maxLength: 30 },
+              },
+              {
+                type: "string",
+                description: "Comma-separated tags; max 5 tags.",
+                example: "khmer,language,learning,updated",
+              },
+            ],
+          },
+          status: {
+            type: "string",
+            enum: ["PUBLISHED", "CLOSED"],
             example: "PUBLISHED",
           },
         },
@@ -405,7 +544,11 @@ export const openApiDoc = {
           },
           title: { type: "string", maxLength: 300 },
           body: { type: "string" },
-          status: { type: "string", enum: ["PUBLISHED", "CLOSED", "DELETED"], example: "PUBLISHED" },
+          status: {
+            type: "string",
+            enum: ["PUBLISHED", "CLOSED", "DELETED"],
+            example: "PUBLISHED",
+          },
           answerCount: { type: "integer", example: 0 },
           upvoteCount: { type: "integer", example: 12 },
           downvoteCount: { type: "integer", example: 2 },
@@ -421,6 +564,14 @@ export const openApiDoc = {
         },
       },
       CreateQuestionSuccessResponse: {
+        type: "object",
+        required: ["ok", "question"],
+        properties: {
+          ok: { type: "boolean", enum: [true], example: true },
+          question: { $ref: "#/components/schemas/ForumQuestionWithTags" },
+        },
+      },
+      EditQuestionSuccessResponse: {
         type: "object",
         required: ["ok", "question"],
         properties: {
@@ -513,7 +664,8 @@ export const openApiDoc = {
             type: "string",
             minLength: 1,
             maxLength: 10000,
-            example: "You can start with daily listening practice and short writing prompts.",
+            example:
+              "You can start with daily listening practice and short writing prompts.",
           },
         },
       },
@@ -561,7 +713,11 @@ export const openApiDoc = {
           questionId: { type: "string", format: "uuid" },
           authorId: { type: "string", format: "uuid" },
           body: { type: "string" },
-          status: { type: "string", enum: ["PUBLISHED", "DELETED"], example: "PUBLISHED" },
+          status: {
+            type: "string",
+            enum: ["PUBLISHED", "DELETED"],
+            example: "PUBLISHED",
+          },
           upvoteCount: { type: "integer", example: 12 },
           downvoteCount: { type: "integer", example: 2 },
           createdAt: { type: "string", format: "date-time" },
@@ -626,9 +782,22 @@ export const openApiDoc = {
         required: ["countryId", "cityId"],
         properties: {
           bio: { type: "string", maxLength: 1000 },
-          countryId: { type: "string", format: "uuid", example: "ff135e82-26a5-4117-b1bf-9f1ef54d1ee8" },
-          cityId: { type: "string", format: "uuid", example: "2d8b8b6a-e172-4bd7-8b2f-cf5beac0f95f" },
-          avatarKey: { type: "string", minLength: 1, maxLength: 600, example: "avatars/user-1.png" },
+          countryId: {
+            type: "string",
+            format: "uuid",
+            example: "ff135e82-26a5-4117-b1bf-9f1ef54d1ee8",
+          },
+          cityId: {
+            type: "string",
+            format: "uuid",
+            example: "2d8b8b6a-e172-4bd7-8b2f-cf5beac0f95f",
+          },
+          avatarKey: {
+            type: "string",
+            minLength: 1,
+            maxLength: 600,
+            example: "avatars/user-1.png",
+          },
         },
       },
       OnboardingInterestsStepRequest: {
@@ -711,7 +880,13 @@ export const openApiDoc = {
             properties: {
               user: {
                 type: "object",
-                required: ["id", "email", "role", "onboardingStep", "onboardingCompletedAt"],
+                required: [
+                  "id",
+                  "email",
+                  "role",
+                  "onboardingStep",
+                  "onboardingCompletedAt",
+                ],
                 properties: {
                   id: { type: "string", format: "uuid" },
                   email: { type: "string", format: "email" },
@@ -803,7 +978,14 @@ export const openApiDoc = {
                 type: "array",
                 items: {
                   type: "object",
-                  required: ["id", "slug", "name", "rankOrder", "minPoints", "description"],
+                  required: [
+                    "id",
+                    "slug",
+                    "name",
+                    "rankOrder",
+                    "minPoints",
+                    "description",
+                  ],
                   properties: {
                     id: { type: "string", format: "uuid" },
                     slug: { type: "string", example: "bronze" },
@@ -952,7 +1134,10 @@ export const openApiDoc = {
                   "Content-Type": { type: "string", example: "image/png" },
                 },
               },
-              avatarKey: { type: "string", example: "avatars/user-id/123-abc.png" },
+              avatarKey: {
+                type: "string",
+                example: "avatars/user-id/123-abc.png",
+              },
               publicUrl: {
                 type: "string",
                 format: "uri",
@@ -991,7 +1176,9 @@ export const openApiDoc = {
             description: "OpenAPI JSON document",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/OpenApiDocumentResponse" },
+                schema: {
+                  $ref: "#/components/schemas/OpenApiDocumentResponse",
+                },
               },
             },
           },
@@ -1031,7 +1218,9 @@ export const openApiDoc = {
             description: "Registration successful",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/RegisterSuccessResponse" },
+                schema: {
+                  $ref: "#/components/schemas/RegisterSuccessResponse",
+                },
               },
             },
           },
@@ -1041,8 +1230,12 @@ export const openApiDoc = {
               "application/json": {
                 schema: {
                   oneOf: [
-                    { $ref: "#/components/schemas/InvalidJsonBodyErrorResponse" },
-                    { $ref: "#/components/schemas/AuthValidationErrorResponse" },
+                    {
+                      $ref: "#/components/schemas/InvalidJsonBodyErrorResponse",
+                    },
+                    {
+                      $ref: "#/components/schemas/AuthValidationErrorResponse",
+                    },
                     { $ref: "#/components/schemas/AuthProviderErrorResponse" },
                   ],
                 },
@@ -1050,10 +1243,13 @@ export const openApiDoc = {
             },
           },
           "409": {
-            description: "Registration conflict (for example, email already exists)",
+            description:
+              "Registration conflict (for example, email already exists)",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/AuthProviderErrorResponse" },
+                schema: {
+                  $ref: "#/components/schemas/AuthProviderErrorResponse",
+                },
               },
             },
           },
@@ -1064,7 +1260,9 @@ export const openApiDoc = {
                 schema: {
                   oneOf: [
                     { $ref: "#/components/schemas/AuthProviderErrorResponse" },
-                    { $ref: "#/components/schemas/InternalServerErrorResponse" },
+                    {
+                      $ref: "#/components/schemas/InternalServerErrorResponse",
+                    },
                   ],
                 },
               },
@@ -1074,7 +1272,9 @@ export const openApiDoc = {
             description: "Authentication provider error",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/AuthProviderErrorResponse" },
+                schema: {
+                  $ref: "#/components/schemas/AuthProviderErrorResponse",
+                },
               },
             },
           },
@@ -1108,8 +1308,12 @@ export const openApiDoc = {
               "application/json": {
                 schema: {
                   oneOf: [
-                    { $ref: "#/components/schemas/InvalidJsonBodyErrorResponse" },
-                    { $ref: "#/components/schemas/AuthValidationErrorResponse" },
+                    {
+                      $ref: "#/components/schemas/InvalidJsonBodyErrorResponse",
+                    },
+                    {
+                      $ref: "#/components/schemas/AuthValidationErrorResponse",
+                    },
                     { $ref: "#/components/schemas/AuthProviderErrorResponse" },
                   ],
                 },
@@ -1120,7 +1324,9 @@ export const openApiDoc = {
             description: "OTP invalid or expired",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/AuthProviderErrorResponse" },
+                schema: {
+                  $ref: "#/components/schemas/AuthProviderErrorResponse",
+                },
               },
             },
           },
@@ -1131,7 +1337,9 @@ export const openApiDoc = {
                 schema: {
                   oneOf: [
                     { $ref: "#/components/schemas/AuthProviderErrorResponse" },
-                    { $ref: "#/components/schemas/InternalServerErrorResponse" },
+                    {
+                      $ref: "#/components/schemas/InternalServerErrorResponse",
+                    },
                   ],
                 },
               },
@@ -1141,7 +1349,9 @@ export const openApiDoc = {
             description: "Authentication provider error",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/AuthProviderErrorResponse" },
+                schema: {
+                  $ref: "#/components/schemas/AuthProviderErrorResponse",
+                },
               },
             },
           },
@@ -1165,7 +1375,9 @@ export const openApiDoc = {
             description: "Verification code sent if eligible",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/ResendRegisterOtpResponse" },
+                schema: {
+                  $ref: "#/components/schemas/ResendRegisterOtpResponse",
+                },
               },
             },
           },
@@ -1175,8 +1387,12 @@ export const openApiDoc = {
               "application/json": {
                 schema: {
                   oneOf: [
-                    { $ref: "#/components/schemas/InvalidJsonBodyErrorResponse" },
-                    { $ref: "#/components/schemas/AuthValidationErrorResponse" },
+                    {
+                      $ref: "#/components/schemas/InvalidJsonBodyErrorResponse",
+                    },
+                    {
+                      $ref: "#/components/schemas/AuthValidationErrorResponse",
+                    },
                   ],
                 },
               },
@@ -1186,7 +1402,9 @@ export const openApiDoc = {
             description: "Internal server error",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/InternalServerErrorResponse" },
+                schema: {
+                  $ref: "#/components/schemas/InternalServerErrorResponse",
+                },
               },
             },
           },
@@ -1220,8 +1438,12 @@ export const openApiDoc = {
               "application/json": {
                 schema: {
                   oneOf: [
-                    { $ref: "#/components/schemas/InvalidJsonBodyErrorResponse" },
-                    { $ref: "#/components/schemas/AuthValidationErrorResponse" },
+                    {
+                      $ref: "#/components/schemas/InvalidJsonBodyErrorResponse",
+                    },
+                    {
+                      $ref: "#/components/schemas/AuthValidationErrorResponse",
+                    },
                     { $ref: "#/components/schemas/AuthProviderErrorResponse" },
                   ],
                 },
@@ -1232,7 +1454,9 @@ export const openApiDoc = {
             description: "Invalid credentials",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/AuthProviderErrorResponse" },
+                schema: {
+                  $ref: "#/components/schemas/AuthProviderErrorResponse",
+                },
               },
             },
           },
@@ -1242,7 +1466,9 @@ export const openApiDoc = {
               "application/json": {
                 schema: {
                   oneOf: [
-                    { $ref: "#/components/schemas/LoginEmailNotVerifiedResponse" },
+                    {
+                      $ref: "#/components/schemas/LoginEmailNotVerifiedResponse",
+                    },
                     { $ref: "#/components/schemas/AuthProviderErrorResponse" },
                   ],
                 },
@@ -1256,7 +1482,9 @@ export const openApiDoc = {
                 schema: {
                   oneOf: [
                     { $ref: "#/components/schemas/AuthProviderErrorResponse" },
-                    { $ref: "#/components/schemas/InternalServerErrorResponse" },
+                    {
+                      $ref: "#/components/schemas/InternalServerErrorResponse",
+                    },
                   ],
                 },
               },
@@ -1266,7 +1494,9 @@ export const openApiDoc = {
             description: "Authentication provider error",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/AuthProviderErrorResponse" },
+                schema: {
+                  $ref: "#/components/schemas/AuthProviderErrorResponse",
+                },
               },
             },
           },
@@ -1300,8 +1530,12 @@ export const openApiDoc = {
               "application/json": {
                 schema: {
                   oneOf: [
-                    { $ref: "#/components/schemas/InvalidJsonBodyErrorResponse" },
-                    { $ref: "#/components/schemas/AuthValidationErrorResponse" },
+                    {
+                      $ref: "#/components/schemas/InvalidJsonBodyErrorResponse",
+                    },
+                    {
+                      $ref: "#/components/schemas/AuthValidationErrorResponse",
+                    },
                     { $ref: "#/components/schemas/AuthProviderErrorResponse" },
                   ],
                 },
@@ -1312,7 +1546,9 @@ export const openApiDoc = {
             description: "Invalid refresh token",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/AuthProviderErrorResponse" },
+                schema: {
+                  $ref: "#/components/schemas/AuthProviderErrorResponse",
+                },
               },
             },
           },
@@ -1323,7 +1559,9 @@ export const openApiDoc = {
                 schema: {
                   oneOf: [
                     { $ref: "#/components/schemas/AuthProviderErrorResponse" },
-                    { $ref: "#/components/schemas/InternalServerErrorResponse" },
+                    {
+                      $ref: "#/components/schemas/InternalServerErrorResponse",
+                    },
                   ],
                 },
               },
@@ -1333,7 +1571,9 @@ export const openApiDoc = {
             description: "Auth provider returned a malformed success response",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/AuthProviderErrorResponse" },
+                schema: {
+                  $ref: "#/components/schemas/AuthProviderErrorResponse",
+                },
               },
             },
           },
@@ -1341,7 +1581,9 @@ export const openApiDoc = {
             description: "Authentication provider error",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/AuthProviderErrorResponse" },
+                schema: {
+                  $ref: "#/components/schemas/AuthProviderErrorResponse",
+                },
               },
             },
           },
@@ -1358,7 +1600,9 @@ export const openApiDoc = {
             description: "Categories found",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/GetCategoriesSuccessResponse" },
+                schema: {
+                  $ref: "#/components/schemas/GetCategoriesSuccessResponse",
+                },
               },
             },
           },
@@ -1374,7 +1618,9 @@ export const openApiDoc = {
             description: "Onboarding required",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/OnboardingRequiredErrorResponse" },
+                schema: {
+                  $ref: "#/components/schemas/OnboardingRequiredErrorResponse",
+                },
               },
             },
           },
@@ -1385,7 +1631,9 @@ export const openApiDoc = {
                 schema: {
                   oneOf: [
                     { $ref: "#/components/schemas/OkFalseErrorResponse" },
-                    { $ref: "#/components/schemas/InternalServerErrorResponse" },
+                    {
+                      $ref: "#/components/schemas/InternalServerErrorResponse",
+                    },
                   ],
                 },
               },
@@ -1410,7 +1658,9 @@ export const openApiDoc = {
             description: "Category created",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/CreateCategorySuccessResponse" },
+                schema: {
+                  $ref: "#/components/schemas/CreateCategorySuccessResponse",
+                },
               },
             },
           },
@@ -1418,7 +1668,9 @@ export const openApiDoc = {
             description: "Validation failed",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/OkFalseValidationIssuesResponse" },
+                schema: {
+                  $ref: "#/components/schemas/OkFalseValidationIssuesResponse",
+                },
               },
             },
           },
@@ -1453,7 +1705,9 @@ export const openApiDoc = {
                 schema: {
                   oneOf: [
                     { $ref: "#/components/schemas/OkFalseErrorResponse" },
-                    { $ref: "#/components/schemas/InternalServerErrorResponse" },
+                    {
+                      $ref: "#/components/schemas/InternalServerErrorResponse",
+                    },
                   ],
                 },
               },
@@ -1497,7 +1751,9 @@ export const openApiDoc = {
             description: "Questions found",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/GetQuestionsSuccessResponse" },
+                schema: {
+                  $ref: "#/components/schemas/GetQuestionsSuccessResponse",
+                },
               },
             },
           },
@@ -1505,7 +1761,9 @@ export const openApiDoc = {
             description: "Validation failed",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/OkFalseValidationIssuesResponse" },
+                schema: {
+                  $ref: "#/components/schemas/OkFalseValidationIssuesResponse",
+                },
               },
             },
           },
@@ -1521,7 +1779,9 @@ export const openApiDoc = {
             description: "Onboarding required",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/OnboardingRequiredErrorResponse" },
+                schema: {
+                  $ref: "#/components/schemas/OnboardingRequiredErrorResponse",
+                },
               },
             },
           },
@@ -1540,7 +1800,9 @@ export const openApiDoc = {
                 schema: {
                   oneOf: [
                     { $ref: "#/components/schemas/OkFalseErrorResponse" },
-                    { $ref: "#/components/schemas/InternalServerErrorResponse" },
+                    {
+                      $ref: "#/components/schemas/InternalServerErrorResponse",
+                    },
                   ],
                 },
               },
@@ -1565,17 +1827,22 @@ export const openApiDoc = {
             description: "Question created",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/CreateQuestionSuccessResponse" },
+                schema: {
+                  $ref: "#/components/schemas/CreateQuestionSuccessResponse",
+                },
               },
             },
           },
           "400": {
-            description: "Validation failed or invalid authenticated user id type",
+            description:
+              "Validation failed or invalid authenticated user id type",
             content: {
               "application/json": {
                 schema: {
                   oneOf: [
-                    { $ref: "#/components/schemas/OkFalseValidationIssuesResponse" },
+                    {
+                      $ref: "#/components/schemas/OkFalseValidationIssuesResponse",
+                    },
                     { $ref: "#/components/schemas/OkFalseErrorResponse" },
                   ],
                 },
@@ -1599,7 +1866,9 @@ export const openApiDoc = {
             description: "Onboarding required",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/OnboardingRequiredErrorResponse" },
+                schema: {
+                  $ref: "#/components/schemas/OnboardingRequiredErrorResponse",
+                },
               },
             },
           },
@@ -1626,7 +1895,121 @@ export const openApiDoc = {
                 schema: {
                   oneOf: [
                     { $ref: "#/components/schemas/OkFalseErrorResponse" },
-                    { $ref: "#/components/schemas/InternalServerErrorResponse" },
+                    {
+                      $ref: "#/components/schemas/InternalServerErrorResponse",
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    "/forum/questions/edit-question/{questionId}": {
+      patch: {
+        tags: ["Forum Question"],
+        summary: "Edit your own question",
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          {
+            in: "path",
+            name: "questionId",
+            required: true,
+            description: "Question UUID",
+            schema: { type: "string", format: "uuid" },
+          },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/EditQuestionRequest" },
+            },
+          },
+        },
+        responses: {
+          "200": {
+            description: "Question updated",
+            content: {
+              "application/json": {
+                schema: {
+                  $ref: "#/components/schemas/EditQuestionSuccessResponse",
+                },
+              },
+            },
+          },
+          "400": {
+            description:
+              "Validation failed or invalid authenticated user id type",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [
+                    {
+                      $ref: "#/components/schemas/OkFalseValidationIssuesResponse",
+                    },
+                    { $ref: "#/components/schemas/OkFalseErrorResponse" },
+                  ],
+                },
+              },
+            },
+          },
+          "401": {
+            description: "Unauthorized",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [
+                    { $ref: "#/components/schemas/SimpleErrorResponse" },
+                    { $ref: "#/components/schemas/OkFalseErrorResponse" },
+                  ],
+                },
+              },
+            },
+          },
+          "403": {
+            description: "Onboarding required or not the question author",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [
+                    {
+                      $ref: "#/components/schemas/OnboardingRequiredErrorResponse",
+                    },
+                    { $ref: "#/components/schemas/OkFalseErrorResponse" },
+                  ],
+                },
+              },
+            },
+          },
+          "404": {
+            description: "Question or category not found",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/OkFalseErrorResponse" },
+              },
+            },
+          },
+          "409": {
+            description:
+              "Cannot edit deleted question or questions can only be moved to active categories",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/OkFalseErrorResponse" },
+              },
+            },
+          },
+          "500": {
+            description: "Internal server error",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [
+                    { $ref: "#/components/schemas/OkFalseErrorResponse" },
+                    {
+                      $ref: "#/components/schemas/InternalServerErrorResponse",
+                    },
                   ],
                 },
               },
@@ -1654,7 +2037,9 @@ export const openApiDoc = {
             description: "Question found",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/GetQuestionSuccessResponse" },
+                schema: {
+                  $ref: "#/components/schemas/GetQuestionSuccessResponse",
+                },
               },
             },
           },
@@ -1662,7 +2047,9 @@ export const openApiDoc = {
             description: "Validation failed",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/OkFalseValidationIssuesResponse" },
+                schema: {
+                  $ref: "#/components/schemas/OkFalseValidationIssuesResponse",
+                },
               },
             },
           },
@@ -1678,7 +2065,9 @@ export const openApiDoc = {
             description: "Onboarding required",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/OnboardingRequiredErrorResponse" },
+                schema: {
+                  $ref: "#/components/schemas/OnboardingRequiredErrorResponse",
+                },
               },
             },
           },
@@ -1697,7 +2086,9 @@ export const openApiDoc = {
                 schema: {
                   oneOf: [
                     { $ref: "#/components/schemas/OkFalseErrorResponse" },
-                    { $ref: "#/components/schemas/InternalServerErrorResponse" },
+                    {
+                      $ref: "#/components/schemas/InternalServerErrorResponse",
+                    },
                   ],
                 },
               },
@@ -1730,12 +2121,15 @@ export const openApiDoc = {
             },
           },
           "400": {
-            description: "Validation failed or invalid authenticated user id type",
+            description:
+              "Validation failed or invalid authenticated user id type",
             content: {
               "application/json": {
                 schema: {
                   oneOf: [
-                    { $ref: "#/components/schemas/OkFalseValidationIssuesResponse" },
+                    {
+                      $ref: "#/components/schemas/OkFalseValidationIssuesResponse",
+                    },
                     { $ref: "#/components/schemas/OkFalseErrorResponse" },
                   ],
                 },
@@ -1761,7 +2155,9 @@ export const openApiDoc = {
               "application/json": {
                 schema: {
                   oneOf: [
-                    { $ref: "#/components/schemas/OnboardingRequiredErrorResponse" },
+                    {
+                      $ref: "#/components/schemas/OnboardingRequiredErrorResponse",
+                    },
                     { $ref: "#/components/schemas/OkFalseErrorResponse" },
                   ],
                 },
@@ -1791,7 +2187,9 @@ export const openApiDoc = {
                 schema: {
                   oneOf: [
                     { $ref: "#/components/schemas/OkFalseErrorResponse" },
-                    { $ref: "#/components/schemas/InternalServerErrorResponse" },
+                    {
+                      $ref: "#/components/schemas/InternalServerErrorResponse",
+                    },
                   ],
                 },
               },
@@ -1827,17 +2225,22 @@ export const openApiDoc = {
             description: "Vote applied",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/VoteQuestionSuccessResponse" },
+                schema: {
+                  $ref: "#/components/schemas/VoteQuestionSuccessResponse",
+                },
               },
             },
           },
           "400": {
-            description: "Validation failed or invalid authenticated user id type",
+            description:
+              "Validation failed or invalid authenticated user id type",
             content: {
               "application/json": {
                 schema: {
                   oneOf: [
-                    { $ref: "#/components/schemas/OkFalseValidationIssuesResponse" },
+                    {
+                      $ref: "#/components/schemas/OkFalseValidationIssuesResponse",
+                    },
                     { $ref: "#/components/schemas/OkFalseErrorResponse" },
                   ],
                 },
@@ -1861,7 +2264,9 @@ export const openApiDoc = {
             description: "Onboarding required",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/OnboardingRequiredErrorResponse" },
+                schema: {
+                  $ref: "#/components/schemas/OnboardingRequiredErrorResponse",
+                },
               },
             },
           },
@@ -1874,7 +2279,8 @@ export const openApiDoc = {
             },
           },
           "409": {
-            description: "Only published questions can be voted on or you cannot vote on your own question",
+            description:
+              "Only published questions can be voted on or you cannot vote on your own question",
             content: {
               "application/json": {
                 schema: { $ref: "#/components/schemas/OkFalseErrorResponse" },
@@ -1888,7 +2294,9 @@ export const openApiDoc = {
                 schema: {
                   oneOf: [
                     { $ref: "#/components/schemas/OkFalseErrorResponse" },
-                    { $ref: "#/components/schemas/InternalServerErrorResponse" },
+                    {
+                      $ref: "#/components/schemas/InternalServerErrorResponse",
+                    },
                   ],
                 },
               },
@@ -1916,17 +2324,22 @@ export const openApiDoc = {
             description: "Answers found",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/GetAnswersSuccessResponse" },
+                schema: {
+                  $ref: "#/components/schemas/GetAnswersSuccessResponse",
+                },
               },
             },
           },
           "400": {
-            description: "Validation failed or invalid authenticated user id type",
+            description:
+              "Validation failed or invalid authenticated user id type",
             content: {
               "application/json": {
                 schema: {
                   oneOf: [
-                    { $ref: "#/components/schemas/OkFalseValidationIssuesResponse" },
+                    {
+                      $ref: "#/components/schemas/OkFalseValidationIssuesResponse",
+                    },
                     { $ref: "#/components/schemas/OkFalseErrorResponse" },
                   ],
                 },
@@ -1950,7 +2363,9 @@ export const openApiDoc = {
             description: "Onboarding required",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/OnboardingRequiredErrorResponse" },
+                schema: {
+                  $ref: "#/components/schemas/OnboardingRequiredErrorResponse",
+                },
               },
             },
           },
@@ -1969,7 +2384,9 @@ export const openApiDoc = {
                 schema: {
                   oneOf: [
                     { $ref: "#/components/schemas/OkFalseErrorResponse" },
-                    { $ref: "#/components/schemas/InternalServerErrorResponse" },
+                    {
+                      $ref: "#/components/schemas/InternalServerErrorResponse",
+                    },
                   ],
                 },
               },
@@ -1996,17 +2413,22 @@ export const openApiDoc = {
             description: "Answer created",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/CreateAnswerSuccessResponse" },
+                schema: {
+                  $ref: "#/components/schemas/CreateAnswerSuccessResponse",
+                },
               },
             },
           },
           "400": {
-            description: "Validation failed or invalid authenticated user id type",
+            description:
+              "Validation failed or invalid authenticated user id type",
             content: {
               "application/json": {
                 schema: {
                   oneOf: [
-                    { $ref: "#/components/schemas/OkFalseValidationIssuesResponse" },
+                    {
+                      $ref: "#/components/schemas/OkFalseValidationIssuesResponse",
+                    },
                     { $ref: "#/components/schemas/OkFalseErrorResponse" },
                   ],
                 },
@@ -2030,7 +2452,9 @@ export const openApiDoc = {
             description: "Onboarding required",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/OnboardingRequiredErrorResponse" },
+                schema: {
+                  $ref: "#/components/schemas/OnboardingRequiredErrorResponse",
+                },
               },
             },
           },
@@ -2057,7 +2481,9 @@ export const openApiDoc = {
                 schema: {
                   oneOf: [
                     { $ref: "#/components/schemas/OkFalseErrorResponse" },
-                    { $ref: "#/components/schemas/InternalServerErrorResponse" },
+                    {
+                      $ref: "#/components/schemas/InternalServerErrorResponse",
+                    },
                   ],
                 },
               },
@@ -2093,17 +2519,22 @@ export const openApiDoc = {
             description: "Answer updated",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/CreateAnswerSuccessResponse" },
+                schema: {
+                  $ref: "#/components/schemas/CreateAnswerSuccessResponse",
+                },
               },
             },
           },
           "400": {
-            description: "Validation failed or invalid authenticated user id type",
+            description:
+              "Validation failed or invalid authenticated user id type",
             content: {
               "application/json": {
                 schema: {
                   oneOf: [
-                    { $ref: "#/components/schemas/OkFalseValidationIssuesResponse" },
+                    {
+                      $ref: "#/components/schemas/OkFalseValidationIssuesResponse",
+                    },
                     { $ref: "#/components/schemas/OkFalseErrorResponse" },
                   ],
                 },
@@ -2129,7 +2560,9 @@ export const openApiDoc = {
               "application/json": {
                 schema: {
                   oneOf: [
-                    { $ref: "#/components/schemas/OnboardingRequiredErrorResponse" },
+                    {
+                      $ref: "#/components/schemas/OnboardingRequiredErrorResponse",
+                    },
                     { $ref: "#/components/schemas/OkFalseErrorResponse" },
                   ],
                 },
@@ -2159,7 +2592,9 @@ export const openApiDoc = {
                 schema: {
                   oneOf: [
                     { $ref: "#/components/schemas/OkFalseErrorResponse" },
-                    { $ref: "#/components/schemas/InternalServerErrorResponse" },
+                    {
+                      $ref: "#/components/schemas/InternalServerErrorResponse",
+                    },
                   ],
                 },
               },
@@ -2192,12 +2627,15 @@ export const openApiDoc = {
             },
           },
           "400": {
-            description: "Validation failed or invalid authenticated user id type",
+            description:
+              "Validation failed or invalid authenticated user id type",
             content: {
               "application/json": {
                 schema: {
                   oneOf: [
-                    { $ref: "#/components/schemas/OkFalseValidationIssuesResponse" },
+                    {
+                      $ref: "#/components/schemas/OkFalseValidationIssuesResponse",
+                    },
                     { $ref: "#/components/schemas/OkFalseErrorResponse" },
                   ],
                 },
@@ -2223,7 +2661,9 @@ export const openApiDoc = {
               "application/json": {
                 schema: {
                   oneOf: [
-                    { $ref: "#/components/schemas/OnboardingRequiredErrorResponse" },
+                    {
+                      $ref: "#/components/schemas/OnboardingRequiredErrorResponse",
+                    },
                     { $ref: "#/components/schemas/OkFalseErrorResponse" },
                   ],
                 },
@@ -2253,7 +2693,9 @@ export const openApiDoc = {
                 schema: {
                   oneOf: [
                     { $ref: "#/components/schemas/OkFalseErrorResponse" },
-                    { $ref: "#/components/schemas/InternalServerErrorResponse" },
+                    {
+                      $ref: "#/components/schemas/InternalServerErrorResponse",
+                    },
                   ],
                 },
               },
@@ -2289,17 +2731,22 @@ export const openApiDoc = {
             description: "Vote applied",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/VoteAnswerSuccessResponse" },
+                schema: {
+                  $ref: "#/components/schemas/VoteAnswerSuccessResponse",
+                },
               },
             },
           },
           "400": {
-            description: "Validation failed or invalid authenticated user id type",
+            description:
+              "Validation failed or invalid authenticated user id type",
             content: {
               "application/json": {
                 schema: {
                   oneOf: [
-                    { $ref: "#/components/schemas/OkFalseValidationIssuesResponse" },
+                    {
+                      $ref: "#/components/schemas/OkFalseValidationIssuesResponse",
+                    },
                     { $ref: "#/components/schemas/OkFalseErrorResponse" },
                   ],
                 },
@@ -2323,7 +2770,9 @@ export const openApiDoc = {
             description: "Onboarding required",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/OnboardingRequiredErrorResponse" },
+                schema: {
+                  $ref: "#/components/schemas/OnboardingRequiredErrorResponse",
+                },
               },
             },
           },
@@ -2336,7 +2785,8 @@ export const openApiDoc = {
             },
           },
           "409": {
-            description: "Cannot vote your own answer or vote on deleted answer",
+            description:
+              "Cannot vote your own answer or vote on deleted answer",
             content: {
               "application/json": {
                 schema: { $ref: "#/components/schemas/OkFalseErrorResponse" },
@@ -2350,7 +2800,9 @@ export const openApiDoc = {
                 schema: {
                   oneOf: [
                     { $ref: "#/components/schemas/OkFalseErrorResponse" },
-                    { $ref: "#/components/schemas/InternalServerErrorResponse" },
+                    {
+                      $ref: "#/components/schemas/InternalServerErrorResponse",
+                    },
                   ],
                 },
               },
@@ -2369,7 +2821,9 @@ export const openApiDoc = {
             description: "Onboarding options",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/OnboardingOptionsResponse" },
+                schema: {
+                  $ref: "#/components/schemas/OnboardingOptionsResponse",
+                },
               },
             },
           },
@@ -2385,7 +2839,9 @@ export const openApiDoc = {
             description: "Internal server error",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/InternalServerErrorResponse" },
+                schema: {
+                  $ref: "#/components/schemas/InternalServerErrorResponse",
+                },
               },
             },
           },
@@ -2402,7 +2858,9 @@ export const openApiDoc = {
             description: "Interest options",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/OnboardingInterestsResponse" },
+                schema: {
+                  $ref: "#/components/schemas/OnboardingInterestsResponse",
+                },
               },
             },
           },
@@ -2418,7 +2876,9 @@ export const openApiDoc = {
             description: "Internal server error",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/InternalServerErrorResponse" },
+                schema: {
+                  $ref: "#/components/schemas/InternalServerErrorResponse",
+                },
               },
             },
           },
@@ -2435,7 +2895,9 @@ export const openApiDoc = {
             description: "Contribution role options",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/OnboardingContributionsResponse" },
+                schema: {
+                  $ref: "#/components/schemas/OnboardingContributionsResponse",
+                },
               },
             },
           },
@@ -2451,7 +2913,9 @@ export const openApiDoc = {
             description: "Internal server error",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/InternalServerErrorResponse" },
+                schema: {
+                  $ref: "#/components/schemas/InternalServerErrorResponse",
+                },
               },
             },
           },
@@ -2484,7 +2948,9 @@ export const openApiDoc = {
             description: "Internal server error",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/InternalServerErrorResponse" },
+                schema: {
+                  $ref: "#/components/schemas/InternalServerErrorResponse",
+                },
               },
             },
           },
@@ -2501,14 +2967,16 @@ export const openApiDoc = {
             in: "query",
             name: "countryId",
             required: false,
-            description: "Country UUID. Either countryId or countryName is required.",
+            description:
+              "Country UUID. Either countryId or countryName is required.",
             schema: { type: "string", format: "uuid" },
           },
           {
             in: "query",
             name: "countryName",
             required: false,
-            description: "Country name. Either countryId or countryName is required.",
+            description:
+              "Country name. Either countryId or countryName is required.",
             schema: { type: "string" },
           },
         ],
@@ -2541,7 +3009,9 @@ export const openApiDoc = {
             description: "Internal server error",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/InternalServerErrorResponse" },
+                schema: {
+                  $ref: "#/components/schemas/InternalServerErrorResponse",
+                },
               },
             },
           },
@@ -2558,7 +3028,9 @@ export const openApiDoc = {
             description: "Onboarding state",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/OnboardingStateResponse" },
+                schema: {
+                  $ref: "#/components/schemas/OnboardingStateResponse",
+                },
               },
             },
           },
@@ -2582,7 +3054,9 @@ export const openApiDoc = {
             description: "Internal server error",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/InternalServerErrorResponse" },
+                schema: {
+                  $ref: "#/components/schemas/InternalServerErrorResponse",
+                },
               },
             },
           },
@@ -2598,7 +3072,9 @@ export const openApiDoc = {
           required: true,
           content: {
             "application/json": {
-              schema: { $ref: "#/components/schemas/OnboardingProfileStepRequest" },
+              schema: {
+                $ref: "#/components/schemas/OnboardingProfileStepRequest",
+              },
             },
           },
         },
@@ -2607,7 +3083,9 @@ export const openApiDoc = {
             description: "Profile saved",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/OnboardingStateResponse" },
+                schema: {
+                  $ref: "#/components/schemas/OnboardingStateResponse",
+                },
               },
             },
           },
@@ -2617,7 +3095,9 @@ export const openApiDoc = {
               "application/json": {
                 schema: {
                   oneOf: [
-                    { $ref: "#/components/schemas/OkFalseValidationIssuesResponse" },
+                    {
+                      $ref: "#/components/schemas/OkFalseValidationIssuesResponse",
+                    },
                     { $ref: "#/components/schemas/OkFalseErrorResponse" },
                   ],
                 },
@@ -2644,7 +3124,9 @@ export const openApiDoc = {
             description: "Internal server error",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/InternalServerErrorResponse" },
+                schema: {
+                  $ref: "#/components/schemas/InternalServerErrorResponse",
+                },
               },
             },
           },
@@ -2660,7 +3142,9 @@ export const openApiDoc = {
           required: true,
           content: {
             "application/json": {
-              schema: { $ref: "#/components/schemas/OnboardingInterestsStepRequest" },
+              schema: {
+                $ref: "#/components/schemas/OnboardingInterestsStepRequest",
+              },
             },
           },
         },
@@ -2669,7 +3153,9 @@ export const openApiDoc = {
             description: "Interests saved",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/OnboardingStateResponse" },
+                schema: {
+                  $ref: "#/components/schemas/OnboardingStateResponse",
+                },
               },
             },
           },
@@ -2679,7 +3165,9 @@ export const openApiDoc = {
               "application/json": {
                 schema: {
                   oneOf: [
-                    { $ref: "#/components/schemas/OkFalseValidationIssuesResponse" },
+                    {
+                      $ref: "#/components/schemas/OkFalseValidationIssuesResponse",
+                    },
                     { $ref: "#/components/schemas/OkFalseErrorResponse" },
                   ],
                 },
@@ -2706,7 +3194,9 @@ export const openApiDoc = {
             description: "Internal server error",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/InternalServerErrorResponse" },
+                schema: {
+                  $ref: "#/components/schemas/InternalServerErrorResponse",
+                },
               },
             },
           },
@@ -2722,7 +3212,9 @@ export const openApiDoc = {
           required: true,
           content: {
             "application/json": {
-              schema: { $ref: "#/components/schemas/OnboardingContributionsStepRequest" },
+              schema: {
+                $ref: "#/components/schemas/OnboardingContributionsStepRequest",
+              },
             },
           },
         },
@@ -2731,7 +3223,9 @@ export const openApiDoc = {
             description: "Contributions saved",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/OnboardingStateResponse" },
+                schema: {
+                  $ref: "#/components/schemas/OnboardingStateResponse",
+                },
               },
             },
           },
@@ -2741,7 +3235,9 @@ export const openApiDoc = {
               "application/json": {
                 schema: {
                   oneOf: [
-                    { $ref: "#/components/schemas/OkFalseValidationIssuesResponse" },
+                    {
+                      $ref: "#/components/schemas/OkFalseValidationIssuesResponse",
+                    },
                     { $ref: "#/components/schemas/OkFalseErrorResponse" },
                   ],
                 },
@@ -2768,7 +3264,9 @@ export const openApiDoc = {
             description: "Internal server error",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/InternalServerErrorResponse" },
+                schema: {
+                  $ref: "#/components/schemas/InternalServerErrorResponse",
+                },
               },
             },
           },
@@ -2785,7 +3283,9 @@ export const openApiDoc = {
             description: "Onboarding completed",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/OnboardingStateResponse" },
+                schema: {
+                  $ref: "#/components/schemas/OnboardingStateResponse",
+                },
               },
             },
           },
@@ -2809,7 +3309,9 @@ export const openApiDoc = {
             description: "Internal server error",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/InternalServerErrorResponse" },
+                schema: {
+                  $ref: "#/components/schemas/InternalServerErrorResponse",
+                },
               },
             },
           },
@@ -2825,7 +3327,9 @@ export const openApiDoc = {
           required: true,
           content: {
             "application/json": {
-              schema: { $ref: "#/components/schemas/PresignAvatarUploadRequest" },
+              schema: {
+                $ref: "#/components/schemas/PresignAvatarUploadRequest",
+              },
             },
           },
         },
@@ -2834,7 +3338,9 @@ export const openApiDoc = {
             description: "Presigned URL generated",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/PresignAvatarUploadResponse" },
+                schema: {
+                  $ref: "#/components/schemas/PresignAvatarUploadResponse",
+                },
               },
             },
           },
@@ -2842,7 +3348,9 @@ export const openApiDoc = {
             description: "Validation failed",
             content: {
               "application/json": {
-                schema: { $ref: "#/components/schemas/OkFalseValidationIssuesResponse" },
+                schema: {
+                  $ref: "#/components/schemas/OkFalseValidationIssuesResponse",
+                },
               },
             },
           },
@@ -2861,7 +3369,9 @@ export const openApiDoc = {
                 schema: {
                   oneOf: [
                     { $ref: "#/components/schemas/OkFalseErrorResponse" },
-                    { $ref: "#/components/schemas/InternalServerErrorResponse" },
+                    {
+                      $ref: "#/components/schemas/InternalServerErrorResponse",
+                    },
                   ],
                 },
               },

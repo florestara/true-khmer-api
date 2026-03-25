@@ -13,6 +13,7 @@ import { FORUM_ADVISORY_LOCK_NAMESPACE } from "../constants";
 import {
   encodeQuestionsPageCursor,
   type CreateQuestionInput,
+  type EditQuestionInput,
   type GetQuestionsQuery,
   type QuestionVoteType,
   type QuestionsPageCursor,
@@ -77,13 +78,23 @@ function resolveAuthorName(row: QuestionHydrationRow): string {
   return displayName && displayName.length > 0 ? displayName : fullName;
 }
 
-function hydrateQuestion(row: QuestionHydrationRow, tags: string[]): ForumQuestionWithTags {
-  const { categoryId, authorId, deletedAt: _deletedAt, ...question } = row.question;
+function hydrateQuestion(
+  row: QuestionHydrationRow,
+  tags: string[],
+): ForumQuestionWithTags {
+  const {
+    categoryId,
+    authorId,
+    deletedAt: _deletedAt,
+    ...question
+  } = row.question;
 
   return {
     ...question,
     score: question.upvoteCount - question.downvoteCount,
-    viewerVote: row.viewerVoteType ? (row.viewerVoteType as QuestionVoteType) : null,
+    viewerVote: row.viewerVoteType
+      ? (row.viewerVoteType as QuestionVoteType)
+      : null,
     category: {
       id: categoryId,
       name: row.categoryName,
@@ -120,7 +131,10 @@ function buildQuestionsBaseQuery(viewerId: string) {
     );
 }
 
-function buildQuestionsWhereClause(categoryId?: string, cursor?: QuestionsPageCursor) {
+function buildQuestionsWhereClause(
+  categoryId?: string,
+  cursor?: QuestionsPageCursor,
+) {
   const filters = [inArray(forumQuestion.status, VISIBLE_QUESTION_STATUSES)];
 
   if (categoryId) {
@@ -145,7 +159,7 @@ function buildQuestionsWhereClause(categoryId?: string, cursor?: QuestionsPageCu
 }
 
 async function attachTagsToQuestions(
-  questions: QuestionHydrationRow[]
+  questions: QuestionHydrationRow[],
 ): Promise<ForumQuestionWithTags[]> {
   if (questions.length === 0) {
     return [];
@@ -175,18 +189,23 @@ async function attachTagsToQuestions(
   }
 
   return questions.map((row) =>
-    hydrateQuestion(row, tagsByQuestionId.get(row.question.id) ?? [])
+    hydrateQuestion(row, tagsByQuestionId.get(row.question.id) ?? []),
   );
 }
 
-export async function findQuestionRowById(id: string): Promise<ForumQuestionRow | null> {
-  const rows = await db.select().from(forumQuestion).where(eq(forumQuestion.id, id));
+export async function findQuestionRowById(
+  id: string,
+): Promise<ForumQuestionRow | null> {
+  const rows = await db
+    .select()
+    .from(forumQuestion)
+    .where(eq(forumQuestion.id, id));
   return rows[0] ?? null;
 }
 
 export async function findQuestionById(
   id: string,
-  viewerId: string
+  viewerId: string,
 ): Promise<ForumQuestionWithTags | null> {
   const rows = await db
     .select({
@@ -209,13 +228,16 @@ export async function findQuestionById(
         eq(forumQuestionVote.voterId, viewerId),
       ),
     )
-    .leftJoin(forumQuestionTag, eq(forumQuestionTag.questionId, forumQuestion.id))
+    .leftJoin(
+      forumQuestionTag,
+      eq(forumQuestionTag.questionId, forumQuestion.id),
+    )
     .leftJoin(forumTag, eq(forumTag.id, forumQuestionTag.tagId))
     .where(
       and(
         eq(forumQuestion.id, id),
         inArray(forumQuestion.status, VISIBLE_QUESTION_STATUSES),
-      )
+      ),
     );
 
   if (rows.length === 0) {
@@ -234,8 +256,10 @@ export async function findQuestionById(
     new Set(
       rows
         .map((row) => row.tagName)
-        .filter((tag): tag is string => typeof tag === "string" && tag.length > 0)
-    )
+        .filter(
+          (tag): tag is string => typeof tag === "string" && tag.length > 0,
+        ),
+    ),
   );
 
   return hydrateQuestion(questionRow, tags);
@@ -243,7 +267,7 @@ export async function findQuestionById(
 
 export async function findQuestions(
   { categoryId, limit, cursor }: GetQuestionsQuery,
-  viewerId: string
+  viewerId: string,
 ): Promise<QuestionsListResult> {
   const whereClause = buildQuestionsWhereClause(categoryId, cursor);
   const baseQuery = buildQuestionsBaseQuery(viewerId)
@@ -263,7 +287,8 @@ export async function findQuestions(
       nextCursor:
         hasMore && questionRows.length > 0
           ? encodeQuestionsPageCursor({
-              createdAt: questionRows[questionRows.length - 1].question.createdAt,
+              createdAt:
+                questionRows[questionRows.length - 1].question.createdAt,
               id: questionRows[questionRows.length - 1].question.id,
             })
           : null,
@@ -273,7 +298,7 @@ export async function findQuestions(
 
 export async function createQuestion(
   data: CreateQuestionInput,
-  authorId: string
+  authorId: string,
 ): Promise<ForumQuestionWithTags> {
   const newQuestionId = await db.transaction(async (tx) => {
     const insertData: ForumQuestionInsert = {
@@ -292,7 +317,9 @@ export async function createQuestion(
       .returning();
 
     const normalizedTags = Array.from(
-      new Map((data.tags ?? []).map((tag) => [normalizeTagName(tag), tag.trim()])).entries()
+      new Map(
+        (data.tags ?? []).map((tag) => [normalizeTagName(tag), tag.trim()]),
+      ).entries(),
     ).map(([normalizedName, name]) => ({ normalizedName, name }));
 
     if (normalizedTags.length === 0) {
@@ -319,8 +346,8 @@ export async function createQuestion(
       .where(
         inArray(
           forumTag.normalizedName,
-          normalizedTags.map((tag) => tag.normalizedName)
-        )
+          normalizedTags.map((tag) => tag.normalizedName),
+        ),
       );
 
     if (tagRows.length === 0) {
@@ -350,9 +377,113 @@ export async function createQuestion(
   return createdQuestion;
 }
 
+export async function updateQuestion(
+  questionId: string,
+  authorId: string,
+  data: EditQuestionInput,
+): Promise<ForumQuestionWithTags | null> {
+  const updateData: Partial<ForumQuestionInsert> = {};
+
+  if (data.categoryId !== undefined) {
+    updateData.categoryId = data.categoryId;
+  }
+  if (data.title !== undefined) {
+    updateData.title = data.title;
+  }
+  if (data.body !== undefined) {
+    updateData.body = data.body;
+  }
+  if (data.status !== undefined) {
+    updateData.status = data.status;
+  }
+
+  const updateResult = await db.transaction(async (tx) => {
+    // Update the question
+    const [updatedQuestion] = await tx
+      .update(forumQuestion)
+      .set({ ...updateData, updatedAt: sql`now()` })
+      .where(
+        and(
+          eq(forumQuestion.id, questionId),
+          eq(forumQuestion.authorId, authorId),
+          inArray(forumQuestion.status, VISIBLE_QUESTION_STATUSES),
+        ),
+      )
+      .returning();
+
+    if (!updatedQuestion) {
+      return null;
+    }
+
+    // If tags are provided, update tags
+    if (data.tags !== undefined) {
+      const normalizedTags = Array.from(
+        new Map(
+          data.tags.map((tag) => [normalizeTagName(tag), tag.trim()]),
+        ).entries(),
+      ).map(([normalizedName, name]) => ({ normalizedName, name }));
+
+      // Delete existing tags
+      await tx
+        .delete(forumQuestionTag)
+        .where(eq(forumQuestionTag.questionId, questionId));
+
+      if (normalizedTags.length > 0) {
+        const tagInsertValues: ForumTagInsert[] = normalizedTags.map((tag) => ({
+          name: tag.name,
+          normalizedName: tag.normalizedName,
+        }));
+
+        await tx
+          .insert(forumTag)
+          .values(tagInsertValues)
+          .onConflictDoNothing({ target: forumTag.normalizedName });
+
+        const tagRows = await tx
+          .select({
+            id: forumTag.id,
+            normalizedName: forumTag.normalizedName,
+          })
+          .from(forumTag)
+          .where(
+            inArray(
+              forumTag.normalizedName,
+              normalizedTags.map((tag) => tag.normalizedName),
+            ),
+          );
+
+        if (tagRows.length > 0) {
+          const questionTagValues: ForumQuestionTagInsert[] = tagRows.map(
+            (tag) => ({
+              questionId: questionId,
+              tagId: tag.id,
+            }),
+          );
+
+          await tx
+            .insert(forumQuestionTag)
+            .values(questionTagValues)
+            .onConflictDoNothing({
+              target: [forumQuestionTag.questionId, forumQuestionTag.tagId],
+            });
+        }
+      }
+    }
+
+    return updatedQuestion;
+  });
+
+  if (!updateResult) {
+    return null;
+  }
+
+  // Return the updated question
+  return await findQuestionById(questionId, authorId);
+}
+
 export async function softDeleteQuestion(
   questionId: string,
-  authorId: string
+  authorId: string,
 ): Promise<ForumQuestionRow | null> {
   const [deletedQuestion] = await db
     .update(forumQuestion)
@@ -366,7 +497,7 @@ export async function softDeleteQuestion(
         eq(forumQuestion.id, questionId),
         eq(forumQuestion.authorId, authorId),
         inArray(forumQuestion.status, VISIBLE_QUESTION_STATUSES),
-      )
+      ),
     )
     .returning();
 
@@ -376,7 +507,7 @@ export async function softDeleteQuestion(
 export async function setQuestionVote(
   questionId: string,
   voterId: string,
-  voteIntent: VoteIntent
+  voteIntent: VoteIntent,
 ): Promise<ForumQuestionWithTags | null> {
   const updatedQuestionId = await db.transaction(async (tx) => {
     // Serialize vote updates per question inside the forum advisory-lock namespace.
@@ -391,7 +522,7 @@ export async function setQuestionVote(
         and(
           eq(forumQuestion.id, questionId),
           eq(forumQuestion.status, "PUBLISHED"),
-        )
+        ),
       );
 
     if (!question) {
@@ -428,10 +559,8 @@ export async function setQuestionVote(
 
     const [voteCountRow] = await tx
       .select({
-        upvoteCount:
-          sql`coalesce(sum(case when ${forumQuestionVote.voteType} = 'UPVOTE' then 1 else 0 end), 0)`,
-        downvoteCount:
-          sql`coalesce(sum(case when ${forumQuestionVote.voteType} = 'DOWNVOTE' then 1 else 0 end), 0)`,
+        upvoteCount: sql`coalesce(sum(case when ${forumQuestionVote.voteType} = 'UPVOTE' then 1 else 0 end), 0)`,
+        downvoteCount: sql`coalesce(sum(case when ${forumQuestionVote.voteType} = 'DOWNVOTE' then 1 else 0 end), 0)`,
       })
       .from(forumQuestionVote)
       .where(eq(forumQuestionVote.questionId, questionId));

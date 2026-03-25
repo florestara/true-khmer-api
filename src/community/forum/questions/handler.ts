@@ -1,6 +1,7 @@
 import type { Context } from "hono";
 import {
   type CreateQuestionInput,
+  type EditQuestionInput,
   type GetQuestionsQuery,
   type QuestionIdParams,
   type VoteQuestionInput,
@@ -12,6 +13,7 @@ import {
   findQuestions,
   setQuestionVote,
   softDeleteQuestion,
+  updateQuestion,
 } from "./query";
 import { findCategoryById } from "../categories/query";
 import { POSTGRES_FOREIGN_KEY_VIOLATION } from "../constants";
@@ -37,7 +39,7 @@ export async function handleGetQuestions(c: Context, query: GetQuestionsQuery) {
         ok: true,
         ...result,
       },
-      200
+      200,
     );
   } catch (err) {
     console.error("Failed to get questions", err);
@@ -52,7 +54,10 @@ export async function handleGetQuestion(c: Context, params: QuestionIdParams) {
   }
 
   try {
-    const question = await findQuestionById(params.questionId, authResult.userId);
+    const question = await findQuestionById(
+      params.questionId,
+      authResult.userId,
+    );
     if (!question) {
       return c.json({ ok: false, error: "Question not found" }, 404);
     }
@@ -63,7 +68,10 @@ export async function handleGetQuestion(c: Context, params: QuestionIdParams) {
   }
 }
 
-export async function handleCreateQuestion(c: Context, data: CreateQuestionInput) {
+export async function handleCreateQuestion(
+  c: Context,
+  data: CreateQuestionInput,
+) {
   const authResult = getAuthUserId(c);
   if (!authResult.ok) {
     return authResult.response;
@@ -77,8 +85,11 @@ export async function handleCreateQuestion(c: Context, data: CreateQuestionInput
 
     if (category.status !== "ACTIVE") {
       return c.json(
-        { ok: false, error: "Questions can only be posted to active categories" },
-        409
+        {
+          ok: false,
+          error: "Questions can only be posted to active categories",
+        },
+        409,
       );
     }
 
@@ -94,7 +105,11 @@ export async function handleCreateQuestion(c: Context, data: CreateQuestionInput
   }
 }
 
-export async function handleDeleteQuestion(c: Context, params: QuestionIdParams) {
+export async function handleEditQuestion(
+  c: Context,
+  params: QuestionIdParams,
+  data: EditQuestionInput,
+) {
   const authResult = getAuthUserId(c);
   if (!authResult.ok) {
     return authResult.response;
@@ -107,14 +122,86 @@ export async function handleDeleteQuestion(c: Context, params: QuestionIdParams)
     }
 
     if (existingQuestion.authorId !== authResult.userId) {
-      return c.json({ ok: false, error: "You can only delete your own question" }, 403);
+      return c.json(
+        { ok: false, error: "You can only edit your own question" },
+        403,
+      );
+    }
+
+    if (existingQuestion.status === "DELETED") {
+      return c.json(
+        { ok: false, error: "Cannot edit a deleted question" },
+        409,
+      );
+    }
+
+    if (data.categoryId) {
+      const category = await findCategoryById(data.categoryId);
+      if (!category) {
+        return c.json({ ok: false, error: "Category not found" }, 404);
+      }
+
+      if (category.status !== "ACTIVE") {
+        return c.json(
+          {
+            ok: false,
+            error: "Questions can only be moved to active categories",
+          },
+          409,
+        );
+      }
+    }
+
+    const updatedQuestion = await updateQuestion(
+      params.questionId,
+      authResult.userId,
+      data,
+    );
+    if (!updatedQuestion) {
+      return c.json({ ok: false, error: "Question not found" }, 404);
+    }
+
+    return c.json({ ok: true, question: updatedQuestion }, 200);
+  } catch (err) {
+    const code = (err as { code?: string } | null)?.code;
+    if (code === POSTGRES_FOREIGN_KEY_VIOLATION) {
+      return c.json({ ok: false, error: "Category not found" }, 404);
+    }
+    console.error("Failed to edit question", err);
+    return c.json({ ok: false, error: "Internal server error" }, 500);
+  }
+}
+
+export async function handleDeleteQuestion(
+  c: Context,
+  params: QuestionIdParams,
+) {
+  const authResult = getAuthUserId(c);
+  if (!authResult.ok) {
+    return authResult.response;
+  }
+
+  try {
+    const existingQuestion = await findQuestionRowById(params.questionId);
+    if (!existingQuestion) {
+      return c.json({ ok: false, error: "Question not found" }, 404);
+    }
+
+    if (existingQuestion.authorId !== authResult.userId) {
+      return c.json(
+        { ok: false, error: "You can only delete your own question" },
+        403,
+      );
     }
 
     if (existingQuestion.status === "DELETED") {
       return c.json({ ok: false, error: "Question is already deleted" }, 409);
     }
 
-    const deletedQuestion = await softDeleteQuestion(params.questionId, authResult.userId);
+    const deletedQuestion = await softDeleteQuestion(
+      params.questionId,
+      authResult.userId,
+    );
     if (!deletedQuestion) {
       return c.json({ ok: false, error: "Question not found" }, 404);
     }
@@ -143,11 +230,17 @@ export async function handleVoteQuestion(
     }
 
     if (existingQuestion.status !== "PUBLISHED") {
-      return c.json({ ok: false, error: "Only published questions can be voted on" }, 409);
+      return c.json(
+        { ok: false, error: "Only published questions can be voted on" },
+        409,
+      );
     }
 
     if (existingQuestion.authorId === authResult.userId) {
-      return c.json({ ok: false, error: "You cannot vote on your own question" }, 409);
+      return c.json(
+        { ok: false, error: "You cannot vote on your own question" },
+        409,
+      );
     }
 
     const votedQuestion = await setQuestionVote(

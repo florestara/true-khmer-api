@@ -25,7 +25,10 @@ const questionBodySchema = z
   .string()
   .trim()
   .min(1, "body is required and must be 1..10000 characters")
-  .max(MAX_BODY_LENGTH, `body is required and must be 1..${MAX_BODY_LENGTH} characters`);
+  .max(
+    MAX_BODY_LENGTH,
+    `body is required and must be 1..${MAX_BODY_LENGTH} characters`,
+  );
 
 const forumQuestionStatusSchema = z.enum(["PUBLISHED", "CLOSED", "DELETED"]);
 export type ForumQuestionStatus = z.infer<typeof forumQuestionStatusSchema>;
@@ -66,41 +69,109 @@ const tagsSchema = rawTagsSchema
     }
   })
   .transform((tags) =>
-    Array.from(new Map(tags.map((tag) => [tag.toLowerCase(), tag])).values())
+    Array.from(new Map(tags.map((tag) => [tag.toLowerCase(), tag])).values()),
   )
   .refine((tags) => tags.length <= MAX_TAGS_PER_QUESTION, {
     message: `a question can have at most ${MAX_TAGS_PER_QUESTION} tags`,
   });
 
+const editTagsSchema = z
+  .union([z.array(z.string()), z.string().trim()])
+  .optional()
+  .transform((value) => {
+    if (value === undefined) {
+      return undefined;
+    }
+    return typeof value === "string" ? value.split(",") : value;
+  })
+  .transform((tags) => {
+    if (tags === undefined) {
+      return undefined;
+    }
+    return tags.map((tag) => normalizeTagText(tag));
+  })
+  .superRefine((tags, ctx) => {
+    if (tags === undefined) {
+      return;
+    }
+
+    for (const tag of tags) {
+      if (!tag) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "tag cannot be empty",
+        });
+      }
+
+      if (tag.length > MAX_TAG_LENGTH) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `tag must be <= ${MAX_TAG_LENGTH} characters`,
+        });
+      }
+    }
+  })
+  .transform((tags) => {
+    if (tags === undefined) {
+      return undefined;
+    }
+
+    return Array.from(
+      new Map(tags.map((tag) => [tag.toLowerCase(), tag])).values(),
+    );
+  })
+  .superRefine((tags, ctx) => {
+    if (tags === undefined) {
+      return;
+    }
+
+    if (tags.length > MAX_TAGS_PER_QUESTION) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `a question can have at most ${MAX_TAGS_PER_QUESTION} tags`,
+      });
+    }
+  });
+
 export const getQuestionParamsSchema = z.object({
-  questionId: z.string().trim().regex(FORUM_UUID_RE, "questionId must be a valid UUID"),
+  questionId: z
+    .string()
+    .trim()
+    .regex(FORUM_UUID_RE, "questionId must be a valid UUID"),
 });
 
 export type QuestionIdParams = z.infer<typeof getQuestionParamsSchema>;
 export type GetQuestionParams = QuestionIdParams;
 
 const questionsPageCursorSchema = z.object({
-  createdAt: z.string().trim().transform((value, ctx) => {
-    const normalized = normalizeQuestionsCursorTimestamp(value);
-    if (!normalized) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "cursor.createdAt must be a valid ISO datetime",
-      });
-      return z.NEVER;
-    }
+  createdAt: z
+    .string()
+    .trim()
+    .transform((value, ctx) => {
+      const normalized = normalizeQuestionsCursorTimestamp(value);
+      if (!normalized) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "cursor.createdAt must be a valid ISO datetime",
+        });
+        return z.NEVER;
+      }
 
-    return normalized;
-  }),
+      return normalized;
+    }),
   id: z.string().trim().regex(FORUM_UUID_RE, "cursor.id must be a valid UUID"),
 });
 
 export type QuestionsPageCursor = z.infer<typeof questionsPageCursorSchema>;
 
 export function encodeQuestionsPageCursor(cursor: QuestionsPageCursor): string {
-  const normalizedCreatedAt = normalizeQuestionsCursorTimestamp(cursor.createdAt);
+  const normalizedCreatedAt = normalizeQuestionsCursorTimestamp(
+    cursor.createdAt,
+  );
   if (!normalizedCreatedAt) {
-    throw new Error("Cannot encode question page cursor with invalid createdAt");
+    throw new Error(
+      "Cannot encode question page cursor with invalid createdAt",
+    );
   }
 
   return Buffer.from(
@@ -108,7 +179,7 @@ export function encodeQuestionsPageCursor(cursor: QuestionsPageCursor): string {
       createdAt: normalizedCreatedAt,
       id: cursor.id,
     }),
-    "utf8"
+    "utf8",
   ).toString("base64url");
 }
 
@@ -212,6 +283,38 @@ export const createQuestionSchema = z
 
 export type CreateQuestionInput = z.infer<typeof createQuestionSchema>;
 
+export const editQuestionSchema = z
+  .object({
+    categoryId: z
+      .string()
+      .trim()
+      .regex(FORUM_UUID_RE, "categoryId must be a valid UUID")
+      .optional(),
+    title: questionTitleSchema.optional(),
+    body: questionBodySchema.optional(),
+    tags: editTagsSchema,
+    status: normalizedStatusSchema.optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.status && !["PUBLISHED", "CLOSED"].includes(value.status)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          "status can only be PUBLISHED or CLOSED when editing a question",
+        path: ["status"],
+      });
+    }
+  })
+  .transform((value) => ({
+    categoryId: value.categoryId,
+    title: value.title,
+    body: value.body,
+    tags: value.tags,
+    status: value.status,
+  }));
+
+export type EditQuestionInput = z.infer<typeof editQuestionSchema>;
+
 const voteIntentSchema = z.enum(["UPVOTE", "DOWNVOTE", "NONE"]);
 
 export type VoteIntent = z.infer<typeof voteIntentSchema>;
@@ -234,7 +337,7 @@ export const voteQuestionSchema = z
 export type VoteQuestionInput = z.infer<typeof voteQuestionSchema>;
 
 export function validateCreateQuestionInput(
-  input: unknown
+  input: unknown,
 ): ValidationResult<CreateQuestionInput> {
   if (typeof input !== "object" || input === null) {
     return { ok: false, issues: ["Body must be a JSON object"] };

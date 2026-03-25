@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import {
   handleCreateQuestion,
   handleDeleteQuestion,
+  handleEditQuestion,
   handleGetQuestion,
   handleGetQuestions,
   handleVoteQuestion,
@@ -9,6 +10,7 @@ import {
 import { requireAccessToken } from "../../../auth/middleware";
 import {
   createQuestionValidator,
+  editQuestionValidator,
   getQuestionParamsValidator,
   getQuestionsQueryValidator,
   voteQuestionValidator,
@@ -24,7 +26,7 @@ communityForumQuestionFeature.get(
   async (c) => {
     const query = c.req.valid("query");
     return handleGetQuestions(c, query);
-  }
+  },
 );
 
 communityForumQuestionFeature.get(
@@ -33,16 +35,23 @@ communityForumQuestionFeature.get(
   async (c) => {
     const params = c.req.valid("param");
     return handleGetQuestion(c, params);
-  }
+  },
 );
 
-communityForumQuestionFeature.post(
-  "/",
-  createQuestionValidator,
+communityForumQuestionFeature.post("/", createQuestionValidator, async (c) => {
+  const data = c.req.valid("json");
+  return handleCreateQuestion(c, data);
+});
+
+communityForumQuestionFeature.patch(
+  "/edit-question/:questionId",
+  getQuestionParamsValidator,
+  editQuestionValidator,
   async (c) => {
+    const params = c.req.valid("param");
     const data = c.req.valid("json");
-    return handleCreateQuestion(c, data);
-  }
+    return handleEditQuestion(c, params, data);
+  },
 );
 
 communityForumQuestionFeature.delete(
