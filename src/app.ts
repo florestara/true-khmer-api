@@ -40,7 +40,7 @@ app.openAPIRegistry.registerComponent("securitySchemes", "RefreshToken", {
 });
 
 // Auto-generate OpenAPI spec from routes
-app.doc("/openapi.json", {
+app.doc("/docs/openapi.json", {
   openapi: "3.0.0",
   info: {
     title: "TrueKhmer API",
@@ -54,8 +54,9 @@ app.doc("/openapi.json", {
 app.get(
   "/docs",
   Scalar({
-    url: "/openapi.json",
+    url: "/docs/openapi.json",
     theme: "deepSpace",
+    layout: 'classic',
     persistAuth: true,
     authentication: {
       preferredSecurityScheme: "BearerAuth",

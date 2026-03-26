@@ -3,16 +3,21 @@ import type { AppBindings } from "../../../lib/types";
 import { requireAccessToken } from "../../../middlewares/auth.middleware";
 import {
   handleCreateQuestion,
+  handleDeleteQuestion,
+  handleEditQuestion,
   handleGetQuestion,
   handleGetQuestions,
+  handleVoteQuestion,
 } from "./questions.service";
 import {
   createQuestionResponseSchema,
   createQuestionSchema,
+  editQuestionSchema,
   getQuestionResponseSchema,
   getQuestionsResponseSchema,
   getQuestionsQuerySchema,
   getQuestionParamsSchema,
+  voteQuestionSchema,
 } from "./questions.schema";
 
 export const questionsRouter = new OpenAPIHono<AppBindings>();
@@ -85,9 +90,81 @@ const createQuestionRoute = createRoute({
   },
 });
 
+const editQuestionRoute = createRoute({
+  method: "patch",
+  path: "/edit-question/{questionId}",
+  tags: ["Forum Question"],
+  middleware: [requireAccessToken],
+  security: [{ BearerAuth: [] }],
+  request: {
+    params: getQuestionParamsSchema,
+    body: {
+      content: { "application/json": { schema: editQuestionSchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Question updated",
+      content: {
+        "application/json": {
+          schema: createQuestionResponseSchema,
+        },
+      },
+    },
+    404: { description: "Question not found" },
+  },
+});
+
+const deleteQuestionRoute = createRoute({
+  method: "delete",
+  path: "/delete-question/{questionId}",
+  tags: ["Forum Question"],
+  middleware: [requireAccessToken],
+  security: [{ BearerAuth: [] }],
+  request: {
+    params: getQuestionParamsSchema,
+  },
+  responses: {
+    200: {
+      description: "Question deleted",
+      content: {
+        "application/json": {
+          schema: z.object({ ok: z.boolean() }),
+        },
+      },
+    },
+    404: { description: "Question not found" },
+  },
+});
+
+const voteQuestionRoute = createRoute({
+  method: "post",
+  path: "/vote-question/{questionId}",
+  tags: ["Forum Question"],
+  middleware: [requireAccessToken],
+  security: [{ BearerAuth: [] }],
+  request: {
+    params: getQuestionParamsSchema,
+    body: {
+      content: { "application/json": { schema: voteQuestionSchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Vote applied",
+      content: {
+        "application/json": {
+          schema: createQuestionResponseSchema,
+        },
+      },
+    },
+    404: { description: "Question not found" },
+  },
+});
+
 questionsRouter.openapi(listRoute, async (c) => {
   const query = c.req.valid("query");
-  return (await handleGetQuestions(c, query)) as any;
+  return handleGetQuestions(c, query) as any;
 });
 
 questionsRouter.openapi(getRoute, async (c) => {
@@ -97,5 +174,22 @@ questionsRouter.openapi(getRoute, async (c) => {
 
 questionsRouter.openapi(createQuestionRoute, async (c) => {
   const data = c.req.valid("json");
-  return (await handleCreateQuestion(c, data)) as any;
+  return handleCreateQuestion(c, data) as any;
+});
+
+questionsRouter.openapi(editQuestionRoute, async (c) => {
+  const params = c.req.valid("param");
+  const data = c.req.valid("json");
+  return handleEditQuestion(c, params, data) as any;
+});
+
+questionsRouter.openapi(deleteQuestionRoute, async (c) => {
+  const params = c.req.valid("param");
+  return handleDeleteQuestion(c, params) as any;
+});
+
+questionsRouter.openapi(voteQuestionRoute, async (c) => {
+  const params = c.req.valid("param");
+  const data = c.req.valid("json");
+  return handleVoteQuestion(c, params, data) as any;
 });

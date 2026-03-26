@@ -138,7 +138,7 @@ export const getQuestionParamsSchema = z.object({
     .string()
     .trim()
     .regex(FORUM_UUID_RE, "questionId must be a valid UUID"),
-});
+}).openapi("GetQuestionParams");
 
 export type QuestionIdParams = z.infer<typeof getQuestionParamsSchema>;
 export type GetQuestionParams = QuestionIdParams;
@@ -277,14 +277,14 @@ export const createQuestionSchema = z
     status: normalizedStatusSchema.optional(),
   })
   .superRefine((value, ctx) => {
-      if (value.status && value.status !== "PUBLISHED") {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "status can only be PUBLISHED when creating a question",
-          path: ["status"],
-        });
-      }
-    })
+    if (value.status && value.status !== "PUBLISHED") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "status can only be PUBLISHED when creating a question",
+        path: ["status"],
+      });
+    }
+  })
   .transform((value) => ({
     categoryId: value.categoryId,
     title: value.title,
@@ -324,11 +324,11 @@ export const editQuestionSchema = z
     body: value.body,
     tags: value.tags,
     status: value.status,
-  }));
+  })).openapi("EditQuestionRequest");
 
 export type EditQuestionInput = z.infer<typeof editQuestionSchema>;
 
-const voteIntentSchema = z.enum(["UPVOTE", "DOWNVOTE", "NONE"]);
+const voteIntentSchema = z.enum(["UPVOTE", "DOWNVOTE", "NONE"]).openapi("VoteIntent");
 
 export type VoteIntent = z.infer<typeof voteIntentSchema>;
 export type QuestionVoteType = Exclude<VoteIntent, "NONE">;
@@ -345,7 +345,7 @@ export const voteQuestionSchema = z
   })
   .transform((value) => ({
     voteType: value.voteType,
-  }));
+  })).openapi("VoteQuestionRequest");
 
 export type VoteQuestionInput = z.infer<typeof voteQuestionSchema>;
 
