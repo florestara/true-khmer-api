@@ -20,6 +20,7 @@ import {
   type VoteIntent,
 } from "./questions.schema";
 
+
 type ForumQuestionRow = typeof forumQuestion.$inferSelect;
 type ForumQuestionInsert = typeof forumQuestion.$inferInsert;
 type ForumQuestionTagInsert = typeof forumQuestionTag.$inferInsert;
@@ -135,6 +136,7 @@ function buildQuestionsWhereClause(
   categoryId?: string,
   cursor?: QuestionsPageCursor,
 ) {
+
   const filters = [inArray(forumQuestion.status, VISIBLE_QUESTION_STATUSES)];
 
   if (categoryId) {
@@ -147,6 +149,13 @@ function buildQuestionsWhereClause(
       and(
         eq(forumQuestion.createdAt, cursor.createdAt),
         lt(forumQuestion.id, cursor.id),
+      ),
+      or(
+        lt(forumQuestion.createdAt, cursor.createdAt),
+        and(
+          eq(forumQuestion.createdAt, cursor.createdAt),
+          lt(forumQuestion.id, cursor.id),
+        ),
       ),
     );
 
@@ -287,10 +296,10 @@ export async function findQuestions(
       nextCursor:
         hasMore && questionRows.length > 0
           ? encodeQuestionsPageCursor({
-              createdAt:
-                questionRows[questionRows.length - 1].question.createdAt,
-              id: questionRows[questionRows.length - 1].question.id,
-            })
+            createdAt:
+              questionRows[questionRows.length - 1].question.createdAt,
+            id: questionRows[questionRows.length - 1].question.id,
+          })
           : null,
     },
   };

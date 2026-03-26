@@ -260,20 +260,31 @@ export const createQuestionSchema = z
       .string()
       .trim()
       .regex(FORUM_UUID_RE, "categoryId is required and must be a valid UUID"),
-    title: questionTitleSchema,
-    body: questionBodySchema,
+    title: z
+      .string()
+      .trim()
+      .min(1, "title is required and must be 1..300 characters")
+      .max(300, "title is required and must be 1..300 characters"),
+    body: z
+      .string()
+      .trim()
+      .min(1, "body is required and must be 1..10000 characters")
+      .max(
+        MAX_BODY_LENGTH,
+        `body is required and must be 1..${MAX_BODY_LENGTH} characters`,
+      ),
     tags: tagsSchema,
     status: normalizedStatusSchema.optional(),
   })
   .superRefine((value, ctx) => {
-    if (value.status && value.status !== "PUBLISHED") {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "status can only be PUBLISHED when creating a question",
-        path: ["status"],
-      });
-    }
-  })
+      if (value.status && value.status !== "PUBLISHED") {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "status can only be PUBLISHED when creating a question",
+          path: ["status"],
+        });
+      }
+    })
   .transform((value) => ({
     categoryId: value.categoryId,
     title: value.title,
