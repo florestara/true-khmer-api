@@ -33,6 +33,20 @@ export const resendRegisterOtpResponseSchema = z
   })
   .openapi("ResendRegisterOtpResponse");
 
+export const forgotPasswordResponseSchema = z
+  .object({
+    success: z.literal(true),
+    message: z.string(),
+  })
+  .openapi("ForgotPasswordResponse");
+
+export const resetPasswordResponseSchema = z
+  .object({
+    success: z.literal(true),
+    message: z.string(),
+  })
+  .openapi("ResetPasswordResponse");
+
 export const authSimpleErrorResponseSchema = z
   .object({
     error: z.string(),

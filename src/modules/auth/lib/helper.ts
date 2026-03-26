@@ -1,7 +1,9 @@
 import { auth } from "./provider";
 import {
+  AuthForgotPasswordPayload,
   AuthLoginPayload,
   AuthRegisterPayload,
+  AuthResetPasswordPayload,
   AuthVerifyRegisterOtpPayload,
 } from "../auth.schema";
 
@@ -246,6 +248,75 @@ export async function signInWithEmailPassword(payload: AuthLoginPayload) {
     body: {
       token,
       user: user as UserLike,
+    },
+  } as const;
+}
+
+export async function requestPasswordReset(payload: AuthForgotPasswordPayload) {
+  const response = await callAuth("/request-password-reset", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      email: payload.email,
+      callbackUrl: payload.callbackUrl,
+    }),
+  });
+
+  const body = await parseResponseBody(response);
+  const parsedBody = isJsonRecord(body) ? body : null;
+  const status = parsedBody?.status;
+
+  if (!response.ok || status !== true) {
+    const errorBody = normalizeAuthErrorBody(
+      body,
+      "Failed to request password reset",
+    );
+    return {
+      ok: false,
+      status: response.status,
+      body: errorBody,
+    } as const;
+  }
+
+  return {
+    ok: true,
+    body: {
+      status: true,
+    },
+  } as const;
+}
+
+export async function resetPassword(payload: AuthResetPasswordPayload) {
+  const response = await callAuth("/reset-password", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      token: payload.token,
+      newPassword: payload.newPassword,
+    }),
+  });
+
+  const body = await parseResponseBody(response);
+  const parsedBody = isJsonRecord(body) ? body : null;
+  const status = parsedBody?.status;
+
+  if (!response.ok || status !== true) {
+    const errorBody = normalizeAuthErrorBody(body, "Failed to reset password");
+    return {
+      ok: false,
+      status: response.status,
+      body: errorBody,
+    } as const;
+  }
+
+  return {
+    ok: true,
+    body: {
+      status: true,
     },
   } as const;
 }

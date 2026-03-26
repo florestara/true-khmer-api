@@ -11,9 +11,14 @@ function optionalEnv(name: string, fallback: string) {
   return value || fallback;
 }
 
+const PASSWORD_RESET_TTL_MINUTES = 15;
+
 export const authConfig = {
   appName: optionalEnv("APP_NAME", "True Khmer"),
+  appDomain: requireEnv("APP_DOMAIN"),
   otpTtlMinutes: 5,
+  passwordResetTtlMinutes: PASSWORD_RESET_TTL_MINUTES,
+  passwordResetTtlSeconds: PASSWORD_RESET_TTL_MINUTES * 60,
   jwtExpiration: optionalEnv("JWT_EXPIRATION", "15m"),
   betterAuthUrl: requireEnv("BETTER_AUTH_URL"),
   betterAuthSecret: requireEnv("BETTER_AUTH_SECRET"),

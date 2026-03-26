@@ -2,21 +2,35 @@ import { Context } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import {
   getAccessTokenFromRefreshToken,
+  requestPasswordReset,
+  resetPassword,
   requestEmailVerificationOtp,
   signInWithEmailPassword,
   signUpWithEmailPassword,
   verifyRegisterOtp,
 } from "./lib/helper";
-import { findUserByEmail, revokeEmailVerificationOtp } from "./auth.query";
+import {
+  findUserByEmail,
+  revokeEmailVerificationOtp,
+} from "./auth.query";
+import { authConfig } from "./lib/config";
 import {
   type ValidationFailure,
   type ValidationResult,
+  validateForgotPasswordPayload,
   validateLoginPayload,
   validateRefreshPayload,
   validateRegisterPayload,
+  validateResetPasswordPayload,
   validateResendRegisterOtpPayload,
   validateVerifyRegisterOtpPayload,
 } from "./auth.validator";
+
+const genericForgotPasswordResponse = {
+  success: true as const,
+  message:
+    "If this email exists in our system, check your email for the reset link.",
+};
 
 function toStatusCode(
   status: unknown,
@@ -110,6 +124,49 @@ function getAuthErrorCode(body: unknown): string | null {
   }
 
   return null;
+}
+
+function getAuthErrorMessage(body: unknown, fallbackMessage: string): string {
+  if (!body || typeof body !== "object") {
+    return fallbackMessage;
+  }
+
+  const error = (body as Record<string, unknown>).error;
+  if (typeof error === "string" && error.trim()) {
+    return error.trim();
+  }
+
+  const message = (body as Record<string, unknown>).message;
+  if (typeof message === "string" && message.trim()) {
+    return message.trim();
+  }
+
+  return fallbackMessage;
+}
+
+function normalizeCallbackUrl(rawCallbackUrl: string) {
+  let callbackUrl: URL;
+
+  try {
+    callbackUrl = new URL(rawCallbackUrl, authConfig.appDomain);
+  } catch {
+    return { ok: false as const, message: "callbackUrl must be a valid URL" };
+  }
+
+  const allowedOrigins = new Set<string>([
+    new URL(authConfig.appDomain).origin,
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+  ]);
+
+  if (!allowedOrigins.has(callbackUrl.origin)) {
+    return {
+      ok: false as const,
+      message: "callbackUrl must use APP_DOMAIN or a local development origin",
+    };
+  }
+
+  return { ok: true as const, url: callbackUrl };
 }
 
 async function buildAuthTokenResponse(
@@ -327,4 +384,69 @@ export async function handleRefresh(c: Context) {
     accessToken: accessTokenResult.token,
     refreshToken: parsed.data.refreshToken,
   });
+}
+
+export async function handleForgotPassword(c: Context) {
+  const parsed = await parseAndValidate(c, validateForgotPasswordPayload);
+  if (!parsed.ok) {
+    return c.json({ error: parsed.response._data.error }, 400);
+  }
+
+  const callbackUrl = normalizeCallbackUrl(parsed.data.callbackUrl);
+  if (!callbackUrl.ok) {
+    return c.json({ error: callbackUrl.message }, 400);
+  }
+
+  const passwordResetResult = await requestPasswordReset({
+    email: parsed.data.email,
+    callbackUrl: callbackUrl.url.toString(),
+  });
+
+  if (!passwordResetResult.ok) {
+    const foundUser = await findUserByEmail(parsed.data.email);
+    if (!foundUser) {
+      return c.json(genericForgotPasswordResponse, 200);
+    }
+
+    return c.json(
+      {
+        error: getAuthErrorMessage(
+          passwordResetResult.body,
+          "Failed to request password reset",
+        ),
+      },
+      400,
+    );
+  }
+
+  return c.json(genericForgotPasswordResponse, 200);
+}
+
+export async function handleResetPassword(c: Context) {
+  const parsed = await parseAndValidate(c, validateResetPasswordPayload);
+  if (!parsed.ok) {
+    return c.json({ error: parsed.response._data.error }, 400);
+  }
+
+  const resetResult = await resetPassword(parsed.data);
+
+  if (!resetResult.ok) {
+    return c.json(
+      {
+        error: getAuthErrorMessage(
+          resetResult.body,
+          "Failed to reset password",
+        ),
+      },
+      400,
+    );
+  }
+
+  return c.json(
+    {
+      success: true,
+      message: "Password reset successful.",
+    },
+    200,
+  );
 }

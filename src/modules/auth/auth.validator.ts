@@ -1,10 +1,12 @@
 import { z } from "zod";
 import type { ZodTypeAny } from "zod";
 import {
+  authForgotPasswordSchema,
   authLoginSchema,
   authResendRegisterOtpSchema,
   authRefreshSchema,
   authRegisterSchema,
+  authResetPasswordSchema,
   authVerifyRegisterOtpSchema,
 } from "./auth.schema";
 
@@ -73,6 +75,14 @@ export function validateResendRegisterOtpPayload(input: unknown) {
 
 export function validateLoginPayload(input: unknown) {
   return parseWithSchema(authLoginSchema, input);
+}
+
+export function validateForgotPasswordPayload(input: unknown) {
+  return parseWithSchema(authForgotPasswordSchema, input);
+}
+
+export function validateResetPasswordPayload(input: unknown) {
+  return parseWithSchema(authResetPasswordSchema, input);
 }
 
 export function validateRefreshPayload(input: unknown) {

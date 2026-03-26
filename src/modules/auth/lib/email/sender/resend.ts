@@ -1,5 +1,6 @@
 import { authConfig } from "../../config";
 import { buildOtpTemplate } from "../templates/otp";
+import { buildPasswordResetTemplate } from "../templates/password-reset";
 import type { OtpEmailType } from "../types";
 
 const subjectByType: Record<OtpEmailType, string> = {
@@ -38,5 +39,40 @@ export async function sendOtpByResend(
   if (!response.ok) {
     const body = await response.text();
     throw new Error(`Failed to send OTP email: ${response.status} ${body}`);
+  }
+}
+
+export async function sendPasswordResetByResend(
+  email: string,
+  resetUrl: string,
+  displayName?: string | null,
+  resetTtlMinutes = authConfig.passwordResetTtlMinutes,
+) {
+  const html = buildPasswordResetTemplate(
+    resetUrl,
+    resetTtlMinutes,
+    displayName,
+    authConfig.appName,
+  );
+
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${authConfig.resendApiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: authConfig.resendFrom,
+      to: [email],
+      subject: `Reset your password - ${authConfig.appName}`,
+      html,
+    }),
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(
+      `Failed to send password reset email: ${response.status} ${body}`,
+    );
   }
 }
