@@ -9,20 +9,21 @@
     "start": "node dist/index.mjs",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:seed:onboarding": "tsx src/onboarding/seed.ts",
-    "db:seed:forum-categories": "tsx src/community/forum/categories/seed.ts",
+    "db:seed:onboarding": "tsx src/modules/onboarding/seed.ts",
+    "db:seed:forum-categories": "tsx src/modules/forum/categories/categories.seed.ts",
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
     "@hono/node-server": "^1.13.0",
-    "@hono/swagger-ui": "^0.6.1",
+    "@hono/zod-openapi": "^1.2.3",
+    "@scalar/hono-api-reference": "^0.10.4",
     "better-auth": "^1.4.18",
     "dotenv": "^16.4.0",
     "drizzle-orm": "^0.45.1",
     "he": "^1.2.0",
     "hono": "^4.6.0",
     "postgres": "^3.4.0",
-    "zod": "^3.24.1"
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/he": "^1.2.3",
