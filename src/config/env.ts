@@ -17,10 +17,7 @@ const emptyStringToUndefined = (value: unknown) => {
 
 const envSchema = z.object({
   APP_NAME: z.string().default("True Khmer"),
-  APP_DOMAIN: z.preprocess(
-    emptyStringToUndefined,
-    z.string().url().optional(),
-  ),
+  APP_DOMAIN: z.preprocess(emptyStringToUndefined, z.string().url()),
   PORT: z.coerce.number().int().positive().default(3000),
   DEFAULT_BASE_URL: z.preprocess(
     emptyStringToUndefined,

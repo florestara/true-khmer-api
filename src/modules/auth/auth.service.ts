@@ -385,7 +385,7 @@ export async function handleRefresh(c: Context) {
 export async function handleForgotPassword(c: Context) {
   const parsed = await parseAndValidate(c, validateForgotPasswordPayload);
   if (!parsed.ok) {
-    return c.json({ error: parsed.response._data.error }, 400);
+    return parsed.response;
   }
 
   const callbackUrl = normalizeCallbackUrl(parsed.data.callbackUrl);
@@ -421,7 +421,7 @@ export async function handleForgotPassword(c: Context) {
 export async function handleResetPassword(c: Context) {
   const parsed = await parseAndValidate(c, validateResetPasswordPayload);
   if (!parsed.ok) {
-    return c.json({ error: parsed.response._data.error }, 400);
+    return parsed.response;
   }
 
   const resetResult = await resetPassword(parsed.data);
