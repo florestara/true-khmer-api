@@ -400,7 +400,6 @@ export async function handleForgotPassword(c: Context) {
 
   if (!passwordResetResult.ok) {
     console.error("Password reset request failed", {
-      email: parsed.data.email,
       error: getAuthErrorMessage(
         passwordResetResult.body,
         "Failed to request password reset",
