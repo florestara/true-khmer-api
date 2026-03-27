@@ -260,7 +260,7 @@ export async function requestPasswordReset(payload: AuthForgotPasswordPayload) {
     },
     body: JSON.stringify({
       email: payload.email,
-      callbackUrl: payload.callbackUrl,
+      redirectTo: payload.callbackUrl,
     }),
   });
 

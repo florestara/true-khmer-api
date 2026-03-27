@@ -153,11 +153,7 @@ function normalizeCallbackUrl(rawCallbackUrl: string) {
     return { ok: false as const, message: "callbackUrl must be a valid URL" };
   }
 
-  const allowedOrigins = new Set<string>([
-    new URL(authConfig.appDomain).origin,
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-  ]);
+  const allowedOrigins = new Set<string>(authConfig.allowedCallbackOrigins);
 
   if (!allowedOrigins.has(callbackUrl.origin)) {
     return {
