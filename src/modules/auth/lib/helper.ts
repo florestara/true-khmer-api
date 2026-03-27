@@ -1,4 +1,5 @@
 import { auth } from "./provider";
+import { authConfig } from "./config";
 import {
   AuthForgotPasswordPayload,
   AuthLoginPayload,
@@ -260,7 +261,7 @@ export async function requestPasswordReset(payload: AuthForgotPasswordPayload) {
     },
     body: JSON.stringify({
       email: payload.email,
-      redirectTo: payload.callbackUrl,
+      redirectTo: payload.resetPageUrl,
     }),
   });
 

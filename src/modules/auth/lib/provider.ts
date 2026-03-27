@@ -12,24 +12,9 @@ import {
 import { jwtPluginConfig } from "./plugins/jwt";
 import { findUserFirstNameByEmail } from "../auth.query";
 
-function getSearchParamValue(
-  searchParams: URLSearchParams,
-  targetName: string,
-): string | null {
-  const normalizedTargetName = targetName.toLowerCase();
-
-  for (const [name, value] of searchParams.entries()) {
-    if (name.toLowerCase() === normalizedTargetName) {
-      return value;
-    }
-  }
-
-  return null;
-}
-
 export const auth = betterAuth({
   baseURL: authConfig.betterAuthUrl,
-  trustedOrigins: authConfig.allowedCallbackOrigins,
+  trustedOrigins: authConfig.allowedResetPageOrigins,
   secret: authConfig.betterAuthSecret,
   database: drizzleAdapter(db, {
     provider: "pg",
@@ -65,16 +50,12 @@ export const auth = betterAuth({
     resetPasswordTokenExpiresIn: authConfig.passwordResetTtlSeconds,
     revokeSessionsOnPasswordReset: true,
     sendResetPassword: async ({ user, url, token }) => {
-      const callbackParams = new URL(url).searchParams;
-      const providedCallbackUrl = getSearchParamValue(
-        callbackParams,
-        "callbackUrl",
-      );
+      // Better Auth accepts `redirectTo`, then forwards it here as `callbackURL`.
+      const providedResetPageUrl = new URL(url).searchParams.get("callbackURL");
       const resetUrl = new URL(
-        providedCallbackUrl ?? authConfig.appDomain,
+        providedResetPageUrl ?? authConfig.appDomain,
         authConfig.appDomain,
       );
-
       resetUrl.searchParams.set("token", token);
 
       const displayName =

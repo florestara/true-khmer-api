@@ -59,10 +59,10 @@ export type AuthLoginPayload = z.infer<typeof authLoginSchema>;
 export const authForgotPasswordSchema = z
   .object({
     email: emailSchema,
-    callbackUrl: z
+    resetPageUrl: z
       .string()
       .trim()
-      .min(1, "callbackUrl is required"),
+      .min(1, "resetPageUrl is required"),
   })
   .openapi("AuthForgotPasswordRequest");
 

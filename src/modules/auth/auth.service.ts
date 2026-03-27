@@ -144,25 +144,25 @@ function getAuthErrorMessage(body: unknown, fallbackMessage: string): string {
   return fallbackMessage;
 }
 
-function normalizeCallbackUrl(rawCallbackUrl: string) {
-  let callbackUrl: URL;
+function normalizeResetPageUrl(rawResetPageUrl: string) {
+  let resetPageUrl: URL;
 
   try {
-    callbackUrl = new URL(rawCallbackUrl, authConfig.appDomain);
+    resetPageUrl = new URL(rawResetPageUrl, authConfig.appDomain);
   } catch {
-    return { ok: false as const, message: "callbackUrl must be a valid URL" };
+    return { ok: false as const, message: "resetPageUrl must be a valid URL" };
   }
 
-  const allowedOrigins = new Set<string>(authConfig.allowedCallbackOrigins);
+  const allowedOrigins = new Set<string>(authConfig.allowedResetPageOrigins);
 
-  if (!allowedOrigins.has(callbackUrl.origin)) {
+  if (!allowedOrigins.has(resetPageUrl.origin)) {
     return {
       ok: false as const,
-      message: "callbackUrl must use APP_DOMAIN or a local development origin",
+      message: "resetPageUrl must use an allowed frontend origin",
     };
   }
 
-  return { ok: true as const, url: callbackUrl };
+  return { ok: true as const, url: resetPageUrl };
 }
 
 async function buildAuthTokenResponse(
@@ -388,31 +388,27 @@ export async function handleForgotPassword(c: Context) {
     return parsed.response;
   }
 
-  const callbackUrl = normalizeCallbackUrl(parsed.data.callbackUrl);
-  if (!callbackUrl.ok) {
-    return c.json({ error: callbackUrl.message }, 400);
+  const resetPageUrl = normalizeResetPageUrl(parsed.data.resetPageUrl);
+  if (!resetPageUrl.ok) {
+    return c.json({ error: resetPageUrl.message }, 400);
   }
 
   const passwordResetResult = await requestPasswordReset({
     email: parsed.data.email,
-    callbackUrl: callbackUrl.url.toString(),
+    resetPageUrl: resetPageUrl.url.toString(),
   });
 
   if (!passwordResetResult.ok) {
-    const foundUser = await findUserByEmail(parsed.data.email);
-    if (!foundUser) {
-      return c.json(genericForgotPasswordResponse, 200);
-    }
-
-    return c.json(
-      {
-        error: getAuthErrorMessage(
-          passwordResetResult.body,
-          "Failed to request password reset",
-        ),
-      },
-      400,
-    );
+    console.error("Password reset request failed", {
+      email: parsed.data.email,
+      error: getAuthErrorMessage(
+        passwordResetResult.body,
+        "Failed to request password reset",
+      ),
+      code: getAuthErrorCode(passwordResetResult.body),
+      status: passwordResetResult.status,
+    });
+    return c.json(genericForgotPasswordResponse, 200);
   }
 
   return c.json(genericForgotPasswordResponse, 200);

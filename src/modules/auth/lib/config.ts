@@ -17,7 +17,7 @@ function toOrigin(url: string) {
 
 const PASSWORD_RESET_TTL_MINUTES = 15;
 const appDomain = requireEnv("APP_DOMAIN");
-const allowedCallbackOrigins = Array.from(
+const allowedResetPageOrigins = Array.from(
   new Set([
     toOrigin(appDomain),
     "http://localhost:5173",
@@ -29,7 +29,7 @@ const allowedCallbackOrigins = Array.from(
 export const authConfig = {
   appName: optionalEnv("APP_NAME", "True Khmer"),
   appDomain,
-  allowedCallbackOrigins,
+  allowedResetPageOrigins,
   otpTtlMinutes: 5,
   passwordResetTtlMinutes: PASSWORD_RESET_TTL_MINUTES,
   passwordResetTtlSeconds: PASSWORD_RESET_TTL_MINUTES * 60,
