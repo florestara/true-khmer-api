@@ -38,4 +38,5 @@ export const authConfig = {
   betterAuthSecret: requireEnv("BETTER_AUTH_SECRET"),
   resendApiKey: requireEnv("RESEND_API_KEY"),
   resendFrom: requireEnv("RESEND_FROM_EMAIL"),
+  resendApiUrl: requireEnv("RESEND_API_URL"),
 };
