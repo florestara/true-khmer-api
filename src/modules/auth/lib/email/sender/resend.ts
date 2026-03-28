@@ -4,10 +4,54 @@ import { buildPasswordResetTemplate } from "../templates/password-reset";
 import type { OtpEmailType } from "../types";
 
 const RESEND_TIMEOUT_MS = 5_000;
+const MAX_PROVIDER_MESSAGE_LENGTH = 120;
 
 const subjectByType: Record<OtpEmailType, string> = {
   "email-verification": `Verify your email - ${authConfig.appName}`,
 };
+
+function sanitizeProviderErrorBody(body: string) {
+  const fallback = "<provider response redacted>";
+  const trimmedBody = body.trim();
+
+  if (!trimmedBody) {
+    return fallback;
+  }
+
+  try {
+    const parsed = JSON.parse(trimmedBody) as {
+      error_code?: unknown;
+      message?: unknown;
+      name?: unknown;
+    };
+
+    const code =
+      typeof parsed.error_code === "string" ? parsed.error_code.trim() : "";
+    const messageSource =
+      typeof parsed.message === "string"
+        ? parsed.message
+        : typeof parsed.name === "string"
+          ? parsed.name
+          : "";
+    const message = messageSource.trim().slice(0, MAX_PROVIDER_MESSAGE_LENGTH);
+
+    if (code && message) {
+      return `${code}: ${message}`;
+    }
+
+    if (code) {
+      return code;
+    }
+
+    if (message) {
+      return message;
+    }
+  } catch {
+    // Ignore parse failures and avoid exposing raw provider responses.
+  }
+
+  return fallback;
+}
 
 async function sendEmailByResend(
   email: string,
@@ -33,7 +77,10 @@ async function sendEmailByResend(
 
     if (!response.ok) {
       const body = await response.text();
-      throw new Error(`Failed to send ${errorLabel}: ${response.status} ${body}`);
+      const providerSummary = sanitizeProviderErrorBody(body);
+      throw new Error(
+        `Failed to send ${errorLabel}: ${response.status} ${providerSummary}`,
+      );
     }
   } catch (error) {
     if (
