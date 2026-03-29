@@ -1,0 +1,2 @@
+ALTER TABLE "volunteer_category" ADD CONSTRAINT "volunteer_category_created_by_user_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "volunteer_category" ADD CONSTRAINT "volunteer_category_updated_by_user_id_fk" FOREIGN KEY ("updated_by") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;

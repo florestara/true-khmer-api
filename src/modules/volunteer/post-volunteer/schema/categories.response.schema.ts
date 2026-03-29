@@ -17,12 +17,12 @@ export const volunteerCategoryResponseSchema = z
   })
   .openapi("VolunteerCategoryResponse");
 
-export const volunteerCategoryOperationErrorResponseSchema = z
+export const volunteerOperationErrorResponseSchema = z
   .object({
     ok: z.literal(false),
     error: z.string(),
   })
-  .openapi("VolunteerCategoryOperationErrorResponse");
+  .openapi("VolunteerOperationErrorResponse");
 
 export const volunteerCategoryValidationErrorResponseSchema = z
   .object({
@@ -36,13 +36,6 @@ export const volunteerCategoryValidationErrorResponseSchema = z
     ),
   })
   .openapi("VolunteerCategoryValidationErrorResponse");
-
-export const volunteerCategoryAuthErrorResponseSchema = z
-  .object({
-    error: z.string(),
-    code: z.string().optional(),
-  })
-  .openapi("VolunteerCategoryAuthErrorResponse");
 
 export const getVolunteerCategoriesResponseSchema = z
   .object({

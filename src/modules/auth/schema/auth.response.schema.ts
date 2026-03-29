@@ -39,6 +39,18 @@ export const authSimpleErrorResponseSchema = z
   })
   .openapi("AuthSimpleErrorResponse");
 
+export const authProtectedErrorResponseSchema = z
+  .object({
+    ok: z.literal(false),
+    error: z.string(),
+    code: z.string().optional(),
+  })
+  .openapi("AuthProtectedErrorResponse");
+
+export type AuthProtectedErrorResponseBody = z.infer<
+  typeof authProtectedErrorResponseSchema
+>;
+
 export const refreshSuccessResponseSchema = z
   .object({
     accessToken: z.string(),

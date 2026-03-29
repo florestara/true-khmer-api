@@ -1,15 +1,20 @@
-import { OpenAPIHono, createRoute } from "@hono/zod-openapi";
+import {
+  OpenAPIHono,
+  createRoute,
+  type RouteHandler,
+} from "@hono/zod-openapi";
 import type { AppBindings } from "../../../lib/types";
 import {
   requireAdmin,
   requireAccessToken,
 } from "../../../middlewares/auth.middleware";
+import { authProtectedErrorResponseSchema } from "../../auth/auth.schema";
+import { getAuthUserId } from "../../auth/utils/get-auth";
 import {
   createVolunteerCategoryResponseSchema,
   createVolunteerCategorySchema,
   getVolunteerCategoriesResponseSchema,
-  volunteerCategoryAuthErrorResponseSchema,
-  volunteerCategoryOperationErrorResponseSchema,
+  volunteerOperationErrorResponseSchema,
   volunteerCategoryValidationErrorResponseSchema,
 } from "./post-volunteer.schema";
 import {
@@ -38,7 +43,7 @@ const getVolunteerCategoriesRoute = createRoute({
       description: "Unauthorized",
       content: {
         "application/json": {
-          schema: volunteerCategoryAuthErrorResponseSchema,
+          schema: authProtectedErrorResponseSchema,
         },
       },
     },
@@ -46,7 +51,7 @@ const getVolunteerCategoriesRoute = createRoute({
       description: "Forbidden",
       content: {
         "application/json": {
-          schema: volunteerCategoryAuthErrorResponseSchema,
+          schema: authProtectedErrorResponseSchema,
         },
       },
     },
@@ -54,7 +59,7 @@ const getVolunteerCategoriesRoute = createRoute({
       description: "Internal server error",
       content: {
         "application/json": {
-          schema: volunteerCategoryOperationErrorResponseSchema,
+          schema: volunteerOperationErrorResponseSchema,
         },
       },
     },
@@ -97,7 +102,7 @@ const createVolunteerCategoryRoute = createRoute({
       description: "Unauthorized",
       content: {
         "application/json": {
-          schema: volunteerCategoryAuthErrorResponseSchema,
+          schema: authProtectedErrorResponseSchema,
         },
       },
     },
@@ -105,7 +110,7 @@ const createVolunteerCategoryRoute = createRoute({
       description: "Forbidden",
       content: {
         "application/json": {
-          schema: volunteerCategoryAuthErrorResponseSchema,
+          schema: authProtectedErrorResponseSchema,
         },
       },
     },
@@ -113,7 +118,7 @@ const createVolunteerCategoryRoute = createRoute({
       description: "Category already exists",
       content: {
         "application/json": {
-          schema: volunteerCategoryOperationErrorResponseSchema,
+          schema: volunteerOperationErrorResponseSchema,
         },
       },
     },
@@ -121,18 +126,52 @@ const createVolunteerCategoryRoute = createRoute({
       description: "Internal server error",
       content: {
         "application/json": {
-          schema: volunteerCategoryOperationErrorResponseSchema,
+          schema: volunteerOperationErrorResponseSchema,
         },
       },
     },
   },
 });
 
-postVolunteerRouter.openapi(getVolunteerCategoriesRoute, async (c) => {
-  return handleGetVolunteerCategories(c);
-});
+const getVolunteerCategoriesHandler: RouteHandler<
+  typeof getVolunteerCategoriesRoute,
+  AppBindings
+> = async (c) => {
+  const result = await handleGetVolunteerCategories();
+  if (!result.ok) {
+    return c.json({ ok: false, error: result.error }, result.status);
+  }
 
-postVolunteerRouter.openapi(createVolunteerCategoryRoute, async (c) => {
+  return c.json({ ok: true, categories: result.categories }, 200);
+};
+
+const createVolunteerCategoryHandler: RouteHandler<
+  typeof createVolunteerCategoryRoute,
+  AppBindings
+> = async (c) => {
+  const authResult = getAuthUserId(c);
+  if (!authResult.ok) {
+    return authResult.response as any;
+  }
+
   const data = c.req.valid("json");
-  return handleCreateVolunteerCategory(c, data);
-});
+  const result = await handleCreateVolunteerCategory({
+    ...data,
+    createdBy: authResult.userId,
+  });
+
+  if (!result.ok) {
+    return c.json({ ok: false, error: result.error }, result.status);
+  }
+
+  return c.json({ ok: true, category: result.category }, 201);
+};
+
+postVolunteerRouter.openapi(
+  getVolunteerCategoriesRoute,
+  getVolunteerCategoriesHandler,
+);
+postVolunteerRouter.openapi(
+  createVolunteerCategoryRoute,
+  createVolunteerCategoryHandler,
+);

@@ -10,6 +10,7 @@ import {
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
+import { user } from "../user";
 
 export const volunteerCategoryStatus = pgEnum("volunteer_category_status", [
   "ACTIVE",
@@ -27,8 +28,10 @@ export const volunteerCategory = pgTable(
     iconKey: varchar("icon_key", { length: 100 }),
     displayOrder: integer("display_order").default(0).notNull(),
     status: volunteerCategoryStatus("status").default("ACTIVE").notNull(),
-    createdBy: uuid("created_by").notNull(),
-    updatedBy: uuid("updated_by"),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => user.id),
+    updatedBy: uuid("updated_by").references(() => user.id),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
       .defaultNow()
       .notNull(),
