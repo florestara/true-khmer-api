@@ -1,6 +1,6 @@
-import { eq, sql } from "drizzle-orm";
+import { eq, getTableColumns, sql } from "drizzle-orm";
 import { db } from "../../../db/index";
-import { forumCategory } from "../../../db/schema";
+import { forumCategory, forumQuestion } from "../../../db/schema";
 import {
   FORUM_ADVISORY_LOCK_NAMESPACE,
   FORUM_CATEGORY_DISPLAY_ORDER_LOCK_KEY,
@@ -9,12 +9,32 @@ import type { CreateCategoryInput } from "./categories.schema";
 
 type ForumCategoryRow = typeof forumCategory.$inferSelect;
 type ForumCategoryInsert = typeof forumCategory.$inferInsert;
+type ForumCategoryWithQuestionCountRow = ForumCategoryRow & {
+  questionCount: number;
+};
 
-export async function getCategories(): Promise<ForumCategoryRow[]> {
+export async function getCategories(): Promise<ForumCategoryWithQuestionCountRow[]> {
   return db
-    .select()
+    .select({
+      ...getTableColumns(forumCategory),
+      questionCount: sql<number>`count(${forumQuestion.id})::int`,
+    })
     .from(forumCategory)
+    .leftJoin(forumQuestion, eq(forumCategory.id, forumQuestion.categoryId))
     .where(eq(forumCategory.status, "ACTIVE"))
+    .groupBy(
+      forumCategory.id,
+      forumCategory.name,
+      forumCategory.slug,
+      forumCategory.description,
+      forumCategory.displayOrder,
+      forumCategory.status,
+      forumCategory.createdBy,
+      forumCategory.updatedBy,
+      forumCategory.createdAt,
+      forumCategory.updatedAt,
+      forumCategory.archivedAt,
+    )
     .orderBy(forumCategory.displayOrder);
 }
 

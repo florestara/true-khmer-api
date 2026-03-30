@@ -11,10 +11,16 @@ export const categoryResponseSchema = z
   })
   .openapi("CategoryResponse");
 
+export const categoryWithQuestionCountResponseSchema = categoryResponseSchema
+  .extend({
+    questionCount: z.number(),
+  })
+  .openapi("CategoryWithQuestionCountResponse");
+
 export const getCategoriesResponseSchema = z
   .object({
     ok: z.boolean(),
-    categories: z.array(categoryResponseSchema),
+    categories: z.array(categoryWithQuestionCountResponseSchema),
   })
   .openapi("GetCategoriesResponse");
 
