@@ -1,4 +1,4 @@
-import { eq, getTableColumns, sql } from "drizzle-orm";
+import { eq, getTableColumns, sql, and, isNull } from "drizzle-orm";
 import { db } from "../../../db/index";
 import { forumCategory, forumQuestion } from "../../../db/schema";
 import {
@@ -21,7 +21,11 @@ export async function getCategories(): Promise<ForumCategoryWithQuestionCountRow
     })
     .from(forumCategory)
     .leftJoin(forumQuestion, eq(forumCategory.id, forumQuestion.categoryId))
-    .where(eq(forumCategory.status, "ACTIVE"))
+    .where(and(
+      eq(forumCategory.status, "ACTIVE"),
+      // Using Drizzle's built-in isNull helper is cleaner than raw SQL
+      isNull(forumQuestion.deletedAt)
+    ))
     .groupBy(
       forumCategory.id,
       forumCategory.name,

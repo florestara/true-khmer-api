@@ -15,6 +15,7 @@ import { HonoContext } from "../../../lib/types";
 export async function handleGetCategories(c: Context) {
   try {
     const categories = await getCategories();
+    console.log(categories);
 
     return c.json({ ok: true, categories }, 200);
   } catch (err) {
