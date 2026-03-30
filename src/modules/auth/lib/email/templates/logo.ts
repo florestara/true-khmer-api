@@ -5,3 +5,4 @@ export const otpLogo = 'https://pub-43fcf325b98b4cdda61e323d4b4a26c4.r2.dev/emai
 export const igLogo = 'https://pub-43fcf325b98b4cdda61e323d4b4a26c4.r2.dev/email-template/brand-instagram.png';
 export const threadLogo = 'https://pub-43fcf325b98b4cdda61e323d4b4a26c4.r2.dev/email-template/brand-threads.png';
 export const xLogo = 'https://pub-43fcf325b98b4cdda61e323d4b4a26c4.r2.dev/email-template/brand-x.png';
+export const lockPassword = 'https://pub-43fcf325b98b4cdda61e323d4b4a26c4.r2.dev/email-template/lock-password.png';

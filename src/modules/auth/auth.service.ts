@@ -2,21 +2,35 @@ import { Context } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import {
   getAccessTokenFromRefreshToken,
+  requestPasswordReset,
+  resetPassword,
   requestEmailVerificationOtp,
   signInWithEmailPassword,
   signUpWithEmailPassword,
   verifyRegisterOtp,
 } from "./lib/helper";
-import { findUserByEmail, revokeEmailVerificationOtp } from "./auth.query";
+import {
+  findUserByEmail,
+  revokeEmailVerificationOtp,
+} from "./auth.query";
+import { authConfig } from "./lib/config";
 import {
   type ValidationFailure,
   type ValidationResult,
+  validateForgotPasswordPayload,
   validateLoginPayload,
   validateRefreshPayload,
   validateRegisterPayload,
+  validateResetPasswordPayload,
   validateResendRegisterOtpPayload,
   validateVerifyRegisterOtpPayload,
 } from "./auth.validator";
+
+const genericForgotPasswordResponse = {
+  success: true as const,
+  message:
+    "If this email exists in our system, check your email for the reset link.",
+};
 
 function toStatusCode(
   status: unknown,
@@ -110,6 +124,45 @@ function getAuthErrorCode(body: unknown): string | null {
   }
 
   return null;
+}
+
+function getAuthErrorMessage(body: unknown, fallbackMessage: string): string {
+  if (!body || typeof body !== "object") {
+    return fallbackMessage;
+  }
+
+  const error = (body as Record<string, unknown>).error;
+  if (typeof error === "string" && error.trim()) {
+    return error.trim();
+  }
+
+  const message = (body as Record<string, unknown>).message;
+  if (typeof message === "string" && message.trim()) {
+    return message.trim();
+  }
+
+  return fallbackMessage;
+}
+
+function normalizeResetPageUrl(rawResetPageUrl: string) {
+  let resetPageUrl: URL;
+
+  try {
+    resetPageUrl = new URL(rawResetPageUrl, authConfig.appDomain);
+  } catch {
+    return { ok: false as const, message: "resetPageUrl must be a valid URL" };
+  }
+
+  const allowedOrigins = new Set<string>(authConfig.allowedResetPageOrigins);
+
+  if (!allowedOrigins.has(resetPageUrl.origin)) {
+    return {
+      ok: false as const,
+      message: "resetPageUrl must use an allowed frontend origin",
+    };
+  }
+
+  return { ok: true as const, url: resetPageUrl };
 }
 
 async function buildAuthTokenResponse(
@@ -327,4 +380,64 @@ export async function handleRefresh(c: Context) {
     accessToken: accessTokenResult.token,
     refreshToken: parsed.data.refreshToken,
   });
+}
+
+export async function handleForgotPassword(c: Context) {
+  const parsed = await parseAndValidate(c, validateForgotPasswordPayload);
+  if (!parsed.ok) {
+    return parsed.response;
+  }
+
+  const resetPageUrl = normalizeResetPageUrl(parsed.data.resetPageUrl);
+  if (!resetPageUrl.ok) {
+    return c.json({ error: resetPageUrl.message }, 400);
+  }
+
+  const passwordResetResult = await requestPasswordReset({
+    email: parsed.data.email,
+    resetPageUrl: resetPageUrl.url.toString(),
+  });
+
+  if (!passwordResetResult.ok) {
+    console.error("Password reset request failed", {
+      error: getAuthErrorMessage(
+        passwordResetResult.body,
+        "Failed to request password reset",
+      ),
+      code: getAuthErrorCode(passwordResetResult.body),
+      status: passwordResetResult.status,
+    });
+    return c.json(genericForgotPasswordResponse, 200);
+  }
+
+  return c.json(genericForgotPasswordResponse, 200);
+}
+
+export async function handleResetPassword(c: Context) {
+  const parsed = await parseAndValidate(c, validateResetPasswordPayload);
+  if (!parsed.ok) {
+    return parsed.response;
+  }
+
+  const resetResult = await resetPassword(parsed.data);
+
+  if (!resetResult.ok) {
+    return c.json(
+      {
+        error: getAuthErrorMessage(
+          resetResult.body,
+          "Failed to reset password",
+        ),
+      },
+      400,
+    );
+  }
+
+  return c.json(
+    {
+      success: true,
+      message: "Password reset successful.",
+    },
+    200,
+  );
 }
