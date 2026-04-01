@@ -1,7 +1,6 @@
-import { and, count, desc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, or, sql } from "drizzle-orm";
 import { db } from "../../../db/index";
 import {
-  forumAnswer,
   forumCategory,
   forumQuestion,
   forumQuestionTag,
@@ -119,43 +118,18 @@ function buildQuestionsBaseQuery(viewerId: string) {
       authorFullName: user.name,
       authorAvatarKey: userProfile.avatarKey,
       viewerVoteType: forumQuestionVote.voteType,
-      answerCount: count(forumAnswer.id).as("answerCount"),
+      answerCount: forumQuestion.answerCount,
     })
     .from(forumQuestion)
     .innerJoin(forumCategory, eq(forumCategory.id, forumQuestion.categoryId))
     .innerJoin(user, eq(user.id, forumQuestion.authorId))
     .leftJoin(userProfile, eq(userProfile.userId, user.id))
     .leftJoin(
-      forumAnswer,
-      and(
-        eq(forumAnswer.questionId, forumQuestion.id),
-        isNull(forumAnswer.deletedAt),
-      ),
-    )
-    .leftJoin(
       forumQuestionVote,
       and(
         eq(forumQuestionVote.questionId, forumQuestion.id),
         eq(forumQuestionVote.voterId, viewerId),
       ),
-    )
-    .groupBy(
-      forumQuestion.id,
-      forumQuestion.categoryId,
-      forumQuestion.authorId,
-      forumQuestion.title,
-      forumQuestion.body,
-      forumQuestion.status,
-      forumQuestion.upvoteCount,
-      forumQuestion.downvoteCount,
-      forumQuestion.createdAt,
-      forumQuestion.updatedAt,
-      forumQuestion.deletedAt,
-      forumCategory.name,
-      userProfile.displayName,
-      user.name,
-      userProfile.avatarKey,
-      forumQuestionVote.voteType,
     )
 }
 

@@ -5,6 +5,12 @@ export const questionResponseSchema = z
     id: z.string(),
     title: z.string(),
     body: z.string(),
+    status: z.enum(["PUBLISHED", "CLOSED", "DELETED"]),
+    upvoteCount: z.number(),
+    downvoteCount: z.number(),
+    answerCount: z.number(),
+    score: z.number(),
+    viewerVote: z.enum(["UPVOTE", "DOWNVOTE"]).nullable(),
     category: z.object({
       id: z.string(),
       name: z.string(),
@@ -15,8 +21,8 @@ export const questionResponseSchema = z
       avatarKey: z.string().nullable(),
     }),
     tags: z.array(z.string()),
-    answerCount: z.number(),
     createdAt: z.string(),
+    updatedAt: z.string(),
   })
   .openapi("QuestionResponse");
 

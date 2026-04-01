@@ -7,7 +7,12 @@ export const categoryResponseSchema = z
     slug: z.string(),
     description: z.string().nullable(),
     displayOrder: z.number(),
-    status: z.string(),
+    status: z.enum(["ACTIVE", "ARCHIVED", "HIDDEN"]),
+    createdBy: z.string(),
+    updatedBy: z.string().nullable(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+    archivedAt: z.string().nullable(),
   })
   .openapi("CategoryResponse");
 
