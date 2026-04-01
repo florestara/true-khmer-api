@@ -237,13 +237,6 @@ export async function handleVoteQuestion(
       );
     }
 
-    if (existingQuestion.authorId === authResult.userId) {
-      return c.json(
-        { ok: false, error: "You cannot vote on your own question" },
-        409,
-      );
-    }
-
     const votedQuestion = await setQuestionVote(
       params.questionId,
       authResult.userId,
