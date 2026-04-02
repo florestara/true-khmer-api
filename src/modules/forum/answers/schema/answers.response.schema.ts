@@ -4,11 +4,19 @@ export const answerResponseSchema = z
   .object({
     id: z.string(),
     body: z.string(),
-    authorId: z.string(),
+    author: z.object({
+      id: z.string(),
+      name: z.string(),
+      avatarKey: z.string().nullable(),
+    }),
     upvoteCount: z.number(),
     downvoteCount: z.number(),
     score: z.number(),
     viewerVote: z.enum(["UPVOTE", "DOWNVOTE"]).nullable(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+    status: z.enum(["PUBLISHED", "DELETED"]),
+    questionId: z.string(),
   })
   .openapi("AnswerResponse");
 

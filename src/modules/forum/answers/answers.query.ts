@@ -4,6 +4,8 @@ import {
   forumAnswer,
   forumAnswerVote,
   forumQuestion,
+  user,
+  userProfile,
 } from "../../../db/schema";
 import { FORUM_ADVISORY_LOCK_NAMESPACE } from "../lib/constants";
 import type {
@@ -17,9 +19,21 @@ type ForumQuestionRow = typeof forumQuestion.$inferSelect;
 type ForumAnswerRow = typeof forumAnswer.$inferSelect;
 type ForumAnswerInsert = typeof forumAnswer.$inferInsert;
 type ForumAnswerVoteInsert = typeof forumAnswerVote.$inferInsert;
-type ForumAnswerWithViewerVote = ForumAnswerRow & {
+type AnswerHydrationRow = {
+  answer: ForumAnswerRow;
+  authorDisplayName: string | null;
+  authorFullName: string;
+  authorAvatarKey: string | null;
+  viewerVoteType: string | null;
+};
+type ForumAnswerWithViewerVote = Omit<ForumAnswerRow, "authorId" | "deletedAt"> & {
   score: number;
   viewerVote: AnswerVoteType | null;
+  author: {
+    id: string;
+    name: string;
+    avatarKey: string | null;
+  };
 };
 
 function toInteger(value: unknown, fallback = 0): number {
@@ -27,14 +41,26 @@ function toInteger(value: unknown, fallback = 0): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function resolveAuthorName(row: AnswerHydrationRow): string {
+  const displayName = row.authorDisplayName?.trim();
+  const fullName = row.authorFullName.trim();
+  return displayName && displayName.length > 0 ? displayName : fullName;
+}
+
 function hydrateAnswer(
-  answer: ForumAnswerRow,
-  viewerVote: AnswerVoteType | null,
+  row: AnswerHydrationRow,
 ): ForumAnswerWithViewerVote {
+  const { authorId, deletedAt: _deletedAt, ...answer } = row.answer;
+
   return {
     ...answer,
     score: answer.upvoteCount - answer.downvoteCount,
-    viewerVote,
+    viewerVote: row.viewerVoteType ? (row.viewerVoteType as AnswerVoteType) : null,
+    author: {
+      id: authorId,
+      name: resolveAuthorName(row),
+      avatarKey: row.authorAvatarKey,
+    },
   };
 }
 
@@ -58,6 +84,34 @@ export async function findAnswerById(
   return rows[0] ?? null;
 }
 
+export async function findAnswerWithViewerVoteById(
+  id: string,
+  viewerId: string,
+): Promise<ForumAnswerWithViewerVote | null> {
+  const rows = await db
+    .select({
+      answer: forumAnswer,
+      authorDisplayName: userProfile.displayName,
+      authorFullName: user.name,
+      authorAvatarKey: userProfile.avatarKey,
+      viewerVoteType: forumAnswerVote.voteType,
+    })
+    .from(forumAnswer)
+    .innerJoin(user, eq(user.id, forumAnswer.authorId))
+    .leftJoin(userProfile, eq(userProfile.userId, user.id))
+    .leftJoin(
+      forumAnswerVote,
+      and(
+        eq(forumAnswerVote.answerId, forumAnswer.id),
+        eq(forumAnswerVote.voterId, viewerId),
+      ),
+    )
+    .where(and(eq(forumAnswer.id, id), eq(forumAnswer.status, "PUBLISHED")))
+    .limit(1);
+
+  return rows[0] ? hydrateAnswer(rows[0]) : null;
+}
+
 export async function findAnswersByQuestionId(
   questionId: string,
   viewerId: string,
@@ -65,9 +119,14 @@ export async function findAnswersByQuestionId(
   const rows = await db
     .select({
       answer: forumAnswer,
+      authorDisplayName: userProfile.displayName,
+      authorFullName: user.name,
+      authorAvatarKey: userProfile.avatarKey,
       viewerVoteType: forumAnswerVote.voteType,
     })
     .from(forumAnswer)
+    .innerJoin(user, eq(user.id, forumAnswer.authorId))
+    .leftJoin(userProfile, eq(userProfile.userId, user.id))
     .leftJoin(
       forumAnswerVote,
       and(
@@ -83,19 +142,14 @@ export async function findAnswersByQuestionId(
     )
     .orderBy(desc(forumAnswer.upvoteCount), desc(forumAnswer.createdAt));
 
-  return rows.map((row) =>
-    hydrateAnswer(
-      row.answer,
-      row.viewerVoteType ? (row.viewerVoteType as AnswerVoteType) : null,
-    ),
-  );
+  return rows.map((row) => hydrateAnswer(row));
 }
 
 export async function createAnswer(
   data: CreateAnswerInput,
   authorId: string,
 ): Promise<ForumAnswerWithViewerVote> {
-  return db.transaction(async (tx) => {
+  const newAnswerId = await db.transaction(async (tx) => {
     const answerInsertData: ForumAnswerInsert = {
       questionId: data.questionId,
       authorId,
@@ -118,8 +172,15 @@ export async function createAnswer(
       })
       .where(eq(forumQuestion.id, data.questionId));
 
-    return hydrateAnswer(newAnswer, null);
+    return newAnswer.id;
   });
+
+  const createdAnswer = await findAnswerWithViewerVoteById(newAnswerId, authorId);
+  if (!createdAnswer) {
+    throw new Error("Created answer could not be loaded");
+  }
+
+  return createdAnswer;
 }
 
 export async function updateAnswer(
@@ -140,9 +201,13 @@ export async function updateAnswer(
         eq(forumAnswer.status, "PUBLISHED"),
       ),
     )
-    .returning();
+    .returning({ id: forumAnswer.id });
 
-  return updatedAnswer ? hydrateAnswer(updatedAnswer, null) : null;
+  if (!updatedAnswer) {
+    return null;
+  }
+
+  return findAnswerWithViewerVoteById(updatedAnswer.id, authorId);
 }
 
 export async function softDeleteAnswer(
@@ -187,7 +252,7 @@ export async function setAnswerVote(
   voterId: string,
   voteIntent: VoteIntent,
 ): Promise<ForumAnswerWithViewerVote | null> {
-  return db.transaction(async (tx) => {
+  const updatedAnswerId = await db.transaction(async (tx) => {
     // Serialize vote updates per answer inside the forum advisory-lock namespace.
     await tx.execute(
       sql`select pg_advisory_xact_lock(${FORUM_ADVISORY_LOCK_NAMESPACE}, hashtext(${answerId}))`,
@@ -251,30 +316,23 @@ export async function setAnswerVote(
         updatedAt: sql`now()`,
       })
       .where(eq(forumAnswer.id, answerId))
-      .returning();
+      .returning({ id: forumAnswer.id });
 
     if (!updatedAnswer) {
       return null;
     }
 
-    const [viewerVoteRow] = await tx
-      .select({
-        voteType: forumAnswerVote.voteType,
-      })
-      .from(forumAnswerVote)
-      .where(
-        and(
-          eq(forumAnswerVote.answerId, answerId),
-          eq(forumAnswerVote.voterId, voterId),
-        ),
-      )
-      .limit(1);
-
-    return hydrateAnswer(
-      updatedAnswer,
-      viewerVoteRow?.voteType
-        ? (viewerVoteRow.voteType as AnswerVoteType)
-        : null,
-    );
+    return updatedAnswer.id;
   });
+
+  if (!updatedAnswerId) {
+    return null;
+  }
+
+  const votedAnswer = await findAnswerWithViewerVoteById(updatedAnswerId, voterId);
+  if (!votedAnswer) {
+    throw new Error("Voted answer could not be loaded");
+  }
+
+  return votedAnswer;
 }
