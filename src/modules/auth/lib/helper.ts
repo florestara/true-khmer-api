@@ -57,7 +57,14 @@ async function attachUserProfile<T extends { id: string }>(
     console.error("Failed to fetch user profile:", error);
   }
 
-  return user;
+  return {
+    ...user,
+    profile: {
+      id: user.id,
+      avatarUrl:
+        "https://r2.bongit.net/1765707089130-account-avatar-profile-user-svgrepo-com.svg",
+    },
+  };
 }
 
 export function getAuthBaseUrl() {
