@@ -2,6 +2,7 @@ import type { Context } from "hono";
 import {
   type CreateQuestionInput,
   type EditQuestionInput,
+  type GetTrendingTagsQuery,
   type GetQuestionsQuery,
 
   type QuestionIdParams,
@@ -12,6 +13,7 @@ import {
   findQuestionById,
   findQuestionRowById,
   findQuestions,
+  getTrendingTags,
   setQuestionVote,
   softDeleteQuestion,
   updateQuestion,
@@ -65,6 +67,31 @@ export async function handleGetQuestion(c: Context, params: QuestionIdParams) {
     return c.json({ ok: true, question }, 200);
   } catch (err) {
     console.error("Failed to get question", err);
+    return c.json({ ok: false, error: "Internal server error" }, 500);
+  }
+}
+
+export async function handleGetTrendingTags(
+  c: Context,
+  query: GetTrendingTagsQuery,
+) {
+  const authResult = getAuthUserId(c);
+  if (!authResult.ok) {
+    return authResult.response;
+  }
+
+  try {
+    if (query.categoryId) {
+      const category = await findCategoryById(query.categoryId);
+      if (!category) {
+        return c.json({ ok: false, error: "Category not found" }, 404);
+      }
+    }
+
+    const tags = await getTrendingTags(query);
+    return c.json({ ok: true, tags }, 200);
+  } catch (err) {
+    console.error("Failed to get trending tags", err);
     return c.json({ ok: false, error: "Internal server error" }, 500);
   }
 }
