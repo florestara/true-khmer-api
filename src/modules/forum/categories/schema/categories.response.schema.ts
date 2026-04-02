@@ -7,14 +7,25 @@ export const categoryResponseSchema = z
     slug: z.string(),
     description: z.string().nullable(),
     displayOrder: z.number(),
-    status: z.string(),
+    status: z.enum(["ACTIVE", "ARCHIVED", "HIDDEN"]),
+    createdBy: z.string(),
+    updatedBy: z.string().nullable(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+    archivedAt: z.string().nullable(),
   })
   .openapi("CategoryResponse");
+
+export const categoryWithQuestionCountResponseSchema = categoryResponseSchema
+  .extend({
+    questionCount: z.number(),
+  })
+  .openapi("CategoryWithQuestionCountResponse");
 
 export const getCategoriesResponseSchema = z
   .object({
     ok: z.boolean(),
-    categories: z.array(categoryResponseSchema),
+    categories: z.array(categoryWithQuestionCountResponseSchema),
   })
   .openapi("GetCategoriesResponse");
 

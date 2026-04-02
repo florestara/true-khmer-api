@@ -118,6 +118,7 @@ function buildQuestionsBaseQuery(viewerId: string) {
       authorFullName: user.name,
       authorAvatarKey: userProfile.avatarKey,
       viewerVoteType: forumQuestionVote.voteType,
+      answerCount: forumQuestion.answerCount,
     })
     .from(forumQuestion)
     .innerJoin(forumCategory, eq(forumCategory.id, forumQuestion.categoryId))
@@ -129,7 +130,7 @@ function buildQuestionsBaseQuery(viewerId: string) {
         eq(forumQuestionVote.questionId, forumQuestion.id),
         eq(forumQuestionVote.voterId, viewerId),
       ),
-    );
+    )
 }
 
 function buildQuestionsWhereClause(
