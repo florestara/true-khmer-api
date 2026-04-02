@@ -47,8 +47,11 @@ function resolveAuthorName(row: AnswerHydrationRow): string {
   return displayName && displayName.length > 0 ? displayName : fullName;
 }
 
-function buildAnswersBaseQuery(viewerId: string) {
-  return db
+function buildAnswersBaseQuery(
+  executor: Pick<typeof db, "select">,
+  viewerId: string,
+) {
+  return executor
     .select({
       answer: forumAnswer,
       authorDisplayName: userProfile.displayName,
@@ -109,7 +112,7 @@ export async function findAnswerWithViewerVoteById(
   id: string,
   viewerId: string,
 ): Promise<ForumAnswerWithViewerVote | null> {
-  const rows = await buildAnswersBaseQuery(viewerId)
+  const rows = await buildAnswersBaseQuery(db, viewerId)
     .where(and(eq(forumAnswer.id, id), eq(forumAnswer.status, "PUBLISHED")))
     .limit(1);
 
@@ -120,7 +123,7 @@ export async function findAnswersByQuestionId(
   questionId: string,
   viewerId: string,
 ): Promise<ForumAnswerWithViewerVote[]> {
-  const rows = await buildAnswersBaseQuery(viewerId)
+  const rows = await buildAnswersBaseQuery(db, viewerId)
     .where(
       and(
         eq(forumAnswer.questionId, questionId),
@@ -136,7 +139,7 @@ export async function createAnswer(
   data: CreateAnswerInput,
   authorId: string,
 ): Promise<ForumAnswerWithViewerVote> {
-  const newAnswerId = await db.transaction(async (tx) => {
+  return db.transaction(async (tx) => {
     const answerInsertData: ForumAnswerInsert = {
       questionId: data.questionId,
       authorId,
@@ -159,15 +162,22 @@ export async function createAnswer(
       })
       .where(eq(forumQuestion.id, data.questionId));
 
-    return newAnswer.id;
+    const createdRows = await buildAnswersBaseQuery(tx, authorId)
+      .where(
+        and(
+          eq(forumAnswer.id, newAnswer.id),
+          eq(forumAnswer.status, "PUBLISHED"),
+        ),
+      )
+      .limit(1);
+
+    const createdAnswer = createdRows[0] ? hydrateAnswer(createdRows[0]) : null;
+    if (!createdAnswer) {
+      throw new Error("Created answer could not be loaded");
+    }
+
+    return createdAnswer;
   });
-
-  const createdAnswer = await findAnswerWithViewerVoteById(newAnswerId, authorId);
-  if (!createdAnswer) {
-    throw new Error("Created answer could not be loaded");
-  }
-
-  return createdAnswer;
 }
 
 export async function updateAnswer(
@@ -175,26 +185,37 @@ export async function updateAnswer(
   authorId: string,
   data: UpdateAnswerInput,
 ): Promise<ForumAnswerWithViewerVote | null> {
-  const [updatedAnswer] = await db
-    .update(forumAnswer)
-    .set({
-      body: data.body,
-      updatedAt: sql`now()`,
-    })
-    .where(
-      and(
-        eq(forumAnswer.id, answerId),
-        eq(forumAnswer.authorId, authorId),
-        eq(forumAnswer.status, "PUBLISHED"),
-      ),
-    )
-    .returning({ id: forumAnswer.id });
+  return db.transaction(async (tx) => {
+    const [updatedAnswer] = await tx
+      .update(forumAnswer)
+      .set({
+        body: data.body,
+        updatedAt: sql`now()`,
+      })
+      .where(
+        and(
+          eq(forumAnswer.id, answerId),
+          eq(forumAnswer.authorId, authorId),
+          eq(forumAnswer.status, "PUBLISHED"),
+        ),
+      )
+      .returning({ id: forumAnswer.id });
 
-  if (!updatedAnswer) {
-    return null;
-  }
+    if (!updatedAnswer) {
+      return null;
+    }
 
-  return findAnswerWithViewerVoteById(updatedAnswer.id, authorId);
+    const updatedRows = await buildAnswersBaseQuery(tx, authorId)
+      .where(
+        and(
+          eq(forumAnswer.id, updatedAnswer.id),
+          eq(forumAnswer.status, "PUBLISHED"),
+        ),
+      )
+      .limit(1);
+
+    return updatedRows[0] ? hydrateAnswer(updatedRows[0]) : null;
+  });
 }
 
 export async function softDeleteAnswer(
@@ -239,7 +260,7 @@ export async function setAnswerVote(
   voterId: string,
   voteIntent: VoteIntent,
 ): Promise<ForumAnswerWithViewerVote | null> {
-  const updatedAnswerId = await db.transaction(async (tx) => {
+  return db.transaction(async (tx) => {
     // Serialize vote updates per answer inside the forum advisory-lock namespace.
     await tx.execute(
       sql`select pg_advisory_xact_lock(${FORUM_ADVISORY_LOCK_NAMESPACE}, hashtext(${answerId}))`,
@@ -309,17 +330,15 @@ export async function setAnswerVote(
       return null;
     }
 
-    return updatedAnswer.id;
+    const votedRows = await buildAnswersBaseQuery(tx, voterId)
+      .where(
+        and(
+          eq(forumAnswer.id, updatedAnswer.id),
+          eq(forumAnswer.status, "PUBLISHED"),
+        ),
+      )
+      .limit(1);
+
+    return votedRows[0] ? hydrateAnswer(votedRows[0]) : null;
   });
-
-  if (!updatedAnswerId) {
-    return null;
-  }
-
-  const votedAnswer = await findAnswerWithViewerVoteById(updatedAnswerId, voterId);
-  if (!votedAnswer) {
-    throw new Error("Voted answer could not be loaded");
-  }
-
-  return votedAnswer;
 }
