@@ -10,8 +10,7 @@ const MAX_TAG_LENGTH = 30;
 const MAX_BODY_LENGTH = 10000;
 const MAX_QUESTIONS_PAGE_SIZE = 50;
 const DEFAULT_QUESTIONS_PAGE_SIZE = 10;
-
-function normalizeTagText(value: string): string {
+function normalizeTagText(value: string) {
   return value.trim().replace(/\s+/g, " ");
 }
 
@@ -219,6 +218,11 @@ export const getQuestionsQuerySchema = z
       .trim()
       .regex(FORUM_UUID_RE, "categoryId must be a valid UUID")
       .optional(),
+    tagId: z
+      .string()
+      .trim()
+      .regex(FORUM_UUID_RE, "tagId must be a valid UUID")
+      .optional(),
     limit: z.coerce
       .number()
       .int()
@@ -247,12 +251,28 @@ export const getQuestionsQuerySchema = z
   })
   .transform((value) => ({
     categoryId: value.categoryId,
+    tagId: value.tagId,
     limit: value.limit,
     cursor: value.cursor,
   }))
   .openapi("GetQuestionsQuery");
 
 export type GetQuestionsQuery = z.infer<typeof getQuestionsQuerySchema>;
+
+export const getTrendingTagsQuerySchema = z
+  .object({
+    categoryId: z
+      .string()
+      .trim()
+      .regex(FORUM_UUID_RE, "categoryId must be a valid UUID")
+      .optional(),
+  })
+  .transform((value) => ({
+    categoryId: value.categoryId,
+  }))
+  .openapi("GetTrendingTagsQuery");
+
+export type GetTrendingTagsQuery = z.infer<typeof getTrendingTagsQuerySchema>;
 
 export const createQuestionSchema = z
   .object({

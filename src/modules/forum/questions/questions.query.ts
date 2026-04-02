@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lt, or, sql } from "drizzle-orm";
 import { db } from "../../../db/index";
 import {
   forumCategory,
@@ -14,6 +14,7 @@ import {
   encodeQuestionsPageCursor,
   type CreateQuestionInput,
   type EditQuestionInput,
+  type GetTrendingTagsQuery,
   type GetQuestionsQuery,
   type QuestionVoteType,
   type QuestionsPageCursor,
@@ -26,6 +27,10 @@ type ForumQuestionInsert = typeof forumQuestion.$inferInsert;
 type ForumQuestionTagInsert = typeof forumQuestionTag.$inferInsert;
 type ForumQuestionVoteInsert = typeof forumQuestionVote.$inferInsert;
 type ForumTagInsert = typeof forumTag.$inferInsert;
+type QuestionTag = {
+  id: string;
+  name: string;
+};
 type QuestionHydrationRow = {
   question: ForumQuestionRow;
   categoryName: string;
@@ -49,7 +54,7 @@ type ForumQuestionWithTags = Omit<
     name: string;
     avatarKey: string | null;
   };
-  tags: string[];
+  tags: QuestionTag[];
 };
 type QuestionsPagination = {
   limit: number;
@@ -61,8 +66,15 @@ type QuestionsListResult = {
   questions: ForumQuestionWithTags[];
   pagination: QuestionsPagination;
 };
+type TrendingTagResult = {
+  id: string;
+  name: string;
+  count: number;
+};
 
-const VISIBLE_QUESTION_STATUSES = ["PUBLISHED", "CLOSED"] as const;
+const VISIBLE_QUESTION_STATUSES = ["PUBLISHED", "CLOSED"] as const; 
+const MIN_TRENDING_TAG_COUNT = 10;
+const MAX_TRENDING_TAG_AMOUNT = 10;
 
 function normalizeTagName(value: string): string {
   return value.trim().replace(/\s+/g, " ").toLowerCase();
@@ -81,7 +93,7 @@ function resolveAuthorName(row: QuestionHydrationRow): string {
 
 function hydrateQuestion(
   row: QuestionHydrationRow,
-  tags: string[],
+  tags: QuestionTag[],
 ): ForumQuestionWithTags {
   const {
     categoryId,
@@ -135,6 +147,7 @@ function buildQuestionsBaseQuery(viewerId: string) {
 
 function buildQuestionsWhereClause(
   categoryId?: string,
+  tagId?: string,
   cursor?: QuestionsPageCursor,
 ) {
 
@@ -142,6 +155,17 @@ function buildQuestionsWhereClause(
 
   if (categoryId) {
     filters.push(eq(forumQuestion.categoryId, categoryId));
+  }
+
+  if (tagId) {
+    filters.push(
+      sql`exists (
+        select 1
+        from ${forumQuestionTag}
+        where ${forumQuestionTag.questionId} = ${forumQuestion.id}
+          and ${forumQuestionTag.tagId} = ${tagId}
+      )`,
+    );
   }
 
   if (cursor) {
@@ -179,22 +203,23 @@ async function attachTagsToQuestions(
   const tagRows = await db
     .select({
       questionId: forumQuestionTag.questionId,
+      tagId: forumTag.id,
       tagName: forumTag.name,
     })
     .from(forumQuestionTag)
     .innerJoin(forumTag, eq(forumTag.id, forumQuestionTag.tagId))
     .where(inArray(forumQuestionTag.questionId, questionIds));
 
-  const tagsByQuestionId = new Map<string, string[]>();
+  const tagsByQuestionId = new Map<string, QuestionTag[]>();
   for (const row of tagRows) {
     const current = tagsByQuestionId.get(row.questionId);
     if (!current) {
-      tagsByQuestionId.set(row.questionId, [row.tagName]);
+      tagsByQuestionId.set(row.questionId, [{ id: row.tagId, name: row.tagName }]);
       continue;
     }
 
-    if (!current.includes(row.tagName)) {
-      current.push(row.tagName);
+    if (!current.some((tag) => tag.id === row.tagId)) {
+      current.push({ id: row.tagId, name: row.tagName });
     }
   }
 
@@ -225,6 +250,7 @@ export async function findQuestionById(
       authorFullName: user.name,
       authorAvatarKey: userProfile.avatarKey,
       viewerVoteType: forumQuestionVote.voteType,
+      tagId: forumTag.id,
       tagName: forumTag.name,
     })
     .from(forumQuestion)
@@ -263,23 +289,24 @@ export async function findQuestionById(
     viewerVoteType: rows[0].viewerVoteType,
   };
   const tags = Array.from(
-    new Set(
+    new Map(
       rows
-        .map((row) => row.tagName)
         .filter(
-          (tag): tag is string => typeof tag === "string" && tag.length > 0,
-        ),
-    ),
+          (row): row is typeof row & { tagId: string; tagName: string } =>
+            typeof row.tagId === "string" && typeof row.tagName === "string",
+        )
+        .map((row) => [row.tagId, { id: row.tagId, name: row.tagName }]),
+    ).values(),
   );
 
   return hydrateQuestion(questionRow, tags);
 }
 
 export async function findQuestions(
-  { categoryId, limit, cursor }: GetQuestionsQuery,
+  { categoryId, tagId, limit, cursor }: GetQuestionsQuery,
   viewerId: string,
 ): Promise<QuestionsListResult> {
-  const whereClause = buildQuestionsWhereClause(categoryId, cursor);
+  const whereClause = buildQuestionsWhereClause(categoryId, tagId, cursor);
   const baseQuery = buildQuestionsBaseQuery(viewerId)
     .where(whereClause)
     .orderBy(desc(forumQuestion.createdAt), desc(forumQuestion.id));
@@ -304,6 +331,32 @@ export async function findQuestions(
           : null,
     },
   };
+}
+
+export async function getTrendingTags({
+  categoryId,
+}: GetTrendingTagsQuery): Promise<TrendingTagResult[]> {
+  const tagCount = sql<number>`count(${forumQuestionTag.tagId})`;
+  const filters = [inArray(forumQuestion.status, VISIBLE_QUESTION_STATUSES)];
+
+  if (categoryId) {
+    filters.push(eq(forumQuestion.categoryId, categoryId));
+  }
+
+  return db
+    .select({
+      id: forumTag.id,
+      name: forumTag.name,
+      count: tagCount.mapWith(Number),
+    })
+    .from(forumTag)
+    .innerJoin(forumQuestionTag, eq(forumTag.id, forumQuestionTag.tagId))
+    .innerJoin(forumQuestion, eq(forumQuestion.id, forumQuestionTag.questionId))
+    .where(and(...filters))
+    .groupBy(forumTag.id, forumTag.name)
+    .having(gte(tagCount, MIN_TRENDING_TAG_COUNT))
+    .orderBy(desc(tagCount), forumTag.name)
+    .limit(MAX_TRENDING_TAG_AMOUNT);
 }
 
 export async function createQuestion(
