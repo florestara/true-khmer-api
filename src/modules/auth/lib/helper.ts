@@ -7,6 +7,7 @@ import {
   AuthResetPasswordPayload,
   AuthVerifyRegisterOtpPayload,
 } from "../auth.schema";
+import { findUserProfileByUserId } from "../auth.query";
 
 const AUTH_PREFIX = "/api/auth";
 
@@ -24,7 +25,35 @@ type UserLike = {
   image?: string | null;
   createdAt: string;
   updatedAt: string;
+  avatar?: {
+    id: string;
+    displayName?: string;
+    avatarKey?: string;
+    avatarUrl?: string;
+  };
 };
+
+async function attachUserAvatar<T extends { id: string }>(
+  user: T,
+): Promise<T & { avatar?: UserLike["avatar"] }> {
+  try {
+    const profile = await findUserProfileByUserId(user.id);
+    if (profile) {
+      return {
+        ...user,
+        avatar: {
+          id: profile.id,
+          displayName: profile.displayName ?? undefined,
+          avatarKey: profile.avatarKey ?? undefined,
+          avatarUrl: profile.avatarUrl ?? undefined,
+        },
+      };
+    }
+  } catch (error) {
+    console.error("Failed to fetch user profile:", error);
+  }
+  return { ...user, avatar: undefined };
+}
 
 export function getAuthBaseUrl() {
   const baseUrl = process.env.BETTER_AUTH_URL;
@@ -128,11 +157,13 @@ export async function signUpWithEmailPassword(payload: AuthRegisterPayload) {
     } as const;
   }
 
+  const enrichedUser = await attachUserAvatar(user);
+
   return {
     ok: true,
     body: {
       token: token ?? null,
-      user,
+      user: enrichedUser,
     },
   } as const;
 }
@@ -203,11 +234,13 @@ export async function verifyRegisterOtp(payload: AuthVerifyRegisterOtpPayload) {
     } as const;
   }
 
+  const enrichedUser = await attachUserAvatar(user as UserLike);
+
   return {
     ok: true,
     body: {
       token,
-      user: user as UserLike,
+      user: enrichedUser,
     },
   } as const;
 }
@@ -244,11 +277,13 @@ export async function signInWithEmailPassword(payload: AuthLoginPayload) {
     } as const;
   }
 
+  const enrichedUser = await attachUserAvatar(user as UserLike);
+
   return {
     ok: true,
     body: {
       token,
-      user: user as UserLike,
+      user: enrichedUser,
     },
   } as const;
 }

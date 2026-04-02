@@ -1,11 +1,21 @@
 import { z } from "zod";
 
+export const authUserProfileSchema = z
+  .object({
+    id: z.string(),
+    displayName: z.string().optional(),
+    avatarKey: z.string().optional(),
+    avatarUrl: z.string().optional(),
+  })
+  .openapi("AuthUserProfile");
+
 export const authUserSchema = z
   .object({
     id: z.string(),
     email: z.string().email(),
     emailVerified: z.boolean().optional(),
     name: z.string().optional(),
+    avatar: authUserProfileSchema.optional(),
   })
   .openapi("AuthUser");
 
