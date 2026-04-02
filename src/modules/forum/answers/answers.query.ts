@@ -4,6 +4,8 @@ import {
   forumAnswer,
   forumAnswerVote,
   forumQuestion,
+  user,
+  userProfile,
 } from "../../../db/schema";
 import { FORUM_ADVISORY_LOCK_NAMESPACE } from "../lib/constants";
 import type {
@@ -17,9 +19,21 @@ type ForumQuestionRow = typeof forumQuestion.$inferSelect;
 type ForumAnswerRow = typeof forumAnswer.$inferSelect;
 type ForumAnswerInsert = typeof forumAnswer.$inferInsert;
 type ForumAnswerVoteInsert = typeof forumAnswerVote.$inferInsert;
-type ForumAnswerWithViewerVote = ForumAnswerRow & {
+type AnswerHydrationRow = {
+  answer: ForumAnswerRow;
+  authorDisplayName: string | null;
+  authorFullName: string;
+  authorAvatarKey: string | null;
+  viewerVoteType: string | null;
+};
+type ForumAnswerWithViewerVote = Omit<ForumAnswerRow, "authorId" | "deletedAt"> & {
   score: number;
   viewerVote: AnswerVoteType | null;
+  author: {
+    id: string;
+    name: string;
+    avatarKey: string | null;
+  };
 };
 
 function toInteger(value: unknown, fallback = 0): number {
@@ -27,14 +41,50 @@ function toInteger(value: unknown, fallback = 0): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function resolveAuthorName(row: AnswerHydrationRow): string {
+  const displayName = row.authorDisplayName?.trim();
+  const fullName = row.authorFullName.trim();
+  return displayName && displayName.length > 0 ? displayName : fullName;
+}
+
+function buildAnswersBaseQuery(
+  executor: Pick<typeof db, "select">,
+  viewerId: string,
+) {
+  return executor
+    .select({
+      answer: forumAnswer,
+      authorDisplayName: userProfile.displayName,
+      authorFullName: user.name,
+      authorAvatarKey: userProfile.avatarKey,
+      viewerVoteType: forumAnswerVote.voteType,
+    })
+    .from(forumAnswer)
+    .innerJoin(user, eq(user.id, forumAnswer.authorId))
+    .leftJoin(userProfile, eq(userProfile.userId, user.id))
+    .leftJoin(
+      forumAnswerVote,
+      and(
+        eq(forumAnswerVote.answerId, forumAnswer.id),
+        eq(forumAnswerVote.voterId, viewerId),
+      ),
+    );
+}
+
 function hydrateAnswer(
-  answer: ForumAnswerRow,
-  viewerVote: AnswerVoteType | null,
+  row: AnswerHydrationRow,
 ): ForumAnswerWithViewerVote {
+  const { authorId, deletedAt: _deletedAt, ...answer } = row.answer;
+
   return {
     ...answer,
     score: answer.upvoteCount - answer.downvoteCount,
-    viewerVote,
+    viewerVote: row.viewerVoteType ? (row.viewerVoteType as AnswerVoteType) : null,
+    author: {
+      id: authorId,
+      name: resolveAuthorName(row),
+      avatarKey: row.authorAvatarKey,
+    },
   };
 }
 
@@ -58,23 +108,22 @@ export async function findAnswerById(
   return rows[0] ?? null;
 }
 
+export async function findAnswerWithViewerVoteById(
+  id: string,
+  viewerId: string,
+): Promise<ForumAnswerWithViewerVote | null> {
+  const rows = await buildAnswersBaseQuery(db, viewerId)
+    .where(and(eq(forumAnswer.id, id), eq(forumAnswer.status, "PUBLISHED")))
+    .limit(1);
+
+  return rows[0] ? hydrateAnswer(rows[0]) : null;
+}
+
 export async function findAnswersByQuestionId(
   questionId: string,
   viewerId: string,
 ): Promise<ForumAnswerWithViewerVote[]> {
-  const rows = await db
-    .select({
-      answer: forumAnswer,
-      viewerVoteType: forumAnswerVote.voteType,
-    })
-    .from(forumAnswer)
-    .leftJoin(
-      forumAnswerVote,
-      and(
-        eq(forumAnswerVote.answerId, forumAnswer.id),
-        eq(forumAnswerVote.voterId, viewerId),
-      ),
-    )
+  const rows = await buildAnswersBaseQuery(db, viewerId)
     .where(
       and(
         eq(forumAnswer.questionId, questionId),
@@ -83,12 +132,7 @@ export async function findAnswersByQuestionId(
     )
     .orderBy(desc(forumAnswer.upvoteCount), desc(forumAnswer.createdAt));
 
-  return rows.map((row) =>
-    hydrateAnswer(
-      row.answer,
-      row.viewerVoteType ? (row.viewerVoteType as AnswerVoteType) : null,
-    ),
-  );
+  return rows.map((row) => hydrateAnswer(row));
 }
 
 export async function createAnswer(
@@ -118,7 +162,21 @@ export async function createAnswer(
       })
       .where(eq(forumQuestion.id, data.questionId));
 
-    return hydrateAnswer(newAnswer, null);
+    const createdRows = await buildAnswersBaseQuery(tx, authorId)
+      .where(
+        and(
+          eq(forumAnswer.id, newAnswer.id),
+          eq(forumAnswer.status, "PUBLISHED"),
+        ),
+      )
+      .limit(1);
+
+    const createdAnswer = createdRows[0] ? hydrateAnswer(createdRows[0]) : null;
+    if (!createdAnswer) {
+      throw new Error("Created answer could not be loaded");
+    }
+
+    return createdAnswer;
   });
 }
 
@@ -127,22 +185,37 @@ export async function updateAnswer(
   authorId: string,
   data: UpdateAnswerInput,
 ): Promise<ForumAnswerWithViewerVote | null> {
-  const [updatedAnswer] = await db
-    .update(forumAnswer)
-    .set({
-      body: data.body,
-      updatedAt: sql`now()`,
-    })
-    .where(
-      and(
-        eq(forumAnswer.id, answerId),
-        eq(forumAnswer.authorId, authorId),
-        eq(forumAnswer.status, "PUBLISHED"),
-      ),
-    )
-    .returning();
+  return db.transaction(async (tx) => {
+    const [updatedAnswer] = await tx
+      .update(forumAnswer)
+      .set({
+        body: data.body,
+        updatedAt: sql`now()`,
+      })
+      .where(
+        and(
+          eq(forumAnswer.id, answerId),
+          eq(forumAnswer.authorId, authorId),
+          eq(forumAnswer.status, "PUBLISHED"),
+        ),
+      )
+      .returning({ id: forumAnswer.id });
 
-  return updatedAnswer ? hydrateAnswer(updatedAnswer, null) : null;
+    if (!updatedAnswer) {
+      return null;
+    }
+
+    const updatedRows = await buildAnswersBaseQuery(tx, authorId)
+      .where(
+        and(
+          eq(forumAnswer.id, updatedAnswer.id),
+          eq(forumAnswer.status, "PUBLISHED"),
+        ),
+      )
+      .limit(1);
+
+    return updatedRows[0] ? hydrateAnswer(updatedRows[0]) : null;
+  });
 }
 
 export async function softDeleteAnswer(
@@ -251,30 +324,21 @@ export async function setAnswerVote(
         updatedAt: sql`now()`,
       })
       .where(eq(forumAnswer.id, answerId))
-      .returning();
+      .returning({ id: forumAnswer.id });
 
     if (!updatedAnswer) {
       return null;
     }
 
-    const [viewerVoteRow] = await tx
-      .select({
-        voteType: forumAnswerVote.voteType,
-      })
-      .from(forumAnswerVote)
+    const votedRows = await buildAnswersBaseQuery(tx, voterId)
       .where(
         and(
-          eq(forumAnswerVote.answerId, answerId),
-          eq(forumAnswerVote.voterId, voterId),
+          eq(forumAnswer.id, updatedAnswer.id),
+          eq(forumAnswer.status, "PUBLISHED"),
         ),
       )
       .limit(1);
 
-    return hydrateAnswer(
-      updatedAnswer,
-      viewerVoteRow?.voteType
-        ? (viewerVoteRow.voteType as AnswerVoteType)
-        : null,
-    );
+    return votedRows[0] ? hydrateAnswer(votedRows[0]) : null;
   });
 }
