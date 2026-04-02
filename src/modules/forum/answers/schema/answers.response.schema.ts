@@ -15,7 +15,6 @@ export const answerResponseSchema = z
     viewerVote: z.enum(["UPVOTE", "DOWNVOTE"]).nullable(),
     createdAt: z.string(),
     updatedAt: z.string(),
-    status: z.enum(["PUBLISHED", "DELETED"]),
     questionId: z.string(),
   })
   .openapi("AnswerResponse");

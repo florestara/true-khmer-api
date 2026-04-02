@@ -47,6 +47,27 @@ function resolveAuthorName(row: AnswerHydrationRow): string {
   return displayName && displayName.length > 0 ? displayName : fullName;
 }
 
+function buildAnswersBaseQuery(viewerId: string) {
+  return db
+    .select({
+      answer: forumAnswer,
+      authorDisplayName: userProfile.displayName,
+      authorFullName: user.name,
+      authorAvatarKey: userProfile.avatarKey,
+      viewerVoteType: forumAnswerVote.voteType,
+    })
+    .from(forumAnswer)
+    .innerJoin(user, eq(user.id, forumAnswer.authorId))
+    .leftJoin(userProfile, eq(userProfile.userId, user.id))
+    .leftJoin(
+      forumAnswerVote,
+      and(
+        eq(forumAnswerVote.answerId, forumAnswer.id),
+        eq(forumAnswerVote.voterId, viewerId),
+      ),
+    );
+}
+
 function hydrateAnswer(
   row: AnswerHydrationRow,
 ): ForumAnswerWithViewerVote {
@@ -88,24 +109,7 @@ export async function findAnswerWithViewerVoteById(
   id: string,
   viewerId: string,
 ): Promise<ForumAnswerWithViewerVote | null> {
-  const rows = await db
-    .select({
-      answer: forumAnswer,
-      authorDisplayName: userProfile.displayName,
-      authorFullName: user.name,
-      authorAvatarKey: userProfile.avatarKey,
-      viewerVoteType: forumAnswerVote.voteType,
-    })
-    .from(forumAnswer)
-    .innerJoin(user, eq(user.id, forumAnswer.authorId))
-    .leftJoin(userProfile, eq(userProfile.userId, user.id))
-    .leftJoin(
-      forumAnswerVote,
-      and(
-        eq(forumAnswerVote.answerId, forumAnswer.id),
-        eq(forumAnswerVote.voterId, viewerId),
-      ),
-    )
+  const rows = await buildAnswersBaseQuery(viewerId)
     .where(and(eq(forumAnswer.id, id), eq(forumAnswer.status, "PUBLISHED")))
     .limit(1);
 
@@ -116,24 +120,7 @@ export async function findAnswersByQuestionId(
   questionId: string,
   viewerId: string,
 ): Promise<ForumAnswerWithViewerVote[]> {
-  const rows = await db
-    .select({
-      answer: forumAnswer,
-      authorDisplayName: userProfile.displayName,
-      authorFullName: user.name,
-      authorAvatarKey: userProfile.avatarKey,
-      viewerVoteType: forumAnswerVote.voteType,
-    })
-    .from(forumAnswer)
-    .innerJoin(user, eq(user.id, forumAnswer.authorId))
-    .leftJoin(userProfile, eq(userProfile.userId, user.id))
-    .leftJoin(
-      forumAnswerVote,
-      and(
-        eq(forumAnswerVote.answerId, forumAnswer.id),
-        eq(forumAnswerVote.voterId, viewerId),
-      ),
-    )
+  const rows = await buildAnswersBaseQuery(viewerId)
     .where(
       and(
         eq(forumAnswer.questionId, questionId),
