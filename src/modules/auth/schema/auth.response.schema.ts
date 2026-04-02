@@ -15,7 +15,7 @@ export const authUserSchema = z
     email: z.string().email(),
     emailVerified: z.boolean().optional(),
     name: z.string().optional(),
-    avatar: authUserProfileSchema.optional(),
+    profile: authUserProfileSchema.optional(),
   })
   .openapi("AuthUser");
 

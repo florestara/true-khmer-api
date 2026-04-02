@@ -25,7 +25,7 @@ type UserLike = {
   image?: string | null;
   createdAt: string;
   updatedAt: string;
-  avatar?: {
+  profile?: {
     id: string;
     displayName?: string;
     avatarKey?: string;
@@ -33,26 +33,31 @@ type UserLike = {
   };
 };
 
-async function attachUserAvatar<T extends { id: string }>(
+async function attachUserProfile<T extends { id: string }>(
   user: T,
-): Promise<T & { avatar?: UserLike["avatar"] }> {
+): Promise<T & { profile?: UserLike["profile"] }> {
+  if (typeof user.id !== "string" || !user.id.trim()) {
+    return user;
+  }
+
   try {
-    const profile = await findUserProfileByUserId(user.id);
-    if (profile) {
+    const userProfile = await findUserProfileByUserId(user.id);
+    if (userProfile) {
       return {
         ...user,
-        avatar: {
-          id: profile.id,
-          displayName: profile.displayName ?? undefined,
-          avatarKey: profile.avatarKey ?? undefined,
-          avatarUrl: profile.avatarUrl ?? undefined,
+        profile: {
+          id: userProfile.id,
+          displayName: userProfile.displayName ?? undefined,
+          avatarKey: userProfile.avatarKey ?? undefined,
+          avatarUrl: userProfile.avatarUrl ?? undefined,
         },
       };
     }
   } catch (error) {
     console.error("Failed to fetch user profile:", error);
   }
-  return { ...user, avatar: undefined };
+
+  return user;
 }
 
 export function getAuthBaseUrl() {
@@ -157,7 +162,7 @@ export async function signUpWithEmailPassword(payload: AuthRegisterPayload) {
     } as const;
   }
 
-  const enrichedUser = await attachUserAvatar(user);
+  const enrichedUser = await attachUserProfile(user);
 
   return {
     ok: true,
@@ -234,7 +239,7 @@ export async function verifyRegisterOtp(payload: AuthVerifyRegisterOtpPayload) {
     } as const;
   }
 
-  const enrichedUser = await attachUserAvatar(user as UserLike);
+  const enrichedUser = await attachUserProfile(user as UserLike);
 
   return {
     ok: true,
@@ -277,7 +282,7 @@ export async function signInWithEmailPassword(payload: AuthLoginPayload) {
     } as const;
   }
 
-  const enrichedUser = await attachUserAvatar(user as UserLike);
+  const enrichedUser = await attachUserProfile(user as UserLike);
 
   return {
     ok: true,
