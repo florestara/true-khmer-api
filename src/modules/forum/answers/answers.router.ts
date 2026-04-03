@@ -155,18 +155,18 @@ const voteAnswerRoute = createRoute({
 
 answersRouter.openapi(getAnswersRoute, async (c) => {
   const params = c.req.valid("param");
-  return (await handleGetAnswers(c, params)) as any;
+  return handleGetAnswers(c, params) as any;
 });
 
 answersRouter.openapi(createAnswerRoute, async (c) => {
   const data = c.req.valid("json");
-  return (await handleCreateAnswer(c, data)) as any;
+  return handleCreateAnswer(c, data) as any;
 });
 
 answersRouter.openapi(editAnswerRoute, async (c) => {
   const params = c.req.valid("param");
   const data = c.req.valid("json");
-  return (await handleEditAnswer(c, params, data)) as any;
+  return handleEditAnswer(c, params, data) as any;
 });
 
 answersRouter.openapi(deleteAnswerRoute, async (c) => {

@@ -1,4 +1,4 @@
-import type { Context, TypedResponse } from "hono";
+import type { Context } from "hono";
 import type {
   AnswerIdParams,
   CreateAnswerInput,
@@ -10,6 +10,7 @@ import {
   createAnswer,
   findAnswerById,
   findAnswersByQuestionId,
+  findAnswersByQuestionIdPublic,
   findQuestionById,
   setAnswerVote,
   softDeleteAnswer,
@@ -18,10 +19,18 @@ import {
 import { POSTGRES_FOREIGN_KEY_VIOLATION } from "../lib/constants";
 import { getAuthUserId } from "../../../modules/auth/utils/get-auth";
 
-export async function handleGetAnswers(c: Context, params: QuestionIdParams) {
-  const authResult = getAuthUserId(c);
-  if (!authResult.ok) {
-    return authResult.response;
+export async function handleGetAnswers(
+  c: Context,
+  params: QuestionIdParams,
+  isPublic = false,
+) {
+  let userId: string | undefined;
+  if (!isPublic) {
+    const authResult = getAuthUserId(c);
+    if (!authResult.ok) {
+      return authResult.response;
+    }
+    userId = authResult.userId;
   }
 
   try {
@@ -30,10 +39,9 @@ export async function handleGetAnswers(c: Context, params: QuestionIdParams) {
       return c.json({ ok: false, error: "Question not found" }, 404);
     }
 
-    const answers = await findAnswersByQuestionId(
-      params.questionId,
-      authResult.userId,
-    );
+    const answers = isPublic
+      ? await findAnswersByQuestionIdPublic(params.questionId)
+      : await findAnswersByQuestionId(params.questionId, userId as string);
     return c.json({ ok: true, answers }, 200);
   } catch (err) {
     console.error("Failed to get answers", err);

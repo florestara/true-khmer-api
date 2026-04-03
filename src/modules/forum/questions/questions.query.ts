@@ -39,6 +39,7 @@ type QuestionHydrationRow = {
   authorAvatarKey: string | null;
   viewerVoteType: string | null;
 };
+type PublicQuestionHydrationRow = Omit<QuestionHydrationRow, "viewerVoteType">;
 type ForumQuestionWithTags = Omit<
   ForumQuestionRow,
   "categoryId" | "authorId" | "deletedAt"
@@ -72,7 +73,7 @@ type TrendingTagResult = {
   count: number;
 };
 
-const VISIBLE_QUESTION_STATUSES = ["PUBLISHED", "CLOSED"] as const; 
+const VISIBLE_QUESTION_STATUSES = ["PUBLISHED", "CLOSED"] as const;
 const MIN_TRENDING_TAG_COUNT = 10;
 const MAX_TRENDING_TAG_AMOUNT = 10;
 
@@ -121,6 +122,19 @@ function hydrateQuestion(
   };
 }
 
+function hydratePublicQuestion(
+  row: PublicQuestionHydrationRow,
+  tags: QuestionTag[],
+): ForumQuestionWithTags {
+  return hydrateQuestion(
+    {
+      ...row,
+      viewerVoteType: null,
+    },
+    tags,
+  );
+}
+
 function buildQuestionsBaseQuery(viewerId: string) {
   return db
     .select({
@@ -143,6 +157,22 @@ function buildQuestionsBaseQuery(viewerId: string) {
         eq(forumQuestionVote.voterId, viewerId),
       ),
     )
+}
+
+function buildPublicQuestionsBaseQuery() {
+  return db
+    .select({
+      question: forumQuestion,
+      categoryName: forumCategory.name,
+      authorDisplayName: userProfile.displayName,
+      authorFullName: user.name,
+      authorAvatarKey: userProfile.avatarKey,
+      answerCount: forumQuestion.answerCount,
+    })
+    .from(forumQuestion)
+    .innerJoin(forumCategory, eq(forumCategory.id, forumQuestion.categoryId))
+    .innerJoin(user, eq(user.id, forumQuestion.authorId))
+    .leftJoin(userProfile, eq(userProfile.userId, user.id));
 }
 
 function buildQuestionsWhereClause(
@@ -302,6 +332,60 @@ export async function findQuestionById(
   return hydrateQuestion(questionRow, tags);
 }
 
+export async function findQuestionByIdPublic(
+  id: string,
+): Promise<ForumQuestionWithTags | null> {
+  const rows = await db
+    .select({
+      question: forumQuestion,
+      categoryName: forumCategory.name,
+      authorDisplayName: userProfile.displayName,
+      authorFullName: user.name,
+      authorAvatarKey: userProfile.avatarKey,
+      tagId: forumTag.id,
+      tagName: forumTag.name,
+    })
+    .from(forumQuestion)
+    .innerJoin(forumCategory, eq(forumCategory.id, forumQuestion.categoryId))
+    .innerJoin(user, eq(user.id, forumQuestion.authorId))
+    .leftJoin(userProfile, eq(userProfile.userId, user.id))
+    .leftJoin(
+      forumQuestionTag,
+      eq(forumQuestionTag.questionId, forumQuestion.id),
+    )
+    .leftJoin(forumTag, eq(forumTag.id, forumQuestionTag.tagId))
+    .where(
+      and(
+        eq(forumQuestion.id, id),
+        inArray(forumQuestion.status, VISIBLE_QUESTION_STATUSES),
+      ),
+    );
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  const questionRow: PublicQuestionHydrationRow = {
+    question: rows[0].question,
+    categoryName: rows[0].categoryName,
+    authorDisplayName: rows[0].authorDisplayName,
+    authorFullName: rows[0].authorFullName,
+    authorAvatarKey: rows[0].authorAvatarKey,
+  };
+  const tags = Array.from(
+    new Map(
+      rows
+        .filter(
+          (row): row is typeof row & { tagId: string; tagName: string } =>
+            typeof row.tagId === "string" && typeof row.tagName === "string",
+        )
+        .map((row) => [row.tagId, { id: row.tagId, name: row.tagName }]),
+    ).values(),
+  );
+
+  return hydratePublicQuestion(questionRow, tags);
+}
+
 export async function findQuestions(
   { categoryId, tagId, limit, cursor }: GetQuestionsQuery,
   viewerId: string,
@@ -331,6 +415,76 @@ export async function findQuestions(
           : null,
     },
   };
+}
+
+export async function findQuestionsPublic({
+  categoryId,
+  tagId,
+  limit,
+  cursor,
+}: GetQuestionsQuery): Promise<QuestionsListResult> {
+  const whereClause = buildQuestionsWhereClause(categoryId, tagId, cursor);
+  const baseQuery = buildPublicQuestionsBaseQuery()
+    .where(whereClause)
+    .orderBy(desc(forumQuestion.createdAt), desc(forumQuestion.id));
+
+  const rows = await baseQuery.limit(limit + 1);
+  const hasMore = rows.length > limit;
+  const questionRows = hasMore ? rows.slice(0, limit) : rows;
+
+  const questions = await attachPublicTagsToQuestions(questionRows);
+
+  return {
+    questions,
+    pagination: {
+      limit,
+      hasMore,
+      nextCursor:
+        hasMore && questionRows.length > 0
+          ? encodeQuestionsPageCursor({
+            createdAt:
+              questionRows[questionRows.length - 1].question.createdAt,
+            id: questionRows[questionRows.length - 1].question.id,
+          })
+          : null,
+    },
+  };
+}
+
+async function attachPublicTagsToQuestions(
+  questions: PublicQuestionHydrationRow[],
+): Promise<ForumQuestionWithTags[]> {
+  if (questions.length === 0) {
+    return [];
+  }
+
+  const questionIds = questions.map((row) => row.question.id);
+  const tagRows = await db
+    .select({
+      questionId: forumQuestionTag.questionId,
+      tagId: forumTag.id,
+      tagName: forumTag.name,
+    })
+    .from(forumQuestionTag)
+    .innerJoin(forumTag, eq(forumTag.id, forumQuestionTag.tagId))
+    .where(inArray(forumQuestionTag.questionId, questionIds));
+
+  const tagsByQuestionId = new Map<string, QuestionTag[]>();
+  for (const row of tagRows) {
+    const current = tagsByQuestionId.get(row.questionId);
+    if (!current) {
+      tagsByQuestionId.set(row.questionId, [{ id: row.tagId, name: row.tagName }]);
+      continue;
+    }
+
+    if (!current.some((tag) => tag.id === row.tagId)) {
+      current.push({ id: row.tagId, name: row.tagName });
+    }
+  }
+
+  return questions.map((row) =>
+    hydratePublicQuestion(row, tagsByQuestionId.get(row.question.id) ?? []),
+  );
 }
 
 export async function getTrendingTags({
