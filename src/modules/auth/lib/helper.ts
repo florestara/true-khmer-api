@@ -7,6 +7,7 @@ import {
   AuthResetPasswordPayload,
   AuthVerifyRegisterOtpPayload,
 } from "../auth.schema";
+import { findUserProfileByUserId } from "../auth.query";
 
 const AUTH_PREFIX = "/api/auth";
 
@@ -24,7 +25,47 @@ type UserLike = {
   image?: string | null;
   createdAt: string;
   updatedAt: string;
+  profile?: {
+    id: string;
+    displayName?: string;
+    avatarKey?: string;
+    avatarUrl?: string;
+  };
 };
+
+async function attachUserProfile<T extends { id: string }>(
+  user: T,
+): Promise<T & { profile?: UserLike["profile"] }> {
+  if (typeof user.id !== "string" || !user.id.trim()) {
+    return user;
+  }
+
+  try {
+    const userProfile = await findUserProfileByUserId(user.id);
+    if (userProfile) {
+      return {
+        ...user,
+        profile: {
+          id: userProfile.id,
+          displayName: userProfile.displayName ?? undefined,
+          avatarKey: userProfile.avatarKey ?? undefined,
+          avatarUrl: userProfile.avatarUrl ?? undefined,
+        },
+      };
+    }
+  } catch (error) {
+    console.error("Failed to fetch user profile:", error);
+  }
+
+  return {
+    ...user,
+    profile: {
+      id: user.id,
+      avatarUrl:
+        "https://r2.bongit.net/1765707089130-account-avatar-profile-user-svgrepo-com.svg",
+    },
+  };
+}
 
 export function getAuthBaseUrl() {
   const baseUrl = process.env.BETTER_AUTH_URL;
@@ -128,11 +169,13 @@ export async function signUpWithEmailPassword(payload: AuthRegisterPayload) {
     } as const;
   }
 
+  const enrichedUser = await attachUserProfile(user);
+
   return {
     ok: true,
     body: {
       token: token ?? null,
-      user,
+      user: enrichedUser,
     },
   } as const;
 }
@@ -203,11 +246,13 @@ export async function verifyRegisterOtp(payload: AuthVerifyRegisterOtpPayload) {
     } as const;
   }
 
+  const enrichedUser = await attachUserProfile(user as UserLike);
+
   return {
     ok: true,
     body: {
       token,
-      user: user as UserLike,
+      user: enrichedUser,
     },
   } as const;
 }
@@ -244,11 +289,13 @@ export async function signInWithEmailPassword(payload: AuthLoginPayload) {
     } as const;
   }
 
+  const enrichedUser = await attachUserProfile(user as UserLike);
+
   return {
     ok: true,
     body: {
       token,
-      user: user as UserLike,
+      user: enrichedUser,
     },
   } as const;
 }
