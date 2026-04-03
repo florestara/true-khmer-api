@@ -166,6 +166,22 @@ const cursorCreatedAtSchema = z
     return normalized;
   });
 
+const cursorActivityAtSchema = z
+  .string()
+  .trim()
+  .transform((value, ctx) => {
+    const normalized = normalizeQuestionsCursorTimestamp(value);
+    if (!normalized) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "cursor.activityAt must be a valid ISO datetime",
+      });
+      return z.NEVER;
+    }
+
+    return normalized;
+  });
+
 function buildChronologicalQuestionsPageCursorSchema<
   TSortBy extends "recent" | "unanswered",
 >(
@@ -188,7 +204,7 @@ const unansweredQuestionsPageCursorSchema =
 
 const myActivityQuestionsPageCursorSchema = z.object({
   sortBy: z.literal("myActivity"),
-  activityAt: cursorCreatedAtSchema,
+  activityAt: cursorActivityAtSchema,
   id: z.string().trim().regex(FORUM_UUID_RE, "cursor.id must be a valid UUID"),
 });
 
