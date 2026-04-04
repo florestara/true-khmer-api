@@ -12,6 +12,7 @@ export const publicCategoriesRouter = new OpenAPIHono<AppBindings>();
 const publicGetRoute = createRoute({
   method: "get",
   path: "/",
+  security: [],
   tags: ["Public", "Public Forum Category"],
   responses: {
     200: {

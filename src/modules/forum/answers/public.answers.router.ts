@@ -9,6 +9,7 @@ const getPublicAnswersRoute = createRoute({
     method: "get",
     path: "/get-answers/{questionId}",
     tags: ["Public", "Public Forum Answer"],
+    security: [],
     request: {
         params: questionIdParamsSchema,
     },

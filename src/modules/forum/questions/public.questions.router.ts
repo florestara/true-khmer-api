@@ -20,6 +20,7 @@ const listPublicRoute = createRoute({
   method: "get",
   path: "/",
   tags: ["Public", "Public Forum Question"],
+  security: [],
   request: {
     query: getQuestionsQuerySchema,
   },
@@ -39,6 +40,7 @@ const getPublicRoute = createRoute({
   method: "get",
   path: "/{questionId}",
   tags: ["Public", "Public Forum Question"],
+  security: [],
   request: {
     params: getQuestionParamsSchema,
   },
@@ -59,6 +61,7 @@ const publicTrendingTagsRoute = createRoute({
   method: "get",
   path: "/trending-tags",
   tags: ["Public", "Public Forum Question"],
+  security: [],
   request: {
     query: getTrendingTagsQuerySchema,
   },
