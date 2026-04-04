@@ -11,8 +11,10 @@ import {
 import {
   createQuestion,
   findQuestionById,
+  findQuestionByIdPublic,
   findQuestionRowById,
   findQuestions,
+  findQuestionsPublic,
   getTrendingTags,
   setQuestionVote,
   softDeleteQuestion,
@@ -22,10 +24,18 @@ import { getAuthUserId } from "../../auth/utils/get-auth";
 import { findCategoryById } from "../categories/categories.query";
 import { POSTGRES_FOREIGN_KEY_VIOLATION } from "../lib/constants";
 
-export async function handleGetQuestions(c: Context, query: GetQuestionsQuery) {
-  const authResult = getAuthUserId(c);
-  if (!authResult.ok) {
-    return authResult.response;
+export async function handleGetQuestions(
+  c: Context,
+  query: GetQuestionsQuery,
+  isPublic = false,
+) {
+  let userId: string | undefined;
+  if (!isPublic) {
+    const authResult = getAuthUserId(c);
+    if (!authResult.ok) {
+      return authResult.response;
+    }
+    userId = authResult.userId;
   }
 
   try {
@@ -36,7 +46,9 @@ export async function handleGetQuestions(c: Context, query: GetQuestionsQuery) {
       }
     }
 
-    const result = await findQuestions(query, authResult.userId);
+    const result = isPublic
+      ? await findQuestionsPublic(query)
+      : await findQuestions(query, userId as string);
     return c.json(
       {
         ok: true,
@@ -50,17 +62,24 @@ export async function handleGetQuestions(c: Context, query: GetQuestionsQuery) {
   }
 }
 
-export async function handleGetQuestion(c: Context, params: QuestionIdParams) {
-  const authResult = getAuthUserId(c);
-  if (!authResult.ok) {
-    return authResult.response;
+export async function handleGetQuestion(
+  c: Context,
+  params: QuestionIdParams,
+  isPublic = false,
+) {
+  let userId: string | undefined;
+  if (!isPublic) {
+    const authResult = getAuthUserId(c);
+    if (!authResult.ok) {
+      return authResult.response;
+    }
+    userId = authResult.userId;
   }
 
   try {
-    const question = await findQuestionById(
-      params.questionId,
-      authResult.userId,
-    );
+    const question = isPublic
+      ? await findQuestionByIdPublic(params.questionId)
+      : await findQuestionById(params.questionId, userId as string);
     if (!question) {
       return c.json({ ok: false, error: "Question not found" }, 404);
     }
@@ -74,10 +93,13 @@ export async function handleGetQuestion(c: Context, params: QuestionIdParams) {
 export async function handleGetTrendingTags(
   c: Context,
   query: GetTrendingTagsQuery,
+  isPublic = false,
 ) {
-  const authResult = getAuthUserId(c);
-  if (!authResult.ok) {
-    return authResult.response;
+  if (!isPublic) {
+    const authResult = getAuthUserId(c);
+    if (!authResult.ok) {
+      return authResult.response;
+    }
   }
 
   try {

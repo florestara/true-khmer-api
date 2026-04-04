@@ -12,11 +12,16 @@ import {
 } from "./categories.query";
 import { HonoContext } from "../../../lib/types";
 
-export async function handleGetCategories(c: Context) {
+export async function handleGetCategories(c: Context, isPublic = false) {
+  if (!isPublic) {
+    const authResult = getAuthUserId(c);
+    if (!authResult.ok) {
+      return authResult.response;
+    }
+  }
+
   try {
     const categories = await getCategories();
-    console.log(categories);
-
     return c.json({ ok: true, categories }, 200);
   } catch (err) {
     console.error("Failed to get categories", err);

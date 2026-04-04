@@ -26,6 +26,7 @@ type AnswerHydrationRow = {
   authorAvatarKey: string | null;
   viewerVoteType: string | null;
 };
+type PublicAnswerHydrationRow = Omit<AnswerHydrationRow, "viewerVoteType">;
 type ForumAnswerWithViewerVote = Omit<ForumAnswerRow, "authorId" | "deletedAt"> & {
   score: number;
   viewerVote: AnswerVoteType | null;
@@ -71,6 +72,19 @@ function buildAnswersBaseQuery(
     );
 }
 
+function buildPublicAnswersBaseQuery(executor: Pick<typeof db, "select">) {
+  return executor
+    .select({
+      answer: forumAnswer,
+      authorDisplayName: userProfile.displayName,
+      authorFullName: user.name,
+      authorAvatarKey: userProfile.avatarKey,
+    })
+    .from(forumAnswer)
+    .innerJoin(user, eq(user.id, forumAnswer.authorId))
+    .leftJoin(userProfile, eq(userProfile.userId, user.id));
+}
+
 function hydrateAnswer(
   row: AnswerHydrationRow,
 ): ForumAnswerWithViewerVote {
@@ -86,6 +100,15 @@ function hydrateAnswer(
       avatarKey: row.authorAvatarKey,
     },
   };
+}
+
+function hydratePublicAnswer(
+  row: PublicAnswerHydrationRow,
+): ForumAnswerWithViewerVote {
+  return hydrateAnswer({
+    ...row,
+    viewerVoteType: null,
+  });
 }
 
 export async function findQuestionById(
@@ -133,6 +156,21 @@ export async function findAnswersByQuestionId(
     .orderBy(desc(forumAnswer.upvoteCount), desc(forumAnswer.createdAt));
 
   return rows.map((row) => hydrateAnswer(row));
+}
+
+export async function findAnswersByQuestionIdPublic(
+  questionId: string,
+): Promise<ForumAnswerWithViewerVote[]> {
+  const rows = await buildPublicAnswersBaseQuery(db)
+    .where(
+      and(
+        eq(forumAnswer.questionId, questionId),
+        eq(forumAnswer.status, "PUBLISHED"),
+      ),
+    )
+    .orderBy(desc(forumAnswer.upvoteCount), desc(forumAnswer.createdAt));
+
+  return rows.map((row) => hydratePublicAnswer(row));
 }
 
 export async function createAnswer(
