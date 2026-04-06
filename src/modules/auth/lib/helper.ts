@@ -1,9 +1,13 @@
 import { auth } from "./provider";
+import { authConfig } from "./config";
 import {
+  AuthForgotPasswordPayload,
   AuthLoginPayload,
   AuthRegisterPayload,
+  AuthResetPasswordPayload,
   AuthVerifyRegisterOtpPayload,
 } from "../auth.schema";
+import { findUserProfileByUserId } from "../auth.query";
 
 const AUTH_PREFIX = "/api/auth";
 
@@ -21,7 +25,47 @@ type UserLike = {
   image?: string | null;
   createdAt: string;
   updatedAt: string;
+  profile?: {
+    id: string;
+    displayName?: string;
+    avatarKey?: string;
+    avatarUrl?: string;
+  };
 };
+
+async function attachUserProfile<T extends { id: string }>(
+  user: T,
+): Promise<T & { profile?: UserLike["profile"] }> {
+  if (typeof user.id !== "string" || !user.id.trim()) {
+    return user;
+  }
+
+  try {
+    const userProfile = await findUserProfileByUserId(user.id);
+    if (userProfile) {
+      return {
+        ...user,
+        profile: {
+          id: userProfile.id,
+          displayName: userProfile.displayName ?? undefined,
+          avatarKey: userProfile.avatarKey ?? undefined,
+          avatarUrl: userProfile.avatarUrl ?? undefined,
+        },
+      };
+    }
+  } catch (error) {
+    console.error("Failed to fetch user profile:", error);
+  }
+
+  return {
+    ...user,
+    profile: {
+      id: user.id,
+      avatarUrl:
+        "https://r2.bongit.net/1765707089130-account-avatar-profile-user-svgrepo-com.svg",
+    },
+  };
+}
 
 export function getAuthBaseUrl() {
   const baseUrl = process.env.BETTER_AUTH_URL;
@@ -125,11 +169,13 @@ export async function signUpWithEmailPassword(payload: AuthRegisterPayload) {
     } as const;
   }
 
+  const enrichedUser = await attachUserProfile(user);
+
   return {
     ok: true,
     body: {
       token: token ?? null,
-      user,
+      user: enrichedUser,
     },
   } as const;
 }
@@ -200,11 +246,13 @@ export async function verifyRegisterOtp(payload: AuthVerifyRegisterOtpPayload) {
     } as const;
   }
 
+  const enrichedUser = await attachUserProfile(user as UserLike);
+
   return {
     ok: true,
     body: {
       token,
-      user: user as UserLike,
+      user: enrichedUser,
     },
   } as const;
 }
@@ -241,11 +289,82 @@ export async function signInWithEmailPassword(payload: AuthLoginPayload) {
     } as const;
   }
 
+  const enrichedUser = await attachUserProfile(user as UserLike);
+
   return {
     ok: true,
     body: {
       token,
-      user: user as UserLike,
+      user: enrichedUser,
+    },
+  } as const;
+}
+
+export async function requestPasswordReset(payload: AuthForgotPasswordPayload) {
+  const response = await callAuth("/request-password-reset", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      email: payload.email,
+      redirectTo: payload.resetPageUrl,
+    }),
+  });
+
+  const body = await parseResponseBody(response);
+  const parsedBody = isJsonRecord(body) ? body : null;
+  const status = parsedBody?.status;
+
+  if (!response.ok || status !== true) {
+    const errorBody = normalizeAuthErrorBody(
+      body,
+      "Failed to request password reset",
+    );
+    return {
+      ok: false,
+      status: response.status,
+      body: errorBody,
+    } as const;
+  }
+
+  return {
+    ok: true,
+    body: {
+      status: true,
+    },
+  } as const;
+}
+
+export async function resetPassword(payload: AuthResetPasswordPayload) {
+  const response = await callAuth("/reset-password", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      token: payload.token,
+      newPassword: payload.newPassword,
+    }),
+  });
+
+  const body = await parseResponseBody(response);
+  const parsedBody = isJsonRecord(body) ? body : null;
+  const status = parsedBody?.status;
+
+  if (!response.ok || status !== true) {
+    const errorBody = normalizeAuthErrorBody(body, "Failed to reset password");
+    return {
+      ok: false,
+      status: response.status,
+      body: errorBody,
+    } as const;
+  }
+
+  return {
+    ok: true,
+    body: {
+      status: true,
     },
   } as const;
 }

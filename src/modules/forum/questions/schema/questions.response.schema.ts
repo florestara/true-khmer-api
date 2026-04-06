@@ -1,10 +1,23 @@
 import { z } from "zod";
 
+export const questionTagResponseSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+  })
+  .openapi("QuestionTagResponse");
+
 export const questionResponseSchema = z
   .object({
     id: z.string(),
     title: z.string(),
     body: z.string(),
+    status: z.enum(["PUBLISHED", "CLOSED", "DELETED"]),
+    upvoteCount: z.number().int().nonnegative(),
+    downvoteCount: z.number().int().nonnegative(),
+    answerCount: z.number().int().nonnegative(),
+    score: z.number().int(),
+    viewerVote: z.enum(["UPVOTE", "DOWNVOTE"]).nullable(),
     category: z.object({
       id: z.string(),
       name: z.string(),
@@ -14,9 +27,9 @@ export const questionResponseSchema = z
       name: z.string(),
       avatarKey: z.string().nullable(),
     }),
-    tags: z.array(z.string()),
-    answerCount: z.number(),
-    createdAt: z.string(),
+    tags: z.array(questionTagResponseSchema),
+    createdAt: z.iso.datetime({ offset: true }),
+    updatedAt: z.iso.datetime({ offset: true }),
   })
   .openapi("QuestionResponse");
 
@@ -45,3 +58,18 @@ export const createQuestionResponseSchema = z
     question: questionResponseSchema,
   })
   .openapi("CreateQuestionResponse");
+
+export const trendingTagResponseSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    count: z.number(),
+  })
+  .openapi("TrendingTagResponse");
+
+export const getTrendingTagsResponseSchema = z
+  .object({
+    ok: z.boolean(),
+    tags: z.array(trendingTagResponseSchema),
+  })
+  .openapi("GetTrendingTagsResponse");

@@ -60,7 +60,7 @@ const postRoute = createRoute({
 });
 
 categoriesRouter.openapi(getRoute, async (c) => {
-  return (await handleGetCategories(c)) as any;
+  return handleGetCategories(c) as any;
 });
 
 categoriesRouter.openapi(postRoute, async (c) => {

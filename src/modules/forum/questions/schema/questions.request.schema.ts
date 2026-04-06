@@ -10,8 +10,15 @@ const MAX_TAG_LENGTH = 30;
 const MAX_BODY_LENGTH = 10000;
 const MAX_QUESTIONS_PAGE_SIZE = 50;
 const DEFAULT_QUESTIONS_PAGE_SIZE = 10;
+const questionSortBySchema = z.enum([
+  "recent",
+  "topRated",
+  "unanswered",
+  "myActivity",
+]);
+export type QuestionSortBy = z.infer<typeof questionSortBySchema>;
 
-function normalizeTagText(value: string): string {
+function normalizeTagText(value: string) {
   return value.trim().replace(/\s+/g, " ");
 }
 
@@ -143,42 +150,113 @@ export const getQuestionParamsSchema = z.object({
 export type QuestionIdParams = z.infer<typeof getQuestionParamsSchema>;
 export type GetQuestionParams = QuestionIdParams;
 
-const questionsPageCursorSchema = z.object({
-  createdAt: z
-    .string()
-    .trim()
-    .transform((value, ctx) => {
-      const normalized = normalizeQuestionsCursorTimestamp(value);
-      if (!normalized) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "cursor.createdAt must be a valid ISO datetime",
-        });
-        return z.NEVER;
-      }
+const cursorCreatedAtSchema = z
+  .string()
+  .trim()
+  .transform((value, ctx) => {
+    const normalized = normalizeQuestionsCursorTimestamp(value);
+    if (!normalized) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "cursor.createdAt must be a valid ISO datetime",
+      });
+      return z.NEVER;
+    }
 
-      return normalized;
-    }),
+    return normalized;
+  });
+
+const cursorActivityAtSchema = z
+  .string()
+  .trim()
+  .transform((value, ctx) => {
+    const normalized = normalizeQuestionsCursorTimestamp(value);
+    if (!normalized) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "cursor.activityAt must be a valid ISO datetime",
+      });
+      return z.NEVER;
+    }
+
+    return normalized;
+  });
+
+function buildChronologicalQuestionsPageCursorSchema<
+  TSortBy extends "recent" | "unanswered",
+>(
+  sortBy: TSortBy,
+) {
+  return z.object({
+    sortBy: z.literal(sortBy),
+    createdAt: cursorCreatedAtSchema,
+    id: z
+      .string()
+      .trim()
+      .regex(FORUM_UUID_RE, "cursor.id must be a valid UUID"),
+  });
+}
+
+const recentQuestionsPageCursorSchema =
+  buildChronologicalQuestionsPageCursorSchema("recent");
+const unansweredQuestionsPageCursorSchema =
+  buildChronologicalQuestionsPageCursorSchema("unanswered");
+
+const myActivityQuestionsPageCursorSchema = z.object({
+  sortBy: z.literal("myActivity"),
+  activityAt: cursorActivityAtSchema,
   id: z.string().trim().regex(FORUM_UUID_RE, "cursor.id must be a valid UUID"),
 });
+
+const topRatedQuestionsPageCursorSchema = z.object({
+  sortBy: z.literal("topRated"),
+  score: z.number().int(),
+  createdAt: cursorCreatedAtSchema,
+  id: z.string().trim().regex(FORUM_UUID_RE, "cursor.id must be a valid UUID"),
+});
+
+const questionsPageCursorSchema = z.discriminatedUnion("sortBy", [
+  recentQuestionsPageCursorSchema,
+  unansweredQuestionsPageCursorSchema,
+  myActivityQuestionsPageCursorSchema,
+  topRatedQuestionsPageCursorSchema,
+]);
 
 export type QuestionsPageCursor = z.infer<typeof questionsPageCursorSchema>;
 
 export function encodeQuestionsPageCursor(cursor: QuestionsPageCursor): string {
-  const normalizedCreatedAt = normalizeQuestionsCursorTimestamp(
-    cursor.createdAt,
-  );
-  if (!normalizedCreatedAt) {
+  const rawTimestamp =
+    cursor.sortBy === "myActivity" ? cursor.activityAt : cursor.createdAt;
+  const normalizedTimestamp = normalizeQuestionsCursorTimestamp(rawTimestamp);
+  if (!normalizedTimestamp) {
     throw new Error(
-      "Cannot encode question page cursor with invalid createdAt",
+      `Cannot encode question page cursor with invalid ${
+        cursor.sortBy === "myActivity" ? "activityAt" : "createdAt"
+      }`,
     );
   }
 
   return Buffer.from(
-    JSON.stringify({
-      createdAt: normalizedCreatedAt,
-      id: cursor.id,
-    }),
+    JSON.stringify(
+      cursor.sortBy === "topRated"
+        ? {
+            sortBy: cursor.sortBy,
+            score: cursor.score,
+            createdAt: normalizedTimestamp,
+            id: cursor.id,
+          }
+        : cursor.sortBy === "myActivity"
+        ? {
+            sortBy: cursor.sortBy,
+            activityAt: normalizedTimestamp,
+            id: cursor.id,
+          }
+        : {
+            sortBy: cursor.sortBy,
+            createdAt: normalizedTimestamp,
+            id: cursor.id,
+          },
+    ),
     "utf8",
   ).toString("base64url");
 }
@@ -219,12 +297,23 @@ export const getQuestionsQuerySchema = z
       .trim()
       .regex(FORUM_UUID_RE, "categoryId must be a valid UUID")
       .optional(),
+    tagId: z
+      .string()
+      .trim()
+      .regex(FORUM_UUID_RE, "tagId must be a valid UUID")
+      .optional(),
     limit: z.coerce
       .number()
       .int()
       .min(1, "limit must be between 1 and 50")
       .max(MAX_QUESTIONS_PAGE_SIZE, "limit must be between 1 and 50")
       .default(DEFAULT_QUESTIONS_PAGE_SIZE),
+    sortBy: z
+      .string()
+      .trim()
+      .optional()
+      .transform((value) => value ?? "recent")
+      .pipe(questionSortBySchema),
     cursor: z
       .string()
       .optional()
@@ -245,14 +334,40 @@ export const getQuestionsQuerySchema = z
         return cursor;
       }),
   })
+  .superRefine((value, ctx) => {
+    if (value.cursor && value.cursor.sortBy !== value.sortBy) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "cursor sort does not match sortBy",
+        path: ["cursor"],
+      });
+    }
+  })
   .transform((value) => ({
     categoryId: value.categoryId,
+    tagId: value.tagId,
     limit: value.limit,
+    sortBy: value.sortBy,
     cursor: value.cursor,
   }))
   .openapi("GetQuestionsQuery");
 
 export type GetQuestionsQuery = z.infer<typeof getQuestionsQuerySchema>;
+
+export const getTrendingTagsQuerySchema = z
+  .object({
+    categoryId: z
+      .string()
+      .trim()
+      .regex(FORUM_UUID_RE, "categoryId must be a valid UUID")
+      .optional(),
+  })
+  .transform((value) => ({
+    categoryId: value.categoryId,
+  }))
+  .openapi("GetTrendingTagsQuery");
+
+export type GetTrendingTagsQuery = z.infer<typeof getTrendingTagsQuerySchema>;
 
 export const createQuestionSchema = z
   .object({
@@ -324,11 +439,14 @@ export const editQuestionSchema = z
     body: value.body,
     tags: value.tags,
     status: value.status,
-  })).openapi("EditQuestionRequest");
+  }))
+  .openapi("EditQuestionRequest");
 
 export type EditQuestionInput = z.infer<typeof editQuestionSchema>;
 
-const voteIntentSchema = z.enum(["UPVOTE", "DOWNVOTE", "NONE"]).openapi("VoteIntent");
+const voteIntentSchema = z
+  .enum(["UPVOTE", "DOWNVOTE", "NONE"])
+  .openapi("VoteIntent");
 
 export type VoteIntent = z.infer<typeof voteIntentSchema>;
 export type QuestionVoteType = Exclude<VoteIntent, "NONE">;
@@ -345,7 +463,8 @@ export const voteQuestionSchema = z
   })
   .transform((value) => ({
     voteType: value.voteType,
-  })).openapi("VoteQuestionRequest");
+  }))
+  .openapi("VoteQuestionRequest");
 
 export type VoteQuestionInput = z.infer<typeof voteQuestionSchema>;
 

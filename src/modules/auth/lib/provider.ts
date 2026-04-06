@@ -5,12 +5,16 @@ import { emailOTP } from "better-auth/plugins/email-otp";
 import { jwt } from "better-auth/plugins/jwt";
 import { db } from "../../../db/index";
 import { authConfig } from "./config";
-import { sendOtpByResend } from "./email/sender/resend";
+import {
+  sendOtpByResend,
+  sendPasswordResetByResend,
+} from "./email/sender/resend";
 import { jwtPluginConfig } from "./plugins/jwt";
 import { findUserFirstNameByEmail } from "../auth.query";
 
 export const auth = betterAuth({
   baseURL: authConfig.betterAuthUrl,
+  trustedOrigins: authConfig.allowedResetPageOrigins,
   secret: authConfig.betterAuthSecret,
   database: drizzleAdapter(db, {
     provider: "pg",
@@ -43,6 +47,27 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: true,
+    resetPasswordTokenExpiresIn: authConfig.passwordResetTtlSeconds,
+    revokeSessionsOnPasswordReset: true,
+    sendResetPassword: async ({ user, url, token }) => {
+      // Better Auth accepts `redirectTo`, then forwards it here as `callbackURL`.
+      const providedResetPageUrl = new URL(url).searchParams.get("callbackURL");
+      const resetUrl = new URL(
+        providedResetPageUrl ?? authConfig.appDomain,
+        authConfig.appDomain,
+      );
+      resetUrl.searchParams.set("token", token);
+
+      const displayName =
+        (user as { firstName?: string | null }).firstName ??
+        (await findUserFirstNameByEmail(user.email));
+
+      await sendPasswordResetByResend(
+        user.email,
+        resetUrl.toString(),
+        displayName,
+      );
+    },
   },
   emailVerification: {
     autoSignInAfterVerification: true,

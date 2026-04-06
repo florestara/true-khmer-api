@@ -1,6 +1,7 @@
-import { and, desc, eq, inArray, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lt, or, sql, type SQL } from "drizzle-orm";
 import { db } from "../../../db/index";
 import {
+  forumAnswer,
   forumCategory,
   forumQuestion,
   forumQuestionTag,
@@ -14,19 +15,24 @@ import {
   encodeQuestionsPageCursor,
   type CreateQuestionInput,
   type EditQuestionInput,
+  type GetTrendingTagsQuery,
   type GetQuestionsQuery,
+  type QuestionSortBy,
   type QuestionVoteType,
   type QuestionsPageCursor,
   type VoteIntent,
 } from "./questions.schema";
-
 
 type ForumQuestionRow = typeof forumQuestion.$inferSelect;
 type ForumQuestionInsert = typeof forumQuestion.$inferInsert;
 type ForumQuestionTagInsert = typeof forumQuestionTag.$inferInsert;
 type ForumQuestionVoteInsert = typeof forumQuestionVote.$inferInsert;
 type ForumTagInsert = typeof forumTag.$inferInsert;
-type QuestionHydrationRow = {
+type QuestionTag = {
+  id: string;
+  name: string;
+};
+type BaseQuestionHydrationRow = {
   question: ForumQuestionRow;
   categoryName: string;
   authorDisplayName: string | null;
@@ -34,6 +40,11 @@ type QuestionHydrationRow = {
   authorAvatarKey: string | null;
   viewerVoteType: string | null;
 };
+type QuestionListRow = BaseQuestionHydrationRow & {
+  myActivityAt?: string | null;
+};
+type QuestionDetailRow = BaseQuestionHydrationRow;
+type PublicQuestionHydrationRow = Omit<BaseQuestionHydrationRow, "viewerVoteType">;
 type ForumQuestionWithTags = Omit<
   ForumQuestionRow,
   "categoryId" | "authorId" | "deletedAt"
@@ -49,7 +60,7 @@ type ForumQuestionWithTags = Omit<
     name: string;
     avatarKey: string | null;
   };
-  tags: string[];
+  tags: QuestionTag[];
 };
 type QuestionsPagination = {
   limit: number;
@@ -61,8 +72,42 @@ type QuestionsListResult = {
   questions: ForumQuestionWithTags[];
   pagination: QuestionsPagination;
 };
+type TrendingTagResult = {
+  id: string;
+  name: string;
+  count: number;
+};
 
 const VISIBLE_QUESTION_STATUSES = ["PUBLISHED", "CLOSED"] as const;
+const MIN_TRENDING_TAG_COUNT = 10;
+const MAX_TRENDING_TAG_AMOUNT = 10;
+const QUESTION_SCORE_SQL =
+  sql<number>`${forumQuestion.upvoteCount} - ${forumQuestion.downvoteCount}`;
+
+function buildMyActivityTimestampSql(viewerId: string) {
+  return sql<string>`greatest(
+    ${forumQuestion.createdAt},
+    coalesce(
+      (
+        select max(${forumAnswer.updatedAt})
+        from ${forumAnswer}
+        where ${forumAnswer.questionId} = ${forumQuestion.id}
+          and ${forumAnswer.authorId} = ${viewerId}
+          and ${forumAnswer.status} = 'PUBLISHED'
+      ),
+      ${forumQuestion.createdAt}
+    ),
+    coalesce(
+      (
+        select max(${forumQuestionVote.updatedAt})
+        from ${forumQuestionVote}
+        where ${forumQuestionVote.questionId} = ${forumQuestion.id}
+          and ${forumQuestionVote.voterId} = ${viewerId}
+      ),
+      ${forumQuestion.createdAt}
+    )
+  )`;
+}
 
 function normalizeTagName(value: string): string {
   return value.trim().replace(/\s+/g, " ").toLowerCase();
@@ -73,15 +118,43 @@ function toInteger(value: unknown, fallback = 0): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-function resolveAuthorName(row: QuestionHydrationRow): string {
+function resolveAuthorName(row: BaseQuestionHydrationRow): string {
   const displayName = row.authorDisplayName?.trim();
   const fullName = row.authorFullName.trim();
   return displayName && displayName.length > 0 ? displayName : fullName;
 }
 
+function buildNextQuestionsCursor(
+  sortBy: QuestionSortBy,
+  row: QuestionListRow,
+): string {
+  if (sortBy === "topRated") {
+    return encodeQuestionsPageCursor({
+      sortBy: "topRated",
+      score: row.question.upvoteCount - row.question.downvoteCount,
+      createdAt: row.question.createdAt,
+      id: row.question.id,
+    });
+  }
+
+  if (sortBy === "myActivity") {
+    return encodeQuestionsPageCursor({
+      sortBy: "myActivity",
+      activityAt: row.myActivityAt ?? row.question.createdAt,
+      id: row.question.id,
+    });
+  }
+
+  return encodeQuestionsPageCursor({
+    sortBy: sortBy === "unanswered" ? "unanswered" : "recent",
+    createdAt: row.question.createdAt,
+    id: row.question.id,
+  });
+}
+
 function hydrateQuestion(
-  row: QuestionHydrationRow,
-  tags: string[],
+  row: BaseQuestionHydrationRow,
+  tags: QuestionTag[],
 ): ForumQuestionWithTags {
   const {
     categoryId,
@@ -109,7 +182,22 @@ function hydrateQuestion(
   };
 }
 
+function hydratePublicQuestion(
+  row: PublicQuestionHydrationRow,
+  tags: QuestionTag[],
+): ForumQuestionWithTags {
+  return hydrateQuestion(
+    {
+      ...row,
+      viewerVoteType: null,
+    },
+    tags,
+  );
+}
+
 function buildQuestionsBaseQuery(viewerId: string) {
+  const myActivityAt = buildMyActivityTimestampSql(viewerId);
+
   return db
     .select({
       question: forumQuestion,
@@ -118,6 +206,7 @@ function buildQuestionsBaseQuery(viewerId: string) {
       authorFullName: user.name,
       authorAvatarKey: userProfile.avatarKey,
       viewerVoteType: forumQuestionVote.voteType,
+      myActivityAt: myActivityAt.mapWith(String),
     })
     .from(forumQuestion)
     .innerJoin(forumCategory, eq(forumCategory.id, forumQuestion.categoryId))
@@ -132,43 +221,156 @@ function buildQuestionsBaseQuery(viewerId: string) {
     );
 }
 
+function buildMyActivityFilter(viewerId: string): SQL<unknown> | undefined {
+  return or(
+    eq(forumQuestion.authorId, viewerId),
+    sql`exists (
+      select 1
+      from ${forumAnswer}
+      where ${forumAnswer.questionId} = ${forumQuestion.id}
+        and ${forumAnswer.authorId} = ${viewerId}
+        and ${forumAnswer.status} = 'PUBLISHED'
+    )`,
+    sql`exists (
+      select 1
+      from ${forumQuestionVote}
+      where ${forumQuestionVote.questionId} = ${forumQuestion.id}
+        and ${forumQuestionVote.voterId} = ${viewerId}
+    )`,
+  );
+}
+
+function buildQuestionsCursorFilter(
+  viewerId: string,
+  sortBy: QuestionSortBy,
+  cursor?: QuestionsPageCursor,
+): SQL<unknown> | undefined {
+  if (!cursor) {
+    return undefined;
+  }
+
+  if (sortBy === "topRated" && cursor.sortBy === "topRated") {
+    return or(
+      sql`${QUESTION_SCORE_SQL} < ${cursor.score}`,
+      and(
+        sql`${QUESTION_SCORE_SQL} = ${cursor.score}`,
+        lt(forumQuestion.createdAt, cursor.createdAt),
+      ),
+      and(
+        sql`${QUESTION_SCORE_SQL} = ${cursor.score}`,
+        eq(forumQuestion.createdAt, cursor.createdAt),
+        lt(forumQuestion.id, cursor.id),
+      ),
+    );
+  }
+
+  if (sortBy === "myActivity" && cursor.sortBy === "myActivity") {
+    const myActivityTimestampSql = buildMyActivityTimestampSql(viewerId);
+    return or(
+      sql`${myActivityTimestampSql} < ${cursor.activityAt}`,
+      and(
+        sql`${myActivityTimestampSql} = ${cursor.activityAt}`,
+        lt(forumQuestion.id, cursor.id),
+      ),
+    );
+  }
+
+  if (
+    (sortBy === "recent" && cursor.sortBy === "recent") ||
+    (sortBy === "unanswered" && cursor.sortBy === "unanswered")
+  ) {
+    return or(
+      lt(forumQuestion.createdAt, cursor.createdAt),
+      and(
+        eq(forumQuestion.createdAt, cursor.createdAt),
+        lt(forumQuestion.id, cursor.id),
+      ),
+    );
+  }
+
+  return undefined;
+}
+
+function buildPublicQuestionsBaseQuery() {
+  return db
+    .select({
+      question: forumQuestion,
+      categoryName: forumCategory.name,
+      authorDisplayName: userProfile.displayName,
+      authorFullName: user.name,
+      authorAvatarKey: userProfile.avatarKey,
+      viewerVoteType: sql<string | null>`null`,
+    })
+    .from(forumQuestion)
+    .innerJoin(forumCategory, eq(forumCategory.id, forumQuestion.categoryId))
+    .innerJoin(user, eq(user.id, forumQuestion.authorId))
+    .leftJoin(userProfile, eq(userProfile.userId, user.id));
+}
+
 function buildQuestionsWhereClause(
+  viewerId: string,
   categoryId?: string,
+  tagId?: string,
+  sortBy: QuestionSortBy = "recent",
   cursor?: QuestionsPageCursor,
 ) {
-
   const filters = [inArray(forumQuestion.status, VISIBLE_QUESTION_STATUSES)];
 
   if (categoryId) {
     filters.push(eq(forumQuestion.categoryId, categoryId));
   }
 
-  if (cursor) {
-    const cursorFilter = or(
-      lt(forumQuestion.createdAt, cursor.createdAt),
-      and(
-        eq(forumQuestion.createdAt, cursor.createdAt),
-        lt(forumQuestion.id, cursor.id),
-      ),
-      or(
-        lt(forumQuestion.createdAt, cursor.createdAt),
-        and(
-          eq(forumQuestion.createdAt, cursor.createdAt),
-          lt(forumQuestion.id, cursor.id),
-        ),
-      ),
+  if (tagId) {
+    filters.push(
+      sql`exists (
+        select 1
+        from ${forumQuestionTag}
+        where ${forumQuestionTag.questionId} = ${forumQuestion.id}
+          and ${forumQuestionTag.tagId} = ${tagId}
+      )`,
     );
+  }
 
-    if (cursorFilter) {
-      filters.push(cursorFilter);
+  if (sortBy === "unanswered") {
+    filters.push(eq(forumQuestion.answerCount, 0));
+  }
+
+  if (sortBy === "myActivity") {
+    const myActivityFilter = buildMyActivityFilter(viewerId);
+    if (myActivityFilter) {
+      filters.push(myActivityFilter);
     }
+  }
+
+  const cursorFilter = buildQuestionsCursorFilter(viewerId, sortBy, cursor);
+  if (cursorFilter) {
+    filters.push(cursorFilter);
   }
 
   return and(...filters);
 }
 
+function buildQuestionsOrderBy(sortBy: QuestionSortBy, viewerId: string) {
+  if (sortBy === "topRated") {
+    return [
+      desc(QUESTION_SCORE_SQL),
+      desc(forumQuestion.createdAt),
+      desc(forumQuestion.id),
+    ] as const;
+  }
+
+  if (sortBy === "myActivity") {
+    return [
+      desc(buildMyActivityTimestampSql(viewerId)),
+      desc(forumQuestion.id),
+    ] as const;
+  }
+
+  return [desc(forumQuestion.createdAt), desc(forumQuestion.id)] as const;
+}
+
 async function attachTagsToQuestions(
-  questions: QuestionHydrationRow[],
+  questions: BaseQuestionHydrationRow[],
 ): Promise<ForumQuestionWithTags[]> {
   if (questions.length === 0) {
     return [];
@@ -178,22 +380,25 @@ async function attachTagsToQuestions(
   const tagRows = await db
     .select({
       questionId: forumQuestionTag.questionId,
+      tagId: forumTag.id,
       tagName: forumTag.name,
     })
     .from(forumQuestionTag)
     .innerJoin(forumTag, eq(forumTag.id, forumQuestionTag.tagId))
     .where(inArray(forumQuestionTag.questionId, questionIds));
 
-  const tagsByQuestionId = new Map<string, string[]>();
+  const tagsByQuestionId = new Map<string, QuestionTag[]>();
   for (const row of tagRows) {
-    const current = tagsByQuestionId.get(row.questionId);
-    if (!current) {
-      tagsByQuestionId.set(row.questionId, [row.tagName]);
+    const tagsForQuestion = tagsByQuestionId.get(row.questionId);
+    if (!tagsForQuestion) {
+      tagsByQuestionId.set(row.questionId, [
+        { id: row.tagId, name: row.tagName },
+      ]);
       continue;
     }
 
-    if (!current.includes(row.tagName)) {
-      current.push(row.tagName);
+    if (!tagsForQuestion.some((tag) => tag.id === row.tagId)) {
+      tagsForQuestion.push({ id: row.tagId, name: row.tagName });
     }
   }
 
@@ -224,6 +429,7 @@ export async function findQuestionById(
       authorFullName: user.name,
       authorAvatarKey: userProfile.avatarKey,
       viewerVoteType: forumQuestionVote.voteType,
+      tagId: forumTag.id,
       tagName: forumTag.name,
     })
     .from(forumQuestion)
@@ -253,7 +459,7 @@ export async function findQuestionById(
     return null;
   }
 
-  const questionRow: QuestionHydrationRow = {
+  const questionRow: QuestionDetailRow = {
     question: rows[0].question,
     categoryName: rows[0].categoryName,
     authorDisplayName: rows[0].authorDisplayName,
@@ -262,47 +468,230 @@ export async function findQuestionById(
     viewerVoteType: rows[0].viewerVoteType,
   };
   const tags = Array.from(
-    new Set(
+    new Map(
       rows
-        .map((row) => row.tagName)
         .filter(
-          (tag): tag is string => typeof tag === "string" && tag.length > 0,
-        ),
-    ),
+          (row): row is typeof row & { tagId: string; tagName: string } =>
+            typeof row.tagId === "string" && typeof row.tagName === "string",
+        )
+        .map((row) => [row.tagId, { id: row.tagId, name: row.tagName }]),
+    ).values(),
   );
 
   return hydrateQuestion(questionRow, tags);
 }
 
+export async function findQuestionByIdPublic(
+  id: string,
+): Promise<ForumQuestionWithTags | null> {
+  const rows = await db
+    .select({
+      question: forumQuestion,
+      categoryName: forumCategory.name,
+      authorDisplayName: userProfile.displayName,
+      authorFullName: user.name,
+      authorAvatarKey: userProfile.avatarKey,
+      tagId: forumTag.id,
+      tagName: forumTag.name,
+    })
+    .from(forumQuestion)
+    .innerJoin(forumCategory, eq(forumCategory.id, forumQuestion.categoryId))
+    .innerJoin(user, eq(user.id, forumQuestion.authorId))
+    .leftJoin(userProfile, eq(userProfile.userId, user.id))
+    .leftJoin(
+      forumQuestionTag,
+      eq(forumQuestionTag.questionId, forumQuestion.id),
+    )
+    .leftJoin(forumTag, eq(forumTag.id, forumQuestionTag.tagId))
+    .where(
+      and(
+        eq(forumQuestion.id, id),
+        inArray(forumQuestion.status, VISIBLE_QUESTION_STATUSES),
+      ),
+    );
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  const questionRow: PublicQuestionHydrationRow = {
+    question: rows[0].question,
+    categoryName: rows[0].categoryName,
+    authorDisplayName: rows[0].authorDisplayName,
+    authorFullName: rows[0].authorFullName,
+    authorAvatarKey: rows[0].authorAvatarKey,
+  };
+  const tags = Array.from(
+    new Map(
+      rows
+        .filter(
+          (row): row is typeof row & { tagId: string; tagName: string } =>
+            typeof row.tagId === "string" && typeof row.tagName === "string",
+        )
+        .map((row) => [row.tagId, { id: row.tagId, name: row.tagName }]),
+    ).values(),
+  );
+
+  return hydratePublicQuestion(questionRow, tags);
+}
+
 export async function findQuestions(
-  { categoryId, limit, cursor }: GetQuestionsQuery,
+  { categoryId, tagId, limit, sortBy, cursor }: GetQuestionsQuery,
   viewerId: string,
 ): Promise<QuestionsListResult> {
-  const whereClause = buildQuestionsWhereClause(categoryId, cursor);
+  const whereClause = buildQuestionsWhereClause(
+    viewerId,
+    categoryId,
+    tagId,
+    sortBy,
+    cursor,
+  );
   const baseQuery = buildQuestionsBaseQuery(viewerId)
     .where(whereClause)
-    .orderBy(desc(forumQuestion.createdAt), desc(forumQuestion.id));
+    .orderBy(...buildQuestionsOrderBy(sortBy, viewerId));
 
   const rows = await baseQuery.limit(limit + 1);
   const hasMore = rows.length > limit;
-  const questionRows = hasMore ? rows.slice(0, limit) : rows;
+  const questionRows: QuestionListRow[] = hasMore ? rows.slice(0, limit) : rows;
   const questions = await attachTagsToQuestions(questionRows);
+  const lastQuestionRow =
+    questionRows.length > 0 ? questionRows[questionRows.length - 1] : null;
+  const nextCursor =
+    hasMore && lastQuestionRow
+      ? buildNextQuestionsCursor(sortBy, lastQuestionRow)
+      : null;
 
   return {
     questions,
     pagination: {
       limit,
       hasMore,
-      nextCursor:
-        hasMore && questionRows.length > 0
-          ? encodeQuestionsPageCursor({
-            createdAt:
-              questionRows[questionRows.length - 1].question.createdAt,
-            id: questionRows[questionRows.length - 1].question.id,
-          })
-          : null,
+      nextCursor,
     },
   };
+}
+
+export async function findQuestionsPublic({
+  categoryId,
+  tagId,
+  limit,
+  sortBy,
+  cursor,
+}: GetQuestionsQuery): Promise<QuestionsListResult> {
+  const effectiveSortBy: Exclude<QuestionSortBy, "myActivity"> =
+    sortBy === "myActivity" ? "recent" : sortBy;
+  const effectiveCursor =
+    cursor && cursor.sortBy === effectiveSortBy ? cursor : undefined;
+  const whereClause = buildQuestionsWhereClause(
+    "",
+    categoryId,
+    tagId,
+    effectiveSortBy,
+    effectiveCursor,
+  );
+  const baseQuery = buildPublicQuestionsBaseQuery()
+    .where(whereClause)
+    .orderBy(...buildQuestionsOrderBy(effectiveSortBy, ""));
+
+  const rows = await baseQuery.limit(limit + 1);
+  const hasMore = rows.length > limit;
+  const questionRows: PublicQuestionHydrationRow[] = hasMore
+    ? rows.slice(0, limit)
+    : rows;
+
+  const questions = await attachPublicTagsToQuestions(questionRows);
+  const lastQuestionRow =
+    questionRows.length > 0 ? questionRows[questionRows.length - 1] : null;
+  const nextCursor =
+    hasMore && lastQuestionRow
+      ? encodeQuestionsPageCursor(
+          effectiveSortBy === "topRated"
+            ? {
+                sortBy: "topRated",
+                score:
+                  lastQuestionRow.question.upvoteCount -
+                  lastQuestionRow.question.downvoteCount,
+                createdAt: lastQuestionRow.question.createdAt,
+                id: lastQuestionRow.question.id,
+              }
+            : {
+                sortBy: effectiveSortBy,
+                createdAt: lastQuestionRow.question.createdAt,
+                id: lastQuestionRow.question.id,
+              },
+        )
+      : null;
+
+  return {
+    questions,
+    pagination: {
+      limit,
+      hasMore,
+      nextCursor,
+    },
+  };
+}
+
+async function attachPublicTagsToQuestions(
+  questions: PublicQuestionHydrationRow[],
+): Promise<ForumQuestionWithTags[]> {
+  if (questions.length === 0) {
+    return [];
+  }
+
+  const questionIds = questions.map((row) => row.question.id);
+  const tagRows = await db
+    .select({
+      questionId: forumQuestionTag.questionId,
+      tagId: forumTag.id,
+      tagName: forumTag.name,
+    })
+    .from(forumQuestionTag)
+    .innerJoin(forumTag, eq(forumTag.id, forumQuestionTag.tagId))
+    .where(inArray(forumQuestionTag.questionId, questionIds));
+
+  const tagsByQuestionId = new Map<string, QuestionTag[]>();
+  for (const row of tagRows) {
+    const current = tagsByQuestionId.get(row.questionId);
+    if (!current) {
+      tagsByQuestionId.set(row.questionId, [{ id: row.tagId, name: row.tagName }]);
+      continue;
+    }
+
+    if (!current.some((tag) => tag.id === row.tagId)) {
+      current.push({ id: row.tagId, name: row.tagName });
+    }
+  }
+
+  return questions.map((row) =>
+    hydratePublicQuestion(row, tagsByQuestionId.get(row.question.id) ?? []),
+  );
+}
+
+export async function getTrendingTags({
+  categoryId,
+}: GetTrendingTagsQuery): Promise<TrendingTagResult[]> {
+  const tagCount = sql<number>`count(${forumQuestionTag.tagId})`;
+  const filters = [inArray(forumQuestion.status, VISIBLE_QUESTION_STATUSES)];
+
+  if (categoryId) {
+    filters.push(eq(forumQuestion.categoryId, categoryId));
+  }
+
+  return db
+    .select({
+      id: forumTag.id,
+      name: forumTag.name,
+      count: tagCount.mapWith(Number),
+    })
+    .from(forumTag)
+    .innerJoin(forumQuestionTag, eq(forumTag.id, forumQuestionTag.tagId))
+    .innerJoin(forumQuestion, eq(forumQuestion.id, forumQuestionTag.questionId))
+    .where(and(...filters))
+    .groupBy(forumTag.id, forumTag.name)
+    .having(gte(tagCount, MIN_TRENDING_TAG_COUNT))
+    .orderBy(desc(tagCount), forumTag.name)
+    .limit(MAX_TRENDING_TAG_AMOUNT);
 }
 
 export async function createQuestion(

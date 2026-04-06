@@ -56,6 +56,29 @@ export const authLoginSchema = z
 
 export type AuthLoginPayload = z.infer<typeof authLoginSchema>;
 
+export const authForgotPasswordSchema = z
+  .object({
+    email: emailSchema,
+    resetPageUrl: z
+      .string()
+      .trim()
+      .min(1, "resetPageUrl is required"),
+  })
+  .openapi("AuthForgotPasswordRequest");
+
+export type AuthForgotPasswordPayload = z.infer<
+  typeof authForgotPasswordSchema
+>;
+
+export const authResetPasswordSchema = z
+  .object({
+    token: z.string().trim().min(1, "token is required"),
+    newPassword: passwordSchema,
+  })
+  .openapi("AuthResetPasswordRequest");
+
+export type AuthResetPasswordPayload = z.infer<typeof authResetPasswordSchema>;
+
 export const authRefreshSchema = z
   .object({
     refreshToken: z.string().trim().min(1, "refreshToken is required"),

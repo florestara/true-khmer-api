@@ -2,6 +2,7 @@ import type { Context } from "hono";
 import {
   type CreateQuestionInput,
   type EditQuestionInput,
+  type GetTrendingTagsQuery,
   type GetQuestionsQuery,
 
   type QuestionIdParams,
@@ -10,8 +11,11 @@ import {
 import {
   createQuestion,
   findQuestionById,
+  findQuestionByIdPublic,
   findQuestionRowById,
   findQuestions,
+  findQuestionsPublic,
+  getTrendingTags,
   setQuestionVote,
   softDeleteQuestion,
   updateQuestion,
@@ -20,10 +24,18 @@ import { getAuthUserId } from "../../auth/utils/get-auth";
 import { POSTGRES_FOREIGN_KEY_VIOLATION } from "../../../db/constants";
 import { findCategoryById } from "../categories/categories.query";
 
-export async function handleGetQuestions(c: Context, query: GetQuestionsQuery) {
-  const authResult = getAuthUserId(c);
-  if (!authResult.ok) {
-    return authResult.response;
+export async function handleGetQuestions(
+  c: Context,
+  query: GetQuestionsQuery,
+  isPublic = false,
+) {
+  let userId: string | undefined;
+  if (!isPublic) {
+    const authResult = getAuthUserId(c);
+    if (!authResult.ok) {
+      return authResult.response;
+    }
+    userId = authResult.userId;
   }
 
   try {
@@ -34,7 +46,9 @@ export async function handleGetQuestions(c: Context, query: GetQuestionsQuery) {
       }
     }
 
-    const result = await findQuestions(query, authResult.userId);
+    const result = isPublic
+      ? await findQuestionsPublic(query)
+      : await findQuestions(query, userId as string);
     return c.json(
       {
         ok: true,
@@ -48,23 +62,58 @@ export async function handleGetQuestions(c: Context, query: GetQuestionsQuery) {
   }
 }
 
-export async function handleGetQuestion(c: Context, params: QuestionIdParams) {
-  const authResult = getAuthUserId(c);
-  if (!authResult.ok) {
-    return authResult.response;
+export async function handleGetQuestion(
+  c: Context,
+  params: QuestionIdParams,
+  isPublic = false,
+) {
+  let userId: string | undefined;
+  if (!isPublic) {
+    const authResult = getAuthUserId(c);
+    if (!authResult.ok) {
+      return authResult.response;
+    }
+    userId = authResult.userId;
   }
 
   try {
-    const question = await findQuestionById(
-      params.questionId,
-      authResult.userId,
-    );
+    const question = isPublic
+      ? await findQuestionByIdPublic(params.questionId)
+      : await findQuestionById(params.questionId, userId as string);
     if (!question) {
       return c.json({ ok: false, error: "Question not found" }, 404);
     }
     return c.json({ ok: true, question }, 200);
   } catch (err) {
     console.error("Failed to get question", err);
+    return c.json({ ok: false, error: "Internal server error" }, 500);
+  }
+}
+
+export async function handleGetTrendingTags(
+  c: Context,
+  query: GetTrendingTagsQuery,
+  isPublic = false,
+) {
+  if (!isPublic) {
+    const authResult = getAuthUserId(c);
+    if (!authResult.ok) {
+      return authResult.response;
+    }
+  }
+
+  try {
+    if (query.categoryId) {
+      const category = await findCategoryById(query.categoryId);
+      if (!category) {
+        return c.json({ ok: false, error: "Category not found" }, 404);
+      }
+    }
+
+    const tags = await getTrendingTags(query);
+    return c.json({ ok: true, tags }, 200);
+  } catch (err) {
+    console.error("Failed to get trending tags", err);
     return c.json({ ok: false, error: "Internal server error" }, 500);
   }
 }
@@ -233,13 +282,6 @@ export async function handleVoteQuestion(
     if (existingQuestion.status !== "PUBLISHED") {
       return c.json(
         { ok: false, error: "Only published questions can be voted on" },
-        409,
-      );
-    }
-
-    if (existingQuestion.authorId === authResult.userId) {
-      return c.json(
-        { ok: false, error: "You cannot vote on your own question" },
         409,
       );
     }

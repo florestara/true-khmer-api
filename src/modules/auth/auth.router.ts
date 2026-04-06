@@ -1,9 +1,11 @@
 import { OpenAPIHono, createRoute } from "@hono/zod-openapi";
 import type { AppBindings } from "../../lib/types";
 import {
+  handleForgotPassword,
   handleLogin,
   handleRefresh,
   handleRegister,
+  handleResetPassword,
   handleResendRegisterOtp,
   handleVerifyRegisterOtp,
 } from "./auth.service";
@@ -13,10 +15,14 @@ import {
   refreshSuccessResponseSchema,
   registerSuccessResponseSchema,
   resendRegisterOtpResponseSchema,
+  forgotPasswordResponseSchema,
+  resetPasswordResponseSchema,
   authRegisterSchema,
   authVerifyRegisterOtpSchema,
   authResendRegisterOtpSchema,
   authLoginSchema,
+  authForgotPasswordSchema,
+  authResetPasswordSchema,
   authRefreshSchema,
 } from "./auth.schema";
 
@@ -139,8 +145,68 @@ const refreshRoute = createRoute({
   },
 });
 
+const forgotPasswordRoute = createRoute({
+  method: "post",
+  path: "/forgot-password",
+  tags: ["Auth"],
+  request: {
+    body: {
+      content: { "application/json": { schema: authForgotPasswordSchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Password reset request accepted",
+      content: {
+        "application/json": {
+          schema: forgotPasswordResponseSchema,
+        },
+      },
+    },
+    400: {
+      description: "Validation failed",
+      content: {
+        "application/json": {
+          schema: authSimpleErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+const resetPasswordRoute = createRoute({
+  method: "post",
+  path: "/reset-password",
+  tags: ["Auth"],
+  request: {
+    body: {
+      content: { "application/json": { schema: authResetPasswordSchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Password reset completed successfully",
+      content: {
+        "application/json": {
+          schema: resetPasswordResponseSchema,
+        },
+      },
+    },
+    400: {
+      description: "Validation failed or token is invalid",
+      content: {
+        "application/json": {
+          schema: authSimpleErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
 authRouter.openapi(registerRoute, handleRegister);
 authRouter.openapi(verifyOtpRoute, handleVerifyRegisterOtp);
 authRouter.openapi(resendOtpRoute, handleResendRegisterOtp);
 authRouter.openapi(loginRoute, handleLogin);
 authRouter.openapi(refreshRoute, handleRefresh);
+authRouter.openapi(forgotPasswordRoute, handleForgotPassword);
+authRouter.openapi(resetPasswordRoute, handleResetPassword);

@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { db } from "../../db/index";
-import { user, verification } from "../../db/schema/index";
+import { user, userProfile, verification } from "../../db/schema/index";
 
 export async function findUserRoleById(userId: string) {
   const [foundUser] = await db
@@ -55,4 +55,19 @@ export async function revokeEmailVerificationOtp(email: string) {
   const normalizedEmail = email.trim().toLowerCase();
   const identifier = `email-verification-otp-${normalizedEmail}`;
   await db.delete(verification).where(eq(verification.identifier, identifier));
+}
+
+export async function findUserProfileByUserId(userId: string) {
+  const [profile] = await db
+    .select({
+      id: userProfile.id,
+      displayName: userProfile.displayName,
+      avatarKey: userProfile.avatarKey,
+      avatarUrl: userProfile.avatarUrl,
+    })
+    .from(userProfile)
+    .where(eq(userProfile.userId, userId))
+    .limit(1);
+
+  return profile ?? null;
 }

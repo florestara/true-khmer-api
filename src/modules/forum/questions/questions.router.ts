@@ -7,11 +7,14 @@ import {
   handleEditQuestion,
   handleGetQuestion,
   handleGetQuestions,
+  handleGetTrendingTags,
   handleVoteQuestion,
 } from "./questions.service";
 import {
   createQuestionResponseSchema,
   createQuestionSchema,
+  getTrendingTagsQuerySchema,
+  getTrendingTagsResponseSchema,
   editQuestionSchema,
   getQuestionResponseSchema,
   getQuestionsResponseSchema,
@@ -62,6 +65,28 @@ const getRoute = createRoute({
       },
     },
     404: { description: "Question not found" },
+  },
+});
+
+const trendingTagsRoute = createRoute({
+  method: "get",
+  path: "/trending-tags",
+  tags: ["Forum Question"],
+  middleware: [requireAccessToken],
+  security: [{ BearerAuth: [] }],
+  request: {
+    query: getTrendingTagsQuerySchema,
+  },
+  responses: {
+    200: {
+      description: "Trending tags",
+      content: {
+        "application/json": {
+          schema: getTrendingTagsResponseSchema,
+        },
+      },
+    },
+    404: { description: "Category not found" },
   },
 });
 
@@ -165,6 +190,11 @@ const voteQuestionRoute = createRoute({
 questionsRouter.openapi(listRoute, async (c) => {
   const query = c.req.valid("query");
   return handleGetQuestions(c, query) as any;
+});
+
+questionsRouter.openapi(trendingTagsRoute, async (c) => {
+  const query = c.req.valid("query");
+  return handleGetTrendingTags(c, query) as any;
 });
 
 questionsRouter.openapi(getRoute, async (c) => {
