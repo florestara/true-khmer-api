@@ -140,12 +140,14 @@ const editTagsSchema = z
     }
   });
 
-export const getQuestionParamsSchema = z.object({
-  questionId: z
-    .string()
-    .trim()
-    .regex(FORUM_UUID_RE, "questionId must be a valid UUID"),
-}).openapi("GetQuestionParams");
+export const getQuestionParamsSchema = z
+  .object({
+    questionId: z
+      .string()
+      .trim()
+      .regex(FORUM_UUID_RE, "questionId must be a valid UUID"),
+  })
+  .openapi("GetQuestionParams");
 
 export type QuestionIdParams = z.infer<typeof getQuestionParamsSchema>;
 export type GetQuestionParams = QuestionIdParams;
@@ -184,9 +186,7 @@ const cursorActivityAtSchema = z
 
 function buildChronologicalQuestionsPageCursorSchema<
   TSortBy extends "recent" | "unanswered",
->(
-  sortBy: TSortBy,
-) {
+>(sortBy: TSortBy) {
   return z.object({
     sortBy: z.literal(sortBy),
     createdAt: cursorCreatedAtSchema,
@@ -246,16 +246,16 @@ export function encodeQuestionsPageCursor(cursor: QuestionsPageCursor): string {
             id: cursor.id,
           }
         : cursor.sortBy === "myActivity"
-        ? {
-            sortBy: cursor.sortBy,
-            activityAt: normalizedTimestamp,
-            id: cursor.id,
-          }
-        : {
-            sortBy: cursor.sortBy,
-            createdAt: normalizedTimestamp,
-            id: cursor.id,
-          },
+          ? {
+              sortBy: cursor.sortBy,
+              activityAt: normalizedTimestamp,
+              id: cursor.id,
+            }
+          : {
+              sortBy: cursor.sortBy,
+              createdAt: normalizedTimestamp,
+              id: cursor.id,
+            },
     ),
     "utf8",
   ).toString("base64url");
@@ -302,6 +302,7 @@ export const getQuestionsQuerySchema = z
       .trim()
       .regex(FORUM_UUID_RE, "tagId must be a valid UUID")
       .optional(),
+    title: z.string().trim().optional(),
     limit: z.coerce
       .number()
       .int()
@@ -346,6 +347,7 @@ export const getQuestionsQuerySchema = z
   .transform((value) => ({
     categoryId: value.categoryId,
     tagId: value.tagId,
+    title: value.title,
     limit: value.limit,
     sortBy: value.sortBy,
     cursor: value.cursor,
