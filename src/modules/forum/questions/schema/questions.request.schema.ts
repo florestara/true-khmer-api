@@ -302,7 +302,11 @@ export const getQuestionsQuerySchema = z
       .trim()
       .regex(FORUM_UUID_RE, "tagId must be a valid UUID")
       .optional(),
-    title: z.string().trim().optional(),
+    title: z
+      .string()
+      .trim()
+      .max(300, "title is required and must be 1..300 characters")
+      .optional(),
     limit: z.coerce
       .number()
       .int()
