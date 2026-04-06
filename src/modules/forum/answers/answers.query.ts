@@ -173,6 +173,21 @@ export async function findAnswersByQuestionIdPublic(
   return rows.map((row) => hydratePublicAnswer(row));
 }
 
+export async function findAnswersByAuthorId(
+  authorId: string,
+): Promise<ForumAnswerWithViewerVote[]> {
+  const rows = await buildAnswersBaseQuery(db, authorId)
+    .where(
+      and(
+        eq(forumAnswer.authorId, authorId),
+        eq(forumAnswer.status, "PUBLISHED"),
+      ),
+    )
+    .orderBy(desc(forumAnswer.createdAt), desc(forumAnswer.upvoteCount));
+
+  return rows.map((row) => hydrateAnswer(row));
+}
+
 export async function createAnswer(
   data: CreateAnswerInput,
   authorId: string,

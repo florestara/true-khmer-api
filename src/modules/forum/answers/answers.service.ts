@@ -9,6 +9,7 @@ import type {
 import {
   createAnswer,
   findAnswerById,
+  findAnswersByAuthorId,
   findAnswersByQuestionId,
   findAnswersByQuestionIdPublic,
   findQuestionById,
@@ -45,6 +46,21 @@ export async function handleGetAnswers(
     return c.json({ ok: true, answers }, 200);
   } catch (err) {
     console.error("Failed to get answers", err);
+    return c.json({ ok: false, error: "Internal server error" }, 500);
+  }
+}
+
+export async function handleGetMyAnswers(c: Context) {
+  const authResult = getAuthUserId(c);
+  if (!authResult.ok) {
+    return authResult.response;
+  }
+
+  try {
+    const answers = await findAnswersByAuthorId(authResult.userId);
+    return c.json({ ok: true, answers }, 200);
+  } catch (err) {
+    console.error("Failed to get my answers", err);
     return c.json({ ok: false, error: "Internal server error" }, 500);
   }
 }
