@@ -21,8 +21,8 @@ import {
   updateQuestion,
 } from "./questions.query";
 import { getAuthUserId } from "../../auth/utils/get-auth";
+import { POSTGRES_FOREIGN_KEY_VIOLATION } from "../../../db/constants";
 import { findCategoryById } from "../categories/categories.query";
-import { POSTGRES_FOREIGN_KEY_VIOLATION } from "../lib/constants";
 
 export async function handleGetQuestions(
   c: Context,

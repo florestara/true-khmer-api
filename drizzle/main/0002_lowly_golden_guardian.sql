@@ -8,7 +8,6 @@ CREATE TABLE "forum_question_vote" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-DROP TABLE "volunteer_category" CASCADE;--> statement-breakpoint
 ALTER TABLE "forum_question" ADD COLUMN "upvote_count" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
 ALTER TABLE "forum_question" ADD COLUMN "downvote_count" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
 ALTER TABLE "forum_question" ADD COLUMN "deleted_at" timestamp with time zone;--> statement-breakpoint
@@ -17,4 +16,3 @@ CREATE UNIQUE INDEX "forum_question_vote_question_voter_unique_idx" ON "forum_qu
 CREATE INDEX "forum_question_vote_question_idx" ON "forum_question_vote" USING btree ("question_id");--> statement-breakpoint
 CREATE INDEX "forum_question_vote_voter_idx" ON "forum_question_vote" USING btree ("voter_id");--> statement-breakpoint
 CREATE INDEX "forum_question_vote_type_idx" ON "forum_question_vote" USING btree ("vote_type");--> statement-breakpoint
-DROP TYPE "public"."volunteer_category_status";

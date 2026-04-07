@@ -1,5 +1,5 @@
 import type { Context } from "hono";
-import { POSTGRES_UNIQUE_VIOLATION } from "../lib/constants";
+import { POSTGRES_UNIQUE_VIOLATION } from "../../../db/constants";
 import { getAuthUserId } from "../../../modules/auth/utils/get-auth";
 import {
   validateCreateCategoryInput,

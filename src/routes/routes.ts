@@ -6,6 +6,7 @@ import { categoriesRouter } from "../modules/forum/categories/categories.router"
 import { questionsRouter } from "../modules/forum/questions/questions.router";
 import { onboardingRouter } from "../modules/onboarding/onboarding.router";
 import { uploadsRouter } from "../modules/uploads/uploads.router";
+import { postVolunteerRouter } from "../modules/volunteer/post-volunteer/post-volunteer.router";
 import { publicQuestionsRouter } from "../modules/forum/questions/public.questions.router";
 import { publicCategoriesRouter } from "../modules/forum/categories/public.categories.router";
 import { publicAnswersRouter } from "../modules/forum/answers/public.answers.router";
@@ -18,6 +19,7 @@ routes.route("/uploads", uploadsRouter);
 routes.route("/forum/category", categoriesRouter);
 routes.route("/forum/questions", questionsRouter);
 routes.route("/forum/answer", answersRouter);
+routes.route("/volunteer", postVolunteerRouter);
 routes.route("/forum/public/questions", publicQuestionsRouter);
 routes.route("/forum/public/category", publicCategoriesRouter);
 routes.route("/forum/public/answer", publicAnswersRouter);

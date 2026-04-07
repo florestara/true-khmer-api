@@ -31,35 +31,46 @@ function readBearerToken(authorization?: string) {
   return token || null;
 }
 
+function authErrorResponse(
+  c: Context,
+  status: 401 | 403,
+  error: string,
+  code?: string,
+) {
+  return c.json(
+    {
+      ok: false as const,
+      error,
+      ...(code ? { code } : {}),
+    },
+    status,
+  );
+}
+
 async function authenticateAccessToken(c: Context) {
   const token = readBearerToken(c.req.header("authorization"));
 
   if (!token) {
-    return c.json({ error: "Missing bearer token" }, 401);
+    return authErrorResponse(c, 401, "Missing bearer token");
   }
 
   const verifyResult = await verifyJwtToken(token);
   if (!verifyResult.ok) {
-    return c.json({ error: "Invalid or expired access token" }, 401);
+    return authErrorResponse(c, 401, "Invalid or expired access token");
   }
 
   if (!isAccessTokenPayload(verifyResult.payload)) {
-    return c.json({ error: "Access token required" }, 401);
+    return authErrorResponse(c, 401, "Access token required");
   }
 
   const sub = (verifyResult.payload as AuthPayload).sub;
   if (typeof sub !== "string" || sub.trim().length === 0) {
-    return c.json({ error: "Invalid access token payload" }, 401);
+    return authErrorResponse(c, 401, "Invalid access token payload");
   }
 
   const userId = sub.trim();
   if (!AUTH_USER_ID_UUID_RE.test(userId)) {
-    return c.json(
-      {
-        error: "User identifier must be a valid UUID",
-      },
-      401,
-    );
+    return authErrorResponse(c, 401, "User identifier must be a valid UUID");
   }
 
   c.set("auth", { userId } satisfies AuthContext);
@@ -77,14 +88,14 @@ function createRequireAccessTokenMiddleware(options?: {
 
     const auth = c.get("auth") as AuthContext | undefined;
     if (!auth) {
-      return c.json({ error: "Invalid access token payload" }, 401);
+      return authErrorResponse(c, 401, "Invalid access token payload");
     }
 
     if (!options?.allowIncompleteOnboarding) {
       const onboardingStatus = await findUserOnboardingStatusById(auth.userId);
 
       if (!onboardingStatus) {
-        return c.json({ error: "User not found" }, 401);
+        return authErrorResponse(c, 401, "User not found");
       }
 
       const isOnboardingCompleted =
@@ -92,12 +103,11 @@ function createRequireAccessTokenMiddleware(options?: {
         onboardingStatus.onboardingStep >= ONBOARDING_COMPLETE_STEP;
 
       if (!isOnboardingCompleted) {
-        return c.json(
-          {
-            error: "Onboarding required",
-            code: "ONBOARDING_REQUIRED",
-          },
+        return authErrorResponse(
+          c,
           403,
+          "Onboarding required",
+          "ONBOARDING_REQUIRED",
         );
       }
     }
@@ -121,17 +131,17 @@ export const requireAdmin = createMiddleware(async (c, next) => {
 
   const auth = c.get("auth") as AuthContext | undefined;
   if (!auth) {
-    return c.json({ error: "Invalid access token payload" }, 401);
+    return authErrorResponse(c, 401, "Invalid access token payload");
   }
 
   const user = await findUserRoleById(auth.userId);
 
   if (!user) {
-    return c.json({ error: "User not found" }, 401);
+    return authErrorResponse(c, 401, "User not found");
   }
 
   if (user.role !== "admin") {
-    return c.json({ error: "Admin role required" }, 403);
+    return authErrorResponse(c, 403, "Admin role required");
   }
 
   await next();

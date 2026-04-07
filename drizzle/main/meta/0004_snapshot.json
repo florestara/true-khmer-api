@@ -1,6 +1,6 @@
 {
-  "id": "9bfce188-e4c1-41a9-b1cf-6d4aafadb9df",
-  "prevId": "da72e89c-0c98-4e5f-9d24-6e288efa8ae4",
+  "id": "826891b1-2687-4516-a678-7524469dff93",
+  "prevId": "9bfce188-e4c1-41a9-b1cf-6d4aafadb9df",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2652,7 +2652,34 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "volunteer_category_created_by_user_id_fk": {
+          "name": "volunteer_category_created_by_user_id_fk",
+          "tableFrom": "volunteer_category",
+          "tableTo": "user",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "volunteer_category_updated_by_user_id_fk": {
+          "name": "volunteer_category_updated_by_user_id_fk",
+          "tableFrom": "volunteer_category",
+          "tableTo": "user",
+          "columnsFrom": [
+            "updated_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},

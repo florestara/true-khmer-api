@@ -17,7 +17,7 @@ import {
   softDeleteAnswer,
   updateAnswer,
 } from "./answers.query";
-import { POSTGRES_FOREIGN_KEY_VIOLATION } from "../lib/constants";
+import { POSTGRES_FOREIGN_KEY_VIOLATION } from "../../../db/constants";
 import { getAuthUserId } from "../../../modules/auth/utils/get-auth";
 
 export async function handleGetAnswers(
