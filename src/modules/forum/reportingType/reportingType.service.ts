@@ -6,11 +6,11 @@ export async function handleReportingTypes(c: Context) {
     const result = await findReportingTypes();
 
     if (!result.reportingTypes || result.reportingTypes.length === 0) {
-      return c.json({ ok: false, error: "No reporting types found" }, 404);
+      return c.json({ ok: false, reportingTypes: [] }, 404);
     }
     return c.json({ ok: true, reportingTypes: result.reportingTypes }, 200);
   } catch (error) {
     console.error("Failed to get reporting types", error);
-    return c.json({ ok: false, error: "Failed to get reporting types" }, 500);
+    return c.json({ ok: false, reportingTypes: [] }, 500);
   }
 }

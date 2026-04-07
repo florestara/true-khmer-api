@@ -19,6 +19,8 @@ const listPublicRoute = createRoute({
         },
       },
     },
+    404: { description: "No reporting types found" },
+    500: { description: "Internal server error" },
   },
 });
 
