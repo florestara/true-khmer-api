@@ -6,6 +6,7 @@ import {
   handleDeleteAnswer,
   handleEditAnswer,
   handleGetAnswers,
+  handleGetMyAnswers,
   handleVoteAnswer,
 } from "./answers.service";
 import {
@@ -36,6 +37,24 @@ const getAnswersRoute = createRoute({
   responses: {
     200: {
       description: "List of answers for a question",
+      content: {
+        "application/json": {
+          schema: getAnswersResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+const getMyAnswersRoute = createRoute({
+  method: "get",
+  path: "/my-answers",
+  tags: ["Forum Answer"],
+  middleware: [requireAccessToken],
+  security: [{ BearerAuth: [] }],
+  responses: {
+    200: {
+      description: "List of answers created by the authenticated user",
       content: {
         "application/json": {
           schema: getAnswersResponseSchema,
@@ -156,6 +175,10 @@ const voteAnswerRoute = createRoute({
 answersRouter.openapi(getAnswersRoute, async (c) => {
   const params = c.req.valid("param");
   return handleGetAnswers(c, params) as any;
+});
+
+answersRouter.openapi(getMyAnswersRoute, async (c) => {
+  return handleGetMyAnswers(c) as any;
 });
 
 answersRouter.openapi(createAnswerRoute, async (c) => {
