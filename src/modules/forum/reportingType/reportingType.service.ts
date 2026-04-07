@@ -3,12 +3,12 @@ import { findReportingTypes } from "./reportingType.query";
 
 export async function handleReportingTypes(c: Context) {
   try {
-    const reportingType = await findReportingTypes();
+    const result = await findReportingTypes();
 
-    if (!reportingType) {
-      return c.json({ ok: false, error: "Reporting type not found" }, 404);
+    if (!result.reportingTypes || result.reportingTypes.length === 0) {
+      return c.json({ ok: false, error: "No reporting types found" }, 404);
     }
-    return c.json({ ok: true, reportingType }, 200);
+    return c.json({ ok: true, reportingTypes: result.reportingTypes }, 200);
   } catch (error) {
     console.error("Failed to get reporting types", error);
     return c.json({ ok: false, error: "Failed to get reporting types" }, 500);
