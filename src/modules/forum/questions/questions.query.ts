@@ -1,4 +1,15 @@
-import { and, desc, eq, gte, inArray, lt, or, sql, type SQL } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  gte,
+  ilike,
+  inArray,
+  lt,
+  or,
+  sql,
+  type SQL,
+} from "drizzle-orm";
 import { db } from "../../../db/index";
 import {
   forumAnswer,
@@ -44,7 +55,10 @@ type QuestionListRow = BaseQuestionHydrationRow & {
   myActivityAt?: string | null;
 };
 type QuestionDetailRow = BaseQuestionHydrationRow;
-type PublicQuestionHydrationRow = Omit<BaseQuestionHydrationRow, "viewerVoteType">;
+type PublicQuestionHydrationRow = Omit<
+  BaseQuestionHydrationRow,
+  "viewerVoteType"
+>;
 type ForumQuestionWithTags = Omit<
   ForumQuestionRow,
   "categoryId" | "authorId" | "deletedAt"
@@ -81,8 +95,7 @@ type TrendingTagResult = {
 const VISIBLE_QUESTION_STATUSES = ["PUBLISHED", "CLOSED"] as const;
 const MIN_TRENDING_TAG_COUNT = 10;
 const MAX_TRENDING_TAG_AMOUNT = 10;
-const QUESTION_SCORE_SQL =
-  sql<number>`${forumQuestion.upvoteCount} - ${forumQuestion.downvoteCount}`;
+const QUESTION_SCORE_SQL = sql<number>`${forumQuestion.upvoteCount} - ${forumQuestion.downvoteCount}`;
 
 function buildMyActivityTimestampSql(viewerId: string) {
   return sql<string>`greatest(
@@ -311,6 +324,7 @@ function buildQuestionsWhereClause(
   viewerId: string,
   categoryId?: string,
   tagId?: string,
+  title?: string,
   sortBy: QuestionSortBy = "recent",
   cursor?: QuestionsPageCursor,
 ) {
@@ -329,6 +343,10 @@ function buildQuestionsWhereClause(
           and ${forumQuestionTag.tagId} = ${tagId}
       )`,
     );
+  }
+
+  if (title) {
+    filters.push(ilike(forumQuestion.title, `%${title}%`));
   }
 
   if (sortBy === "unanswered") {
@@ -536,13 +554,14 @@ export async function findQuestionByIdPublic(
 }
 
 export async function findQuestions(
-  { categoryId, tagId, limit, sortBy, cursor }: GetQuestionsQuery,
+  { categoryId, tagId, title, limit, sortBy, cursor }: GetQuestionsQuery,
   viewerId: string,
 ): Promise<QuestionsListResult> {
   const whereClause = buildQuestionsWhereClause(
     viewerId,
     categoryId,
     tagId,
+    title,
     sortBy,
     cursor,
   );
@@ -574,6 +593,7 @@ export async function findQuestions(
 export async function findQuestionsPublic({
   categoryId,
   tagId,
+  title,
   limit,
   sortBy,
   cursor,
@@ -582,10 +602,12 @@ export async function findQuestionsPublic({
     sortBy === "myActivity" ? "recent" : sortBy;
   const effectiveCursor =
     cursor && cursor.sortBy === effectiveSortBy ? cursor : undefined;
+
   const whereClause = buildQuestionsWhereClause(
     "",
     categoryId,
     tagId,
+    title,
     effectiveSortBy,
     effectiveCursor,
   );
@@ -654,7 +676,9 @@ async function attachPublicTagsToQuestions(
   for (const row of tagRows) {
     const current = tagsByQuestionId.get(row.questionId);
     if (!current) {
-      tagsByQuestionId.set(row.questionId, [{ id: row.tagId, name: row.tagName }]);
+      tagsByQuestionId.set(row.questionId, [
+        { id: row.tagId, name: row.tagName },
+      ]);
       continue;
     }
 
