@@ -10,6 +10,7 @@ import {
   sql,
   type SQL,
 } from "drizzle-orm";
+import { env } from "../../../config/env";
 import { db } from "../../../db/index";
 import {
   forumAnswer,
@@ -93,8 +94,8 @@ type TrendingTagResult = {
 };
 
 const VISIBLE_QUESTION_STATUSES = ["PUBLISHED", "CLOSED"] as const;
-const MIN_TRENDING_TAG_COUNT = 10;
-const MAX_TRENDING_TAG_AMOUNT = 10;
+const MIN_TRENDING_TAG_COUNT = env.FORUM_MIN_TRENDING_TAG_COUNT;
+const MAX_TRENDING_TAG_AMOUNT = env.FORUM_MAX_TRENDING_TAG_AMOUNT;
 const QUESTION_SCORE_SQL = sql<number>`${forumQuestion.upvoteCount} - ${forumQuestion.downvoteCount}`;
 
 function buildMyActivityTimestampSql(viewerId: string) {
