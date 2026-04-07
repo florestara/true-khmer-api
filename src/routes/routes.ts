@@ -10,6 +10,7 @@ import { postVolunteerRouter } from "../modules/volunteer/post-volunteer/post-vo
 import { publicQuestionsRouter } from "../modules/forum/questions/public.questions.router";
 import { publicCategoriesRouter } from "../modules/forum/categories/public.categories.router";
 import { publicAnswersRouter } from "../modules/forum/answers/public.answers.router";
+import { reportingTypeRouter } from "../modules/forum/reportingType/reportingType.router";
 
 const routes = new OpenAPIHono<AppBindings>();
 
@@ -23,6 +24,6 @@ routes.route("/volunteer", postVolunteerRouter);
 routes.route("/forum/public/questions", publicQuestionsRouter);
 routes.route("/forum/public/category", publicCategoriesRouter);
 routes.route("/forum/public/answer", publicAnswersRouter);
-
+routes.route("/forum/public/reporting-type", reportingTypeRouter);
 
 export default routes;
