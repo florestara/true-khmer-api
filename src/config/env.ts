@@ -19,6 +19,12 @@ const envSchema = z.object({
   APP_NAME: z.string().default("True Khmer"),
   APP_DOMAIN: z.preprocess(emptyStringToUndefined, z.string().url()),
   PORT: z.coerce.number().int().positive().default(3000),
+  FORUM_MIN_TRENDING_TAG_COUNT: z.coerce.number().int().positive().default(10),
+  FORUM_MAX_TRENDING_TAG_AMOUNT: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(10),
   DEFAULT_BASE_URL: z.preprocess(
     emptyStringToUndefined,
     z.string().url().optional(),
