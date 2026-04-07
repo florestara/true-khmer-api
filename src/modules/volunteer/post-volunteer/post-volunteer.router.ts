@@ -1,15 +1,10 @@
-import {
-  OpenAPIHono,
-  createRoute,
-  type RouteHandler,
-} from "@hono/zod-openapi";
+import { OpenAPIHono, createRoute } from "@hono/zod-openapi";
 import type { AppBindings } from "../../../lib/types";
 import {
   requireAdmin,
   requireAccessToken,
 } from "../../../middlewares/auth.middleware";
 import { authProtectedErrorResponseSchema } from "../../auth/auth.schema";
-import { getAuthUserId } from "../../auth/utils/get-auth";
 import {
   createVolunteerCategoryResponseSchema,
   createVolunteerCategorySchema,
@@ -133,45 +128,11 @@ const createVolunteerCategoryRoute = createRoute({
   },
 });
 
-const getVolunteerCategoriesHandler: RouteHandler<
-  typeof getVolunteerCategoriesRoute,
-  AppBindings
-> = async (c) => {
-  const result = await handleGetVolunteerCategories();
-  if (!result.ok) {
-    return c.json({ ok: false, error: result.error }, result.status);
-  }
+postVolunteerRouter.openapi(getVolunteerCategoriesRoute, async (c) => {
+  return handleGetVolunteerCategories(c) as any;
+});
 
-  return c.json({ ok: true, categories: result.categories }, 200);
-};
-
-const createVolunteerCategoryHandler: RouteHandler<
-  typeof createVolunteerCategoryRoute,
-  AppBindings
-> = async (c) => {
-  const authResult = getAuthUserId(c);
-  if (!authResult.ok) {
-    return authResult.response as any;
-  }
-
+postVolunteerRouter.openapi(createVolunteerCategoryRoute, async (c) => {
   const data = c.req.valid("json");
-  const result = await handleCreateVolunteerCategory({
-    ...data,
-    createdBy: authResult.userId,
-  });
-
-  if (!result.ok) {
-    return c.json({ ok: false, error: result.error }, result.status);
-  }
-
-  return c.json({ ok: true, category: result.category }, 201);
-};
-
-postVolunteerRouter.openapi(
-  getVolunteerCategoriesRoute,
-  getVolunteerCategoriesHandler,
-);
-postVolunteerRouter.openapi(
-  createVolunteerCategoryRoute,
-  createVolunteerCategoryHandler,
-);
+  return handleCreateVolunteerCategory(c, data) as any;
+});
