@@ -58,7 +58,10 @@ export const forumCategory = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" })
       .defaultNow()
       .notNull(),
-    archivedAt: timestamp("archived_at", { withTimezone: true, mode: "string" }),
+    archivedAt: timestamp("archived_at", {
+      withTimezone: true,
+      mode: "string",
+    }),
   },
   (table) => [
     uniqueIndex("forum_category_slug_unique_idx").using("btree", table.slug),
@@ -193,33 +196,59 @@ export const forumAnswerVote = pgTable(
   ],
 );
 
+export const forumReportingType = pgTable(
+  "forum_reporting_type",
+  {
+    id: uuid("id").defaultRandom().primaryKey().notNull(),
+    type: varchar("type", { length: 150 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("forum_reporting_type_type_unique_idx").using(
+      "btree",
+      table.type,
+    ),
+  ],
+);
+
 export const forumCategoryRelations = relations(forumCategory, ({ many }) => ({
   questions: many(forumQuestion),
 }));
 
-export const forumQuestionRelations = relations(forumQuestion, ({ one, many }) => ({
-  category: one(forumCategory, {
-    fields: [forumQuestion.categoryId],
-    references: [forumCategory.id],
+export const forumQuestionRelations = relations(
+  forumQuestion,
+  ({ one, many }) => ({
+    category: one(forumCategory, {
+      fields: [forumQuestion.categoryId],
+      references: [forumCategory.id],
+    }),
+    author: one(user, {
+      fields: [forumQuestion.authorId],
+      references: [user.id],
+    }),
+    answers: many(forumAnswer),
+    votes: many(forumQuestionVote),
   }),
-  author: one(user, {
-    fields: [forumQuestion.authorId],
-    references: [user.id],
-  }),
-  answers: many(forumAnswer),
-  votes: many(forumQuestionVote),
-}));
+);
 
-export const forumQuestionVoteRelations = relations(forumQuestionVote, ({ one }) => ({
-  question: one(forumQuestion, {
-    fields: [forumQuestionVote.questionId],
-    references: [forumQuestion.id],
+export const forumQuestionVoteRelations = relations(
+  forumQuestionVote,
+  ({ one }) => ({
+    question: one(forumQuestion, {
+      fields: [forumQuestionVote.questionId],
+      references: [forumQuestion.id],
+    }),
+    voter: one(user, {
+      fields: [forumQuestionVote.voterId],
+      references: [user.id],
+    }),
   }),
-  voter: one(user, {
-    fields: [forumQuestionVote.voterId],
-    references: [user.id],
-  }),
-}));
+);
 
 export const forumAnswerRelations = relations(forumAnswer, ({ one, many }) => ({
   question: one(forumQuestion, {
@@ -233,13 +262,16 @@ export const forumAnswerRelations = relations(forumAnswer, ({ one, many }) => ({
   votes: many(forumAnswerVote),
 }));
 
-export const forumAnswerVoteRelations = relations(forumAnswerVote, ({ one }) => ({
-  answer: one(forumAnswer, {
-    fields: [forumAnswerVote.answerId],
-    references: [forumAnswer.id],
+export const forumAnswerVoteRelations = relations(
+  forumAnswerVote,
+  ({ one }) => ({
+    answer: one(forumAnswer, {
+      fields: [forumAnswerVote.answerId],
+      references: [forumAnswer.id],
+    }),
+    voter: one(user, {
+      fields: [forumAnswerVote.voterId],
+      references: [user.id],
+    }),
   }),
-  voter: one(user, {
-    fields: [forumAnswerVote.voterId],
-    references: [user.id],
-  }),
-}));
+);
