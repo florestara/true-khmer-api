@@ -14,12 +14,13 @@ export async function handleCreateReporting(
   try {
     if (data.questionId) {
       const question = await findQuestionById(data.questionId);
-      if (!question)
+      if (!question || question?.status === "DELETED")
         return c.json({ ok: false, error: "Question not found" }, 404);
     }
     if (data.answerId) {
       const answer = await findAnswerById(data.answerId);
-      if (!answer) return c.json({ ok: false, error: "Answer not found" }, 404);
+      if (!answer || answer?.status === "DELETED")
+        return c.json({ ok: false, error: "Answer not found" }, 404);
     }
 
     const type = await findReportingTypeById(data.typeId);
