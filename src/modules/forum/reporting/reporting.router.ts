@@ -12,7 +12,6 @@ const createReportingRoute = createRoute({
   method: "post",
   path: "/",
   tags: ["Public", "Forum Reporting"],
-  security: [{ BearerAuth: [] }],
   request: {
     body: {
       content: {

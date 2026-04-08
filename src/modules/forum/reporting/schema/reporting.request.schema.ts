@@ -37,7 +37,7 @@ export const createReportingSchema = z
       .string()
       .max(
         MAX_BODY_LENGTH,
-        `body must be not more than ${MAX_BODY_LENGTH} characters`,
+        `description must be not more than ${MAX_BODY_LENGTH} characters`,
       )
       .optional(),
   })
