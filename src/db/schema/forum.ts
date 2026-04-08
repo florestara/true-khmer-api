@@ -216,6 +216,27 @@ export const forumReportingType = pgTable(
   ],
 );
 
+export const forumReporting = pgTable("forum_reporting", {
+  id: uuid("id").defaultRandom().primaryKey().notNull(),
+  questionId: uuid("question_id").references(() => forumQuestion.id, {
+    onDelete: "cascade",
+  }),
+  answerId: uuid("answer_id").references(() => forumAnswer.id, {
+    onDelete: "cascade",
+  }),
+  typeId: uuid("type_id")
+    .notNull()
+    .references(() => forumReportingType.id),
+  description: text("description"),
+  createdBy: uuid("created_by").references(() => user.id),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
+    .defaultNow()
+    .notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" })
+    .defaultNow()
+    .notNull(),
+});
+
 export const forumCategoryRelations = relations(forumCategory, ({ many }) => ({
   questions: many(forumQuestion),
 }));
@@ -275,3 +296,25 @@ export const forumAnswerVoteRelations = relations(
     }),
   }),
 );
+
+export const forumReportingTypeRelations = relations(
+  forumReportingType,
+  ({ many }) => ({
+    reportings: many(forumReporting),
+  }),
+);
+
+export const forumReportingRelations = relations(forumReporting, ({ one }) => ({
+  question: one(forumQuestion, {
+    fields: [forumReporting.questionId],
+    references: [forumQuestion.id],
+  }),
+  answer: one(forumAnswer, {
+    fields: [forumReporting.answerId],
+    references: [forumAnswer.id],
+  }),
+  type: one(forumReportingType, {
+    fields: [forumReporting.typeId],
+    references: [forumReportingType.id],
+  }),
+}));

@@ -1,3 +1,4 @@
+import { eq } from "drizzle-orm";
 import { db } from "../../../db";
 import { forumReportingType } from "../../../db/schema";
 
@@ -10,6 +11,11 @@ type ForumReportingType = Omit<
 type GetReportingTypesResult = {
   ok: boolean;
   reportingTypes?: ForumReportingType[];
+};
+
+type GetReportingTypeByIdResult = {
+  ok: boolean;
+  reportingType?: ForumReportingType | null;
 };
 
 function buildReportingTypeBaseQuery() {
@@ -25,4 +31,16 @@ export async function findReportingTypes(): Promise<GetReportingTypesResult> {
     ok: true,
     reportingTypes,
   };
+}
+
+export async function findReportingTypeById(
+  id: string,
+): Promise<GetReportingTypeByIdResult | null> {
+  const reportingType = await buildReportingTypeBaseQuery()
+    .where(eq(forumReportingType.id, id))
+    .then((res) => res[0]);
+  if (!reportingType) {
+    return { ok: false, reportingType: null };
+  }
+  return { ok: true, reportingType };
 }
