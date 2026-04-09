@@ -1,9 +1,7 @@
-import { db } from "../../db/index";
+import { db } from "../index";
 import { eq } from "drizzle-orm";
-import { normalizeLocationName } from "./utils";
-import { fileURLToPath } from "node:url";
-import { resolve } from "node:path";
-import { city, country, interest, tier } from "../../db/schema";
+import { city, country, interest, tier } from "../schema";
+import { normalizeLocationName } from "../../modules/onboarding/utils";
 
 const INTEREST_SEED = [
   { slug: "education", label: "Education", icon: "🎓" },
@@ -130,23 +128,5 @@ export async function seedOnboardingLookups() {
     .values(citySeed)
     .onConflictDoNothing({
       target: [city.countryId, city.normalizedName],
-    });
-}
-
-function isExecutedDirectly() {
-  const currentFilePath = fileURLToPath(import.meta.url);
-  const entryPath = process.argv[1] ? resolve(process.argv[1]) : "";
-  return currentFilePath === entryPath;
-}
-
-if (isExecutedDirectly()) {
-  seedOnboardingLookups()
-    .then(() => {
-      console.log("Onboarding lookup seed completed");
-      process.exit(0);
-    })
-    .catch((error) => {
-      console.error("Onboarding lookup seed failed", error);
-      process.exit(1);
     });
 }

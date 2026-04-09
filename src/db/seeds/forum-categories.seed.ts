@@ -1,7 +1,5 @@
-import { fileURLToPath } from "node:url";
-import { resolve } from "node:path";
-import { closeDb, db } from "../../../db/index";
-import { forumCategory } from "../../../db/schema";
+import { forumCategory } from "../schema";
+import { db } from "../index";
 
 const SEED_ACTOR_ID = "11111111-1111-4111-8111-111111111111";
 
@@ -15,7 +13,8 @@ const FORUM_CATEGORY_SEED = [
   {
     name: "Career Advice",
     slug: "career-advice",
-    description: "Career path, hiring, and professional development discussions.",
+    description:
+      "Career path, hiring, and professional development discussions.",
     displayOrder: 2,
   },
   {
@@ -27,13 +26,15 @@ const FORUM_CATEGORY_SEED = [
   {
     name: "Khmer Culture",
     slug: "khmer-culture",
-    description: "Culture, identity, heritage, and local community conversations.",
+    description:
+      "Culture, identity, heritage, and local community conversations.",
     displayOrder: 4,
   },
   {
     name: "Networking",
     slug: "networking",
-    description: "Relationship building, partnerships, and collaboration opportunities.",
+    description:
+      "Relationship building, partnerships, and collaboration opportunities.",
     displayOrder: 5,
   },
 ] satisfies Array<
@@ -61,8 +62,7 @@ export async function seedForumCategories() {
 
       if (insertedCategory) insertedCount += 1;
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "unknown error";
+      const message = error instanceof Error ? error.message : "unknown error";
 
       throw new Error(
         `Failed to insert forum category "${category.slug}": ${message}`,
@@ -75,25 +75,4 @@ export async function seedForumCategories() {
   console.log(
     `Forum category seed completed. Inserted ${insertedCount} new categories, skipped ${skippedCount} existing categories.`,
   );
-}
-
-function isExecutedDirectly() {
-  const currentFilePath = fileURLToPath(import.meta.url);
-  const entryPath = process.argv[1] ? resolve(process.argv[1]) : "";
-  return currentFilePath === entryPath;
-}
-
-async function main() {
-  try {
-    await seedForumCategories();
-  } catch (error) {
-    console.error("Forum category seed failed", error);
-    process.exitCode = 1;
-  } finally {
-    await closeDb();
-  }
-}
-
-if (isExecutedDirectly()) {
-  void main();
 }
