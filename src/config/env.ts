@@ -35,7 +35,7 @@ const envSchema = z.object({
   ),
   VOLUNTEER_COUNTRY_NORMALIZED_NAME: z.preprocess(
     emptyStringToUndefined,
-    z.string().trim().min(1).default("cambodia"),
+    z.string().trim().toLowerCase().min(1).default("cambodia"),
   ),
   JWT_EXPIRATION: z.string().default("15m"),
   BETTER_AUTH_URL: z.preprocess(

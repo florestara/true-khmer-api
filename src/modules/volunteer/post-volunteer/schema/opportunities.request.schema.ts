@@ -61,8 +61,8 @@ const volunteerOpportunityContactSchema = z
       .transform((value) => normalizeOptionalText(value))
       .refine(
         (value) =>
-          value === null || /^[0-9+()\-.\s]{7,40}$/.test(value),
-        "contact.phone must be 7..40 characters and contain only numbers, spaces, or +()-.",
+          value === null || /^(?=.*\d)[0-9+()\-.\s]{7,40}$/.test(value),
+        "contact.phone must be 7..40 characters, contain at least one number, and use only spaces or +()-.",
       ),
     websiteUrl: z
       .string()

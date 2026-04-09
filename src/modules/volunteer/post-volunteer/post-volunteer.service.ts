@@ -145,19 +145,6 @@ export async function handleCreateVolunteerOpportunity(
     return authResult.response;
   }
 
-  const [category, location] = await Promise.all([
-    findActiveVolunteerCategoryById(data.categoryId),
-    findVolunteerLocationById(data.locationId),
-  ]);
-
-  if (!category) {
-    return c.json({ ok: false, error: "Volunteer category not found" }, 404);
-  }
-
-  if (!location) {
-    return c.json({ ok: false, error: "Location not found" }, 404);
-  }
-
   const normalizedCoverImageKey = normalizeOwnedCoverImageKey(
     authResult.userId,
     data.coverImageKey,
@@ -180,6 +167,19 @@ export async function handleCreateVolunteerOpportunity(
   }
 
   try {
+    const [category, location] = await Promise.all([
+      findActiveVolunteerCategoryById(data.categoryId),
+      findVolunteerLocationById(data.locationId),
+    ]);
+
+    if (!category) {
+      return c.json({ ok: false, error: "Volunteer category not found" }, 404);
+    }
+
+    if (!location) {
+      return c.json({ ok: false, error: "Location not found" }, 404);
+    }
+
     const opportunity = await createVolunteerOpportunity({
       ...data,
       coverImageKey: normalizedCoverImageKey,
