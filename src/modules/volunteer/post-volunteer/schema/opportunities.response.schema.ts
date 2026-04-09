@@ -1,5 +1,28 @@
 import { z } from "zod";
 
+const presignedUploadHeadersSchema = z.object({
+  "Content-Length": z.string(),
+  "Content-Type": z.string(),
+});
+
+export const presignVolunteerOpportunityCoverUploadResultSchema = z
+  .object({
+    uploadUrl: z.string(),
+    method: z.literal("PUT"),
+    requiredHeaders: presignedUploadHeadersSchema,
+    coverImageKey: z.string(),
+    publicUrl: z.string().nullable(),
+    expiresInSeconds: z.number(),
+  })
+  .openapi("PresignVolunteerOpportunityCoverUploadResult");
+
+export const presignVolunteerOpportunityCoverUploadResponseSchema = z
+  .object({
+    ok: z.literal(true),
+    upload: presignVolunteerOpportunityCoverUploadResultSchema,
+  })
+  .openapi("PresignVolunteerOpportunityCoverUploadResponse");
+
 const volunteerOpportunityContactResponseSchema = z
   .object({
     email: z.string(),

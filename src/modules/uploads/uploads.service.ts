@@ -2,7 +2,10 @@ import { createHash, createHmac, randomUUID } from "node:crypto";
 import type { Context } from "hono";
 import { getAuthUserId } from "../auth/utils/get-auth";
 import type { PresignAvatarUploadPayload } from "./uploads.schema";
-import type { PresignAvatarUploadResponse } from "./types";
+import type {
+  PresignAvatarUploadResponse,
+  PresignVolunteerCoverUploadResponse,
+} from "./types";
 
 const R2_REGION = "auto";
 const PRESIGN_EXPIRY_SECONDS = 600;
@@ -42,6 +45,14 @@ function buildAvatarKey(userId: string, fileName: string) {
   return buildNestedImageObjectKey("avatars", userId, fileName);
 }
 
+function buildVolunteerCoverKey(userId: string, fileName: string) {
+  return buildNestedImageObjectKey(
+    "volunteer-covers",
+    userId,
+    fileName,
+  );
+}
+
 function buildImageObjectFileName(fileName: string) {
   const baseName = fileName.split(/[\\/]/).pop() || "";
   const extension = baseName.includes(".")
@@ -70,21 +81,8 @@ function resolvePublicUrl(objectKey: string) {
   return `${normalizedBase}/${objectKey}`;
 }
 
-function toSafeErrorLog(error: unknown) {
-  if (error instanceof Error) {
-    return {
-      name: error.name,
-      message: error.message,
-    };
-  }
-
-  return {
-    message: "unknown error",
-  };
-}
-
 function buildPresignedPutUrl(
-  avatarKey: string,
+  objectKey: string,
   contentType: string,
   fileSize: number,
 ) {
@@ -99,7 +97,7 @@ function buildPresignedPutUrl(
   const { amzDate, dateStamp } = toAmzDate(now);
   const credentialScope = `${dateStamp}/${R2_REGION}/s3/aws4_request`;
 
-  const canonicalUri = `/${encodeRfc3986(bucketName)}/${avatarKey
+  const canonicalUri = `/${encodeRfc3986(bucketName)}/${objectKey
     .split("/")
     .map((segment) => encodeRfc3986(segment))
     .join("/")}`;
@@ -158,118 +156,36 @@ function buildPresignedPutUrl(
   };
 }
 
-async function uploadObjectDirectlyToR2(options: {
-  objectKey: string;
-  contentType: string;
-  fileSize: number;
-  body: ArrayBuffer;
-}) {
-  const accountId = getEnv("R2_ACCOUNT_ID");
-  const accessKeyId = getEnv("R2_ACCESS_KEY_ID");
-  const secretAccessKey = getEnv("R2_SECRET_ACCESS_KEY");
-  const bucketName = getEnv("R2_BUCKET_NAME");
-
-  const host = `${accountId}.r2.cloudflarestorage.com`;
-  const method = "PUT";
-  const now = new Date();
-  const { amzDate, dateStamp } = toAmzDate(now);
-  const credentialScope = `${dateStamp}/${R2_REGION}/s3/aws4_request`;
-  const canonicalUri = `/${encodeRfc3986(bucketName)}/${options.objectKey
-    .split("/")
-    .map((segment) => encodeRfc3986(segment))
-    .join("/")}`;
-
-  const bodyBytes = new Uint8Array(options.body);
-  const payloadHash = sha256Hex(bodyBytes);
-  const canonicalHeaders = [
-    `content-length:${options.fileSize}`,
-    `content-type:${options.contentType}`,
-    `host:${host}`,
-    `x-amz-content-sha256:${payloadHash}`,
-    `x-amz-date:${amzDate}`,
-    "",
-  ].join("\n");
-  const signedHeaders =
-    "content-length;content-type;host;x-amz-content-sha256;x-amz-date";
-
-  const canonicalRequest = [
-    method,
-    canonicalUri,
-    "",
-    canonicalHeaders,
-    signedHeaders,
-    payloadHash,
-  ].join("\n");
-
-  const stringToSign = [
-    "AWS4-HMAC-SHA256",
-    amzDate,
-    credentialScope,
-    sha256Hex(canonicalRequest),
-  ].join("\n");
-
-  const kDate = hmac(`AWS4${secretAccessKey}`, dateStamp);
-  const kRegion = hmac(kDate, R2_REGION);
-  const kService = hmac(kRegion, "s3");
-  const kSigning = hmac(kService, "aws4_request");
-  const signature = createHmac("sha256", kSigning)
-    .update(stringToSign)
-    .digest("hex");
-
-  const authorization = [
-    "AWS4-HMAC-SHA256",
-    `Credential=${accessKeyId}/${credentialScope},`,
-    `SignedHeaders=${signedHeaders},`,
-    `Signature=${signature}`,
-  ].join(" ");
-
-  const uploadResponse = await fetch(`https://${host}${canonicalUri}`, {
-    method,
-    headers: {
-      Authorization: authorization,
-      "Content-Length": String(options.fileSize),
-      "Content-Type": options.contentType,
-      "x-amz-content-sha256": payloadHash,
-      "x-amz-date": amzDate,
-    },
-    body: bodyBytes,
-  });
-
-  if (!uploadResponse.ok) {
-    const responseText = (await uploadResponse.text().catch(() => "")).slice(
-      0,
-      300,
-    );
-    throw new Error(
-      `R2 direct upload failed with status ${uploadResponse.status}${responseText ? `: ${responseText}` : ""}`,
-    );
-  }
-
-  return {
-    objectKey: options.objectKey,
-    publicUrl: resolvePublicUrl(options.objectKey),
-  };
+export function resolveR2PublicUrl(objectKey: string) {
+  return resolvePublicUrl(objectKey);
 }
 
-export async function uploadVolunteerCoverImage(options: {
-  opportunityId: string;
+export function presignVolunteerCoverUpload(options: {
+  userId: string;
   fileName: string;
   contentType: string;
   fileSize: number;
-  body: ArrayBuffer;
 }) {
-  const coverImageKey = buildNestedImageObjectKey(
-    "volunteer-covers",
-    options.opportunityId,
+  const coverImageKey = buildVolunteerCoverKey(
+    options.userId,
     options.fileName,
   );
+  const presigned = buildPresignedPutUrl(
+    coverImageKey,
+    options.contentType,
+    options.fileSize,
+  );
 
-  return uploadObjectDirectlyToR2({
-    objectKey: coverImageKey,
-    contentType: options.contentType,
-    fileSize: options.fileSize,
-    body: options.body,
-  });
+  const response: PresignVolunteerCoverUploadResponse = {
+    uploadUrl: presigned.uploadUrl,
+    method: "PUT",
+    requiredHeaders: presigned.requiredHeaders,
+    coverImageKey,
+    publicUrl: resolvePublicUrl(coverImageKey),
+    expiresInSeconds: presigned.expiresInSeconds,
+  };
+
+  return response;
 }
 
 export async function handlePresignAvatarUpload(
@@ -300,10 +216,7 @@ export async function handlePresignAvatarUpload(
 
     return c.json({ ok: true, upload: response });
   } catch (error) {
-    console.error(
-      "Failed to generate avatar upload URL",
-      toSafeErrorLog(error),
-    );
+    console.error("Failed to generate avatar upload URL", error);
     return c.json({ ok: false, error: "Failed to generate upload URL" }, 500);
   }
 }

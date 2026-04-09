@@ -8,10 +8,12 @@ import { authProtectedErrorResponseSchema } from "../../auth/auth.schema";
 import {
   createVolunteerCategoryResponseSchema,
   createVolunteerCategorySchema,
-  createVolunteerOpportunityFormSchema,
+  createVolunteerOpportunitySchema,
   createVolunteerOpportunityResponseSchema,
   getVolunteerCategoriesResponseSchema,
   getVolunteerLocationsResponseSchema,
+  presignVolunteerOpportunityCoverUploadResponseSchema,
+  presignVolunteerOpportunityCoverUploadSchema,
   volunteerCategoryValidationErrorResponseSchema,
   volunteerOperationErrorResponseSchema,
   volunteerValidationErrorResponseSchema,
@@ -21,6 +23,7 @@ import {
   handleCreateVolunteerOpportunity,
   handleGetVolunteerCategories,
   handleGetVolunteerLocations,
+  handlePresignVolunteerOpportunityCoverUpload,
 } from "./post-volunteer.service";
 
 export const postVolunteerRouter = new OpenAPIHono<AppBindings>();
@@ -176,6 +179,65 @@ const getVolunteerLocationsRoute = createRoute({
   },
 });
 
+const presignVolunteerOpportunityCoverUploadRoute = createRoute({
+  method: "post",
+  path: "/opportunities/cover-image/presign",
+  tags: ["Volunteer Post"],
+  middleware: [requireAccessToken],
+  security: [{ BearerAuth: [] }],
+  request: {
+    body: {
+      content: {
+        "application/json": {
+          schema: presignVolunteerOpportunityCoverUploadSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Presigned volunteer cover upload URL generated",
+      content: {
+        "application/json": {
+          schema: presignVolunteerOpportunityCoverUploadResponseSchema,
+        },
+      },
+    },
+    400: {
+      description: "Validation failed",
+      content: {
+        "application/json": {
+          schema: volunteerValidationErrorResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: "Unauthorized",
+      content: {
+        "application/json": {
+          schema: authProtectedErrorResponseSchema,
+        },
+      },
+    },
+    403: {
+      description: "Forbidden",
+      content: {
+        "application/json": {
+          schema: authProtectedErrorResponseSchema,
+        },
+      },
+    },
+    500: {
+      description: "Internal server error",
+      content: {
+        "application/json": {
+          schema: volunteerOperationErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
 const createVolunteerOpportunityRoute = createRoute({
   method: "post",
   path: "/opportunities",
@@ -185,8 +247,8 @@ const createVolunteerOpportunityRoute = createRoute({
   request: {
     body: {
       content: {
-        "multipart/form-data": {
-          schema: createVolunteerOpportunityFormSchema,
+        "application/json": {
+          schema: createVolunteerOpportunitySchema,
         },
       },
     },
@@ -255,6 +317,15 @@ postVolunteerRouter.openapi(getVolunteerLocationsRoute, async (c) => {
   return handleGetVolunteerLocations(c) as any;
 });
 
+postVolunteerRouter.openapi(
+  presignVolunteerOpportunityCoverUploadRoute,
+  async (c) => {
+    const data = c.req.valid("json");
+    return handlePresignVolunteerOpportunityCoverUpload(c, data) as any;
+  },
+);
+
 postVolunteerRouter.openapi(createVolunteerOpportunityRoute, async (c) => {
-  return handleCreateVolunteerOpportunity(c) as any;
+  const data = c.req.valid("json");
+  return handleCreateVolunteerOpportunity(c, data) as any;
 });

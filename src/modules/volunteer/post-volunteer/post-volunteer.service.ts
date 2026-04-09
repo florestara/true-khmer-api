@@ -1,8 +1,9 @@
-import { randomUUID } from "node:crypto";
 import type { Context } from "hono";
-import { z } from "zod";
 import { POSTGRES_UNIQUE_VIOLATION } from "../../../db/constants";
-import { uploadVolunteerCoverImage } from "../../uploads/uploads.service";
+import {
+  presignVolunteerCoverUpload,
+  resolveR2PublicUrl,
+} from "../../uploads/uploads.service";
 import { getAuthUserId } from "../../auth/utils/get-auth";
 import {
   createVolunteerCategory,
@@ -14,12 +15,8 @@ import {
 } from "./post-volunteer.query";
 import type {
   CreateVolunteerCategoryBodyInput,
-  CreateVolunteerOpportunityPayloadInput,
-} from "./post-volunteer.schema";
-import {
-  createVolunteerOpportunityPayloadSchema,
-  isAllowedVolunteerCoverImageContentType,
-  VOLUNTEER_COVER_IMAGE_MAX_BYTES,
+  CreateVolunteerOpportunityBodyInput,
+  PresignVolunteerOpportunityCoverUploadPayload,
 } from "./post-volunteer.schema";
 
 const VOLUNTEER_CATEGORY_SLUG_UNIQUE_INDEX =
@@ -27,125 +24,30 @@ const VOLUNTEER_CATEGORY_SLUG_UNIQUE_INDEX =
 const VOLUNTEER_CATEGORY_NAME_UNIQUE_INDEX =
   "volunteer_category_name_unique_idx";
 
-function toValidationIssues(error: z.ZodError) {
-  return error.issues.map((issue) => ({
-    path:
-      issue.path.length === 0
-        ? "payload"
-        : issue.path
-            .map((segment) =>
-              typeof segment === "number" ? `[${segment}]` : String(segment),
-            )
-            .join(".")
-            .replace(".[", "["),
-    message: issue.message,
-  }));
-}
-
-type ParsedCreateVolunteerOpportunityForm =
-  | {
-      ok: true;
-      payload: CreateVolunteerOpportunityPayloadInput;
-      coverImage: File;
-    }
-  | {
-      ok: false;
-      issues: Array<{ path: string; message: string }>;
-    };
-
-async function parseCreateVolunteerOpportunityForm(
-  formData: FormData,
-): Promise<ParsedCreateVolunteerOpportunityForm> {
-  const issues: Array<{ path: string; message: string }> = [];
-
-  const payloadValue = formData.get("payload");
-  const payloadText = typeof payloadValue === "string" ? payloadValue : null;
-  if (!payloadText) {
-    issues.push({
-      path: "payload",
-      message: "payload is required and must be a JSON string",
-    });
-  }
-
-  const coverImageValue = formData.get("coverImage");
-  const coverImageFile = coverImageValue instanceof File ? coverImageValue : null;
-  if (!coverImageFile) {
-    issues.push({
-      path: "coverImage",
-      message: "coverImage is required and must be an image file",
-    });
-  }
-
-  if (issues.length > 0 || !payloadText || !coverImageFile) {
-    return { ok: false, issues };
-  }
-
-  let parsedPayloadJson: unknown;
+function normalizeOwnedCoverImageKey(
+  userId: string,
+  coverImageKey: string,
+): string | null {
+  const rawKey = coverImageKey.startsWith("/")
+    ? coverImageKey.slice(1)
+    : coverImageKey;
+  let normalizedKey: string;
   try {
-    parsedPayloadJson = JSON.parse(payloadText);
+    normalizedKey = decodeURIComponent(rawKey);
   } catch {
-    return {
-      ok: false,
-      issues: [
-        {
-          path: "payload",
-          message: "payload must be valid JSON",
-        },
-      ],
-    };
+    return null;
   }
 
-  const parsedPayload =
-    createVolunteerOpportunityPayloadSchema.safeParse(parsedPayloadJson);
-
-  if (!parsedPayload.success) {
-    return {
-      ok: false,
-      issues: toValidationIssues(parsedPayload.error),
-    };
+  const forbiddenPattern = /(^|\/)\.\.(\/|$)|\\|\/\/|[\u0000-\u001F\u007F]/;
+  if (forbiddenPattern.test(normalizedKey)) {
+    return null;
   }
 
-  if (!isAllowedVolunteerCoverImageContentType(coverImageFile.type)) {
-    return {
-      ok: false,
-      issues: [
-        {
-          path: "coverImage",
-          message: "coverImage must be a JPEG, PNG, or WebP image",
-        },
-      ],
-    };
+  if (!normalizedKey.startsWith(`volunteer-covers/${userId}/`)) {
+    return null;
   }
 
-  if (coverImageFile.size <= 0) {
-    return {
-      ok: false,
-      issues: [
-        {
-          path: "coverImage",
-          message: "coverImage must not be empty",
-        },
-      ],
-    };
-  }
-
-  if (coverImageFile.size > VOLUNTEER_COVER_IMAGE_MAX_BYTES) {
-    return {
-      ok: false,
-      issues: [
-        {
-          path: "coverImage",
-          message: `coverImage must be <= ${Math.floor(VOLUNTEER_COVER_IMAGE_MAX_BYTES / (1024 * 1024))} MB`,
-        },
-      ],
-    };
-  }
-
-  return {
-    ok: true,
-    payload: parsedPayload.data,
-    coverImage: coverImageFile,
-  };
+  return normalizedKey;
 }
 
 export async function handleGetVolunteerCategories(c: Context) {
@@ -204,43 +106,48 @@ export async function handleCreateVolunteerCategory(
   }
 }
 
-export async function handleCreateVolunteerOpportunity(c: Context) {
+export async function handlePresignVolunteerOpportunityCoverUpload(
+  c: Context,
+  payload: PresignVolunteerOpportunityCoverUploadPayload,
+) {
   const authResult = getAuthUserId(c);
   if (!authResult.ok) {
     return authResult.response;
   }
 
-  let formData: FormData;
   try {
-    formData = await c.req.formData();
-  } catch {
+    const upload = presignVolunteerCoverUpload({
+      userId: authResult.userId,
+      fileName: payload.fileName,
+      contentType: payload.contentType,
+      fileSize: payload.fileSize,
+    });
+
     return c.json(
       {
-        ok: false,
-        error: "Validation failed",
-        issues: [
-          {
-            path: "payload",
-            message: "Request body must be multipart/form-data",
-          },
-        ],
+        ok: true,
+        upload,
       },
-      400,
+      200,
     );
+  } catch (error) {
+    console.error("Failed to generate volunteer cover upload URL", error);
+    return c.json({ ok: false, error: "Failed to generate upload URL" }, 500);
+  }
+}
+
+export async function handleCreateVolunteerOpportunity(
+  c: Context,
+  data: CreateVolunteerOpportunityBodyInput,
+) {
+  const authResult = getAuthUserId(c);
+  if (!authResult.ok) {
+    return authResult.response;
   }
 
-  const parsedForm = await parseCreateVolunteerOpportunityForm(formData);
-  if (!parsedForm.ok) {
-    return c.json(
-      { ok: false, error: "Validation failed", issues: parsedForm.issues },
-      400,
-    );
-  }
-
-  const opportunityId = randomUUID();
   const [category, location] = await Promise.all([
-    findActiveVolunteerCategoryById(parsedForm.payload.categoryId),
-    findVolunteerLocationById(parsedForm.payload.locationId),
+    findActiveVolunteerCategoryById(data.categoryId),
+    findVolunteerLocationById(data.locationId),
   ]);
 
   if (!category) {
@@ -251,34 +158,33 @@ export async function handleCreateVolunteerOpportunity(c: Context) {
     return c.json({ ok: false, error: "Location not found" }, 404);
   }
 
-  let coverImageUpload:
-    | Awaited<ReturnType<typeof uploadVolunteerCoverImage>>
-    | undefined;
+  const normalizedCoverImageKey = normalizeOwnedCoverImageKey(
+    authResult.userId,
+    data.coverImageKey,
+  );
 
-  try {
-    const coverImageBuffer = await parsedForm.coverImage.arrayBuffer();
-    coverImageUpload = await uploadVolunteerCoverImage({
-      opportunityId,
-      fileName: parsedForm.coverImage.name || "volunteer-cover",
-      contentType: parsedForm.coverImage.type,
-      fileSize: parsedForm.coverImage.size,
-      body: coverImageBuffer,
-    });
-  } catch (error) {
-    console.error("Failed to upload volunteer cover image", error);
+  if (!normalizedCoverImageKey) {
     return c.json(
-      { ok: false, error: "Failed to upload volunteer cover image" },
-      500,
+      {
+        ok: false,
+        error: "Validation failed",
+        issues: [
+          {
+            path: "coverImageKey",
+            message: "coverImageKey does not belong to current user",
+          },
+        ],
+      },
+      400,
     );
   }
 
   try {
     const opportunity = await createVolunteerOpportunity({
-      ...parsedForm.payload,
-      opportunityId,
+      ...data,
+      coverImageKey: normalizedCoverImageKey,
       createdBy: authResult.userId,
-      coverImageKey: coverImageUpload.objectKey,
-      coverImageUrl: coverImageUpload.publicUrl,
+      coverImageUrl: resolveR2PublicUrl(normalizedCoverImageKey),
     });
 
     return c.json({ ok: true, opportunity }, 201);

@@ -15,7 +15,7 @@ import {
 } from "../lib/constants";
 import type {
   CreateVolunteerCategoryInput,
-  CreateVolunteerOpportunityPayloadInput,
+  CreateVolunteerOpportunityBodyInput,
 } from "./post-volunteer.schema";
 
 type VolunteerCategoryRow = typeof volunteerCategory.$inferSelect;
@@ -138,10 +138,8 @@ export async function findVolunteerLocationById(locationId: string) {
 }
 
 export type CreateVolunteerOpportunityInput =
-  CreateVolunteerOpportunityPayloadInput & {
-    opportunityId: string;
+  CreateVolunteerOpportunityBodyInput & {
     createdBy: string;
-    coverImageKey: string;
     coverImageUrl: string | null;
   };
 
@@ -187,7 +185,6 @@ export async function createVolunteerOpportunity(
     const [newOpportunity] = await tx
       .insert(volunteerOpportunity)
       .values({
-        id: data.opportunityId,
         categoryId: data.categoryId,
         cityId: data.locationId,
         title: data.title,

@@ -5,6 +5,7 @@ const VOLUNTEER_COVER_IMAGE_ALLOWED_CONTENT_TYPES = [
   "image/png",
   "image/webp",
 ] as const;
+const SAFE_UPLOAD_FILE_NAME = /^[A-Za-z0-9._-]+$/;
 
 export const VOLUNTEER_COVER_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 
@@ -152,7 +153,37 @@ const volunteerOpportunityRoleSchema = z
   })
   .openapi("VolunteerOpportunityRoleRequest");
 
-export const createVolunteerOpportunityPayloadSchema = z
+export const presignVolunteerOpportunityCoverUploadSchema = z
+  .object({
+    fileName: z
+      .string()
+      .trim()
+      .min(1, "fileName is required")
+      .max(120, "fileName must be <= 120 characters")
+      .regex(SAFE_UPLOAD_FILE_NAME, "fileName contains invalid characters"),
+    contentType: z
+      .string()
+      .trim()
+      .toLowerCase()
+      .refine(
+        (value) =>
+          (
+            VOLUNTEER_COVER_IMAGE_ALLOWED_CONTENT_TYPES as readonly string[]
+          ).includes(value),
+        "Unsupported image contentType",
+      ),
+    fileSize: z
+      .number()
+      .int("fileSize must be an integer")
+      .positive("fileSize must be positive")
+      .max(
+        VOLUNTEER_COVER_IMAGE_MAX_BYTES,
+        `fileSize must be <= ${VOLUNTEER_COVER_IMAGE_MAX_BYTES / (1024 * 1024)} MB`,
+      ),
+  })
+  .openapi("PresignVolunteerOpportunityCoverUploadRequest");
+
+const createVolunteerOpportunityBaseSchema = z
   .object({
     categoryId: z.string().uuid("categoryId must be a valid UUID"),
     locationId: z.string().uuid("locationId must be a valid UUID"),
@@ -238,26 +269,21 @@ export const createVolunteerOpportunityPayloadSchema = z
   })
   .openapi("CreateVolunteerOpportunityPayload");
 
-export const createVolunteerOpportunityFormSchema = z
-  .object({
-    payload: z.string().openapi({
-      description:
-        "JSON string matching the CreateVolunteerOpportunityPayload schema",
-    }),
-    coverImage: z.any().openapi({
-      type: "string",
-      format: "binary",
-      description: "Volunteer cover image file",
-    }),
-  })
-  .openapi("CreateVolunteerOpportunityFormRequest");
+export const createVolunteerOpportunitySchema =
+  createVolunteerOpportunityBaseSchema
+    .extend({
+      coverImageKey: z
+        .string()
+        .trim()
+        .min(1, "coverImageKey is required")
+        .max(600, "coverImageKey must be <= 600 characters"),
+    })
+    .openapi("CreateVolunteerOpportunityRequest");
 
-export type CreateVolunteerOpportunityPayloadInput = z.infer<
-  typeof createVolunteerOpportunityPayloadSchema
+export type PresignVolunteerOpportunityCoverUploadPayload = z.infer<
+  typeof presignVolunteerOpportunityCoverUploadSchema
 >;
 
-export function isAllowedVolunteerCoverImageContentType(contentType: string) {
-  return VOLUNTEER_COVER_IMAGE_ALLOWED_CONTENT_TYPES.includes(
-    contentType as (typeof VOLUNTEER_COVER_IMAGE_ALLOWED_CONTENT_TYPES)[number],
-  );
-}
+export type CreateVolunteerOpportunityBodyInput = z.infer<
+  typeof createVolunteerOpportunitySchema
+>;
