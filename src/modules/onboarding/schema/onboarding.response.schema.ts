@@ -14,9 +14,3 @@ export const onboardingErrorResponseSchema = z
   })
   .loose()
   .openapi("OnboardingErrorResponse");
-
-export const onboardingUnauthorizedResponseSchema = z
-  .object({
-    error: z.string(),
-  })
-  .openapi("OnboardingUnauthorizedResponse");

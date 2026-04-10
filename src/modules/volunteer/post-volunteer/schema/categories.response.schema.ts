@@ -37,6 +37,9 @@ export const volunteerCategoryValidationErrorResponseSchema = z
   })
   .openapi("VolunteerCategoryValidationErrorResponse");
 
+export const volunteerValidationErrorResponseSchema =
+  volunteerCategoryValidationErrorResponseSchema;
+
 export const getVolunteerCategoriesResponseSchema = z
   .object({
     ok: z.literal(true),

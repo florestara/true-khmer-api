@@ -2,7 +2,10 @@ import { createHash, createHmac, randomUUID } from "node:crypto";
 import type { Context } from "hono";
 import { getAuthUserId } from "../auth/utils/get-auth";
 import type { PresignAvatarUploadPayload } from "./uploads.schema";
-import type { PresignAvatarUploadResponse } from "./types";
+import type {
+  PresignAvatarUploadResponse,
+  PresignVolunteerCoverUploadResponse,
+} from "./types";
 
 const R2_REGION = "auto";
 const PRESIGN_EXPIRY_SECONDS = 600;
@@ -15,7 +18,7 @@ function getEnv(name: string) {
   return value;
 }
 
-function sha256Hex(value: string) {
+function sha256Hex(value: string | Uint8Array) {
   return createHash("sha256").update(value).digest("hex");
 }
 
@@ -39,40 +42,47 @@ function encodeRfc3986(value: string) {
 }
 
 function buildAvatarKey(userId: string, fileName: string) {
+  return buildNestedImageObjectKey("avatars", userId, fileName);
+}
+
+function buildVolunteerCoverKey(userId: string, fileName: string) {
+  return buildNestedImageObjectKey(
+    "volunteer-covers",
+    userId,
+    fileName,
+  );
+}
+
+function buildImageObjectFileName(fileName: string) {
   const baseName = fileName.split(/[\\/]/).pop() || "";
   const extension = baseName.includes(".")
     ? (baseName.split(".").pop() ?? "bin")
     : "bin";
   const safeExtension =
     extension.toLowerCase().replace(/[^a-z0-9]/g, "") || "bin";
-  return `avatars/${userId}/${Date.now()}-${randomUUID()}.${safeExtension}`;
+  return `${Date.now()}-${randomUUID()}.${safeExtension}`;
 }
 
-function resolvePublicUrl(avatarKey: string) {
+function buildNestedImageObjectKey(
+  folder: string,
+  resourceId: string,
+  fileName: string,
+) {
+  return `${folder}/${resourceId}/${buildImageObjectFileName(fileName)}`;
+}
+
+function resolvePublicUrl(objectKey: string) {
   const base = process.env.R2_PUBLIC_BASE_URL?.trim();
   if (!base) {
     return null;
   }
 
   const normalizedBase = base.endsWith("/") ? base.slice(0, -1) : base;
-  return `${normalizedBase}/${avatarKey}`;
-}
-
-function toSafeErrorLog(error: unknown) {
-  if (error instanceof Error) {
-    return {
-      name: error.name,
-      message: error.message,
-    };
-  }
-
-  return {
-    message: "unknown error",
-  };
+  return `${normalizedBase}/${objectKey}`;
 }
 
 function buildPresignedPutUrl(
-  avatarKey: string,
+  objectKey: string,
   contentType: string,
   fileSize: number,
 ) {
@@ -87,7 +97,7 @@ function buildPresignedPutUrl(
   const { amzDate, dateStamp } = toAmzDate(now);
   const credentialScope = `${dateStamp}/${R2_REGION}/s3/aws4_request`;
 
-  const canonicalUri = `/${encodeRfc3986(bucketName)}/${avatarKey
+  const canonicalUri = `/${encodeRfc3986(bucketName)}/${objectKey
     .split("/")
     .map((segment) => encodeRfc3986(segment))
     .join("/")}`;
@@ -146,6 +156,38 @@ function buildPresignedPutUrl(
   };
 }
 
+export function resolveR2PublicUrl(objectKey: string) {
+  return resolvePublicUrl(objectKey);
+}
+
+export function presignVolunteerCoverUpload(options: {
+  userId: string;
+  fileName: string;
+  contentType: string;
+  fileSize: number;
+}) {
+  const coverImageKey = buildVolunteerCoverKey(
+    options.userId,
+    options.fileName,
+  );
+  const presigned = buildPresignedPutUrl(
+    coverImageKey,
+    options.contentType,
+    options.fileSize,
+  );
+
+  const response: PresignVolunteerCoverUploadResponse = {
+    uploadUrl: presigned.uploadUrl,
+    method: "PUT",
+    requiredHeaders: presigned.requiredHeaders,
+    coverImageKey,
+    publicUrl: resolvePublicUrl(coverImageKey),
+    expiresInSeconds: presigned.expiresInSeconds,
+  };
+
+  return response;
+}
+
 export async function handlePresignAvatarUpload(
   c: Context,
   payload: PresignAvatarUploadPayload,
@@ -174,10 +216,7 @@ export async function handlePresignAvatarUpload(
 
     return c.json({ ok: true, upload: response });
   } catch (error) {
-    console.error(
-      "Failed to generate avatar upload URL",
-      toSafeErrorLog(error),
-    );
+    console.error("Failed to generate avatar upload URL", error);
     return c.json({ ok: false, error: "Failed to generate upload URL" }, 500);
   }
 }

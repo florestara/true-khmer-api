@@ -1,6 +1,7 @@
 import { OpenAPIHono, createRoute } from "@hono/zod-openapi";
 import type { AppBindings } from "../../lib/types";
 import { requireAccessTokenAllowIncompleteOnboarding } from "../../middlewares/auth.middleware";
+import { authProtectedErrorResponseSchema } from "../auth/auth.schema";
 import {
   handleCompleteOnboarding,
   handleGetCities,
@@ -19,7 +20,6 @@ import {
   onboardingInterestsStepSchema,
   onboardingOkResponseSchema,
   onboardingProfileStepSchema,
-  onboardingUnauthorizedResponseSchema,
 } from "./onboarding.schema";
 
 export const onboardingRouter = new OpenAPIHono<AppBindings>();
@@ -141,7 +141,7 @@ const stateRoute = createRoute({
       description: "Unauthorized",
       content: {
         "application/json": {
-          schema: onboardingUnauthorizedResponseSchema,
+          schema: authProtectedErrorResponseSchema,
         },
       },
     },
@@ -188,7 +188,7 @@ const profileRoute = createRoute({
       description: "Unauthorized",
       content: {
         "application/json": {
-          schema: onboardingUnauthorizedResponseSchema,
+          schema: authProtectedErrorResponseSchema,
         },
       },
     },
@@ -237,7 +237,7 @@ const interestsStepRoute = createRoute({
       description: "Unauthorized",
       content: {
         "application/json": {
-          schema: onboardingUnauthorizedResponseSchema,
+          schema: authProtectedErrorResponseSchema,
         },
       },
     },
@@ -286,7 +286,7 @@ const contributionsStepRoute = createRoute({
       description: "Unauthorized",
       content: {
         "application/json": {
-          schema: onboardingUnauthorizedResponseSchema,
+          schema: authProtectedErrorResponseSchema,
         },
       },
     },
@@ -328,7 +328,7 @@ const completeRoute = createRoute({
       description: "Unauthorized",
       content: {
         "application/json": {
-          schema: onboardingUnauthorizedResponseSchema,
+          schema: authProtectedErrorResponseSchema,
         },
       },
     },
