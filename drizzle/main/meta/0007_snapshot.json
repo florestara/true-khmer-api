@@ -1,6 +1,6 @@
 {
-  "id": "c9519765-8dc5-49b5-ac55-a35bf6992e47",
-  "prevId": "1a00059d-5778-4ba3-87d3-0e3cf7077d74",
+  "id": "73d82668-995a-4625-8dc7-901b15b3da26",
+  "prevId": "c9519765-8dc5-49b5-ac55-a35bf6992e47",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -112,8 +112,12 @@
           "name": "account_user_id_user_id_fk",
           "tableFrom": "account",
           "tableTo": "user",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -246,8 +250,12 @@
           "name": "session_user_id_user_id_fk",
           "tableFrom": "session",
           "tableTo": "user",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -257,7 +265,9 @@
         "session_token_unique": {
           "name": "session_token_unique",
           "nullsNotDistinct": false,
-          "columns": ["token"]
+          "columns": [
+            "token"
+          ]
         }
       },
       "policies": {},
@@ -368,7 +378,9 @@
         "user_email_unique": {
           "name": "user_email_unique",
           "nullsNotDistinct": false,
-          "columns": ["email"]
+          "columns": [
+            "email"
+          ]
         }
       },
       "policies": {},
@@ -586,8 +598,12 @@
           "name": "city_country_id_country_id_fk",
           "tableFrom": "city",
           "tableTo": "country",
-          "columnsFrom": ["country_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "country_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -993,8 +1009,12 @@
           "name": "user_contribution_onboard_user_id_user_id_fk",
           "tableFrom": "user_contribution_onboard",
           "tableTo": "user",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1094,8 +1114,12 @@
           "name": "user_interest_user_id_user_id_fk",
           "tableFrom": "user_interest",
           "tableTo": "user",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1103,8 +1127,12 @@
           "name": "user_interest_interest_id_interest_id_fk",
           "tableFrom": "user_interest",
           "tableTo": "interest",
-          "columnsFrom": ["interest_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "interest_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1222,8 +1250,12 @@
           "name": "user_point_ledger_user_id_user_id_fk",
           "tableFrom": "user_point_ledger",
           "tableTo": "user",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1354,8 +1386,12 @@
           "name": "user_profile_user_id_user_id_fk",
           "tableFrom": "user_profile",
           "tableTo": "user",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1363,8 +1399,12 @@
           "name": "user_profile_country_id_country_id_fk",
           "tableFrom": "user_profile",
           "tableTo": "country",
-          "columnsFrom": ["country_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "country_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
@@ -1372,8 +1412,12 @@
           "name": "user_profile_city_id_city_id_fk",
           "tableFrom": "user_profile",
           "tableTo": "city",
-          "columnsFrom": ["city_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "city_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -1444,8 +1488,12 @@
           "name": "user_progress_user_id_user_id_fk",
           "tableFrom": "user_progress",
           "tableTo": "user",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1453,8 +1501,12 @@
           "name": "user_progress_current_tier_id_tier_id_fk",
           "tableFrom": "user_progress",
           "tableTo": "tier",
-          "columnsFrom": ["current_tier_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "current_tier_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -1604,8 +1656,12 @@
           "name": "forum_answer_question_id_forum_question_id_fk",
           "tableFrom": "forum_answer",
           "tableTo": "forum_question",
-          "columnsFrom": ["question_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "question_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1613,8 +1669,12 @@
           "name": "forum_answer_author_id_user_id_fk",
           "tableFrom": "forum_answer",
           "tableTo": "user",
-          "columnsFrom": ["author_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "author_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1743,8 +1803,12 @@
           "name": "forum_answer_vote_answer_id_forum_answer_id_fk",
           "tableFrom": "forum_answer_vote",
           "tableTo": "forum_answer",
-          "columnsFrom": ["answer_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "answer_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1752,8 +1816,12 @@
           "name": "forum_answer_vote_voter_id_user_id_fk",
           "tableFrom": "forum_answer_vote",
           "tableTo": "user",
-          "columnsFrom": ["voter_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "voter_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -2062,8 +2130,12 @@
           "name": "forum_question_category_id_forum_category_id_fk",
           "tableFrom": "forum_question",
           "tableTo": "forum_category",
-          "columnsFrom": ["category_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "category_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2071,8 +2143,12 @@
           "name": "forum_question_author_id_user_id_fk",
           "tableFrom": "forum_question",
           "tableTo": "user",
-          "columnsFrom": ["author_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "author_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -2201,8 +2277,12 @@
           "name": "forum_question_vote_question_id_forum_question_id_fk",
           "tableFrom": "forum_question_vote",
           "tableTo": "forum_question",
-          "columnsFrom": ["question_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "question_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -2210,8 +2290,129 @@
           "name": "forum_question_vote_voter_id_user_id_fk",
           "tableFrom": "forum_question_vote",
           "tableTo": "user",
-          "columnsFrom": ["voter_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "voter_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.forum_reporting": {
+      "name": "forum_reporting",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "question_id": {
+          "name": "question_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "answer_id": {
+          "name": "answer_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "type_id": {
+          "name": "type_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "forum_reporting_question_id_forum_question_id_fk": {
+          "name": "forum_reporting_question_id_forum_question_id_fk",
+          "tableFrom": "forum_reporting",
+          "tableTo": "forum_question",
+          "columnsFrom": [
+            "question_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "forum_reporting_answer_id_forum_answer_id_fk": {
+          "name": "forum_reporting_answer_id_forum_answer_id_fk",
+          "tableFrom": "forum_reporting",
+          "tableTo": "forum_answer",
+          "columnsFrom": [
+            "answer_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "forum_reporting_type_id_forum_reporting_type_id_fk": {
+          "name": "forum_reporting_type_id_forum_reporting_type_id_fk",
+          "tableFrom": "forum_reporting",
+          "tableTo": "forum_reporting_type",
+          "columnsFrom": [
+            "type_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "forum_reporting_created_by_user_id_fk": {
+          "name": "forum_reporting_created_by_user_id_fk",
+          "tableFrom": "forum_reporting",
+          "tableTo": "user",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -2373,8 +2574,12 @@
           "name": "forum_question_tag_question_id_forum_question_id_fk",
           "tableFrom": "forum_question_tag",
           "tableTo": "forum_question",
-          "columnsFrom": ["question_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "question_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -2382,8 +2587,12 @@
           "name": "forum_question_tag_tag_id_forum_tag_id_fk",
           "tableFrom": "forum_question_tag",
           "tableTo": "forum_tag",
-          "columnsFrom": ["tag_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "tag_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2621,8 +2830,12 @@
           "name": "volunteer_category_created_by_user_id_fk",
           "tableFrom": "volunteer_category",
           "tableTo": "user",
-          "columnsFrom": ["created_by"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2630,8 +2843,12 @@
           "name": "volunteer_category_updated_by_user_id_fk",
           "tableFrom": "volunteer_category",
           "tableTo": "user",
-          "columnsFrom": ["updated_by"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "updated_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -2874,8 +3091,12 @@
           "name": "volunteer_opportunity_category_id_volunteer_category_id_fk",
           "tableFrom": "volunteer_opportunity",
           "tableTo": "volunteer_category",
-          "columnsFrom": ["category_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "category_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2883,8 +3104,12 @@
           "name": "volunteer_opportunity_city_id_city_id_fk",
           "tableFrom": "volunteer_opportunity",
           "tableTo": "city",
-          "columnsFrom": ["city_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "city_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2892,8 +3117,12 @@
           "name": "volunteer_opportunity_created_by_user_id_fk",
           "tableFrom": "volunteer_opportunity",
           "tableTo": "user",
-          "columnsFrom": ["created_by"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2901,8 +3130,12 @@
           "name": "volunteer_opportunity_updated_by_user_id_fk",
           "tableFrom": "volunteer_opportunity",
           "tableTo": "user",
-          "columnsFrom": ["updated_by"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "updated_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -3013,8 +3246,12 @@
           "name": "volunteer_role_opportunity_id_volunteer_opportunity_id_fk",
           "tableFrom": "volunteer_role",
           "tableTo": "volunteer_opportunity",
-          "columnsFrom": ["opportunity_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "opportunity_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -3106,8 +3343,12 @@
           "name": "volunteer_role_requirement_role_id_volunteer_role_id_fk",
           "tableFrom": "volunteer_role_requirement",
           "tableTo": "volunteer_role",
-          "columnsFrom": ["role_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "role_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -3123,42 +3364,72 @@
     "public.user_gender": {
       "name": "user_gender",
       "schema": "public",
-      "values": ["male", "female", "other"]
+      "values": [
+        "male",
+        "female",
+        "other"
+      ]
     },
     "public.forum_answer_status": {
       "name": "forum_answer_status",
       "schema": "public",
-      "values": ["PUBLISHED", "DELETED"]
+      "values": [
+        "PUBLISHED",
+        "DELETED"
+      ]
     },
     "public.forum_answer_vote_type": {
       "name": "forum_answer_vote_type",
       "schema": "public",
-      "values": ["UPVOTE", "DOWNVOTE"]
+      "values": [
+        "UPVOTE",
+        "DOWNVOTE"
+      ]
     },
     "public.forum_category_status": {
       "name": "forum_category_status",
       "schema": "public",
-      "values": ["ACTIVE", "ARCHIVED", "HIDDEN"]
+      "values": [
+        "ACTIVE",
+        "ARCHIVED",
+        "HIDDEN"
+      ]
     },
     "public.forum_question_status": {
       "name": "forum_question_status",
       "schema": "public",
-      "values": ["PUBLISHED", "CLOSED", "DELETED"]
+      "values": [
+        "PUBLISHED",
+        "CLOSED",
+        "DELETED"
+      ]
     },
     "public.forum_question_vote_type": {
       "name": "forum_question_vote_type",
       "schema": "public",
-      "values": ["UPVOTE", "DOWNVOTE"]
+      "values": [
+        "UPVOTE",
+        "DOWNVOTE"
+      ]
     },
     "public.volunteer_category_status": {
       "name": "volunteer_category_status",
       "schema": "public",
-      "values": ["ACTIVE", "ARCHIVED", "HIDDEN"]
+      "values": [
+        "ACTIVE",
+        "ARCHIVED",
+        "HIDDEN"
+      ]
     },
     "public.volunteer_opportunity_status": {
       "name": "volunteer_opportunity_status",
       "schema": "public",
-      "values": ["DRAFT", "PUBLISHED", "ARCHIVED", "CLOSED"]
+      "values": [
+        "DRAFT",
+        "PUBLISHED",
+        "ARCHIVED",
+        "CLOSED"
+      ]
     }
   },
   "schemas": {},
