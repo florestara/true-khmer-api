@@ -43,6 +43,13 @@
       "when": 1775562626084,
       "tag": "0005_melted_the_call",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1775645422217,
+      "tag": "0006_same_pretty_boy",
+      "breakpoints": true
     }
   ]
 }
