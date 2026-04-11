@@ -1,4 +1,4 @@
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { env } from "../../../config/env";
 import { db } from "../../../db/index";
 import {
@@ -25,6 +25,7 @@ type VolunteerLocationRow = {
   name: string;
 };
 type VolunteerOpportunityRow = typeof volunteerOpportunity.$inferSelect;
+type VolunteerRoleRow = typeof volunteerRole.$inferSelect;
 type VolunteerRoleRequirementRow = typeof volunteerRoleRequirement.$inferSelect;
 
 const CAMBODIA_NORMALIZED_NAME =
@@ -178,6 +179,122 @@ export type CreatedVolunteerOpportunity = {
   }>;
 };
 
+function hydrateVolunteerOpportunity(
+  opportunity: VolunteerOpportunityRow,
+  roles: VolunteerRoleRow[],
+  requirementsByRoleId: Map<string, VolunteerRoleRequirementRow[]>,
+): CreatedVolunteerOpportunity {
+  return {
+    id: opportunity.id,
+    categoryId: opportunity.categoryId,
+    locationId: opportunity.cityId,
+    title: opportunity.title,
+    overview: opportunity.overview,
+    communityImpact: opportunity.communityImpact,
+    durationLabel: opportunity.durationLabel,
+    commitmentLabel: opportunity.commitmentLabel,
+    applicationDeadline: opportunity.applicationDeadline,
+    coverImageKey: opportunity.coverImageKey,
+    coverImageUrl: opportunity.coverImageUrl,
+    benefits: opportunity.benefits as string[],
+    contact: {
+      email: opportunity.contactEmail,
+      telegramUsername: opportunity.contactTelegramUsername,
+      phone: opportunity.contactPhone,
+      websiteUrl: opportunity.contactWebsiteUrl,
+    },
+    status: opportunity.status,
+    publishedAt: opportunity.publishedAt,
+    createdBy: opportunity.createdBy,
+    createdAt: opportunity.createdAt,
+    updatedAt: opportunity.updatedAt,
+    roles: roles.map((role) => ({
+      id: role.id,
+      title: role.title,
+      commitmentLabel: role.commitmentLabel,
+      capacity: role.capacity,
+      responsibilities: role.responsibilities as string[],
+      requirements: (requirementsByRoleId.get(role.id) ?? [])
+        .sort((left, right) => left.displayOrder - right.displayOrder)
+        .map((requirement) => requirement.requirementText),
+      displayOrder: role.displayOrder,
+    })),
+  };
+}
+
+export async function getVolunteerOpportunities(): Promise<
+  CreatedVolunteerOpportunity[]
+> {
+  const opportunities = await db
+    .select()
+    .from(volunteerOpportunity)
+    .where(eq(volunteerOpportunity.status, "PUBLISHED"))
+    .orderBy(
+      desc(volunteerOpportunity.publishedAt),
+      desc(volunteerOpportunity.createdAt),
+      desc(volunteerOpportunity.id),
+    );
+
+  if (opportunities.length === 0) {
+    return [];
+  }
+
+  const opportunityIds = opportunities.map((opportunity) => opportunity.id);
+  const roles = await db
+    .select()
+    .from(volunteerRole)
+    .where(inArray(volunteerRole.opportunityId, opportunityIds))
+    .orderBy(
+      asc(volunteerRole.displayOrder),
+      asc(volunteerRole.createdAt),
+      asc(volunteerRole.id),
+    );
+
+  const rolesByOpportunityId = new Map<string, VolunteerRoleRow[]>();
+  for (const role of roles) {
+    const opportunityRoles = rolesByOpportunityId.get(role.opportunityId);
+    if (!opportunityRoles) {
+      rolesByOpportunityId.set(role.opportunityId, [role]);
+      continue;
+    }
+
+    opportunityRoles.push(role);
+  }
+
+  const roleIds = roles.map((role) => role.id);
+  const requirements =
+    roleIds.length === 0
+      ? []
+      : await db
+          .select()
+          .from(volunteerRoleRequirement)
+          .where(inArray(volunteerRoleRequirement.roleId, roleIds))
+          .orderBy(
+            asc(volunteerRoleRequirement.displayOrder),
+            asc(volunteerRoleRequirement.createdAt),
+            asc(volunteerRoleRequirement.id),
+          );
+
+  const requirementsByRoleId = new Map<string, VolunteerRoleRequirementRow[]>();
+  for (const requirement of requirements) {
+    const roleRequirements = requirementsByRoleId.get(requirement.roleId);
+    if (!roleRequirements) {
+      requirementsByRoleId.set(requirement.roleId, [requirement]);
+      continue;
+    }
+
+    roleRequirements.push(requirement);
+  }
+
+  return opportunities.map((opportunity) =>
+    hydrateVolunteerOpportunity(
+      opportunity,
+      rolesByOpportunityId.get(opportunity.id) ?? [],
+      requirementsByRoleId,
+    ),
+  );
+}
+
 export async function createVolunteerOpportunity(
   data: CreateVolunteerOpportunityInput,
 ): Promise<CreatedVolunteerOpportunity> {
@@ -248,31 +365,32 @@ export async function createVolunteerOpportunity(
       });
     }
 
-    return {
-      id: newOpportunity.id,
-      categoryId: newOpportunity.categoryId,
-      locationId: newOpportunity.cityId,
-      title: newOpportunity.title,
-      overview: newOpportunity.overview,
-      communityImpact: newOpportunity.communityImpact,
-      durationLabel: newOpportunity.durationLabel,
-      commitmentLabel: newOpportunity.commitmentLabel,
-      applicationDeadline: newOpportunity.applicationDeadline,
-      coverImageKey: newOpportunity.coverImageKey,
-      coverImageUrl: newOpportunity.coverImageUrl,
-      benefits: newOpportunity.benefits as string[],
-      contact: {
-        email: newOpportunity.contactEmail,
-        telegramUsername: newOpportunity.contactTelegramUsername,
-        phone: newOpportunity.contactPhone,
-        websiteUrl: newOpportunity.contactWebsiteUrl,
-      },
-      status: newOpportunity.status,
-      publishedAt: newOpportunity.publishedAt,
-      createdBy: newOpportunity.createdBy,
-      createdAt: newOpportunity.createdAt,
-      updatedAt: newOpportunity.updatedAt,
-      roles: createdRoles,
-    };
+    return hydrateVolunteerOpportunity(
+      newOpportunity,
+      createdRoles.map((role) => ({
+        id: role.id,
+        opportunityId: newOpportunity.id,
+        title: role.title,
+        commitmentLabel: role.commitmentLabel,
+        capacity: role.capacity,
+        responsibilities: role.responsibilities,
+        displayOrder: role.displayOrder,
+        createdAt: newOpportunity.createdAt,
+        updatedAt: newOpportunity.updatedAt,
+      })),
+      new Map(
+        createdRoles.map((role) => [
+          role.id,
+          role.requirements.map((requirementText, displayOrder) => ({
+            id: `${role.id}:${displayOrder}`,
+            roleId: role.id,
+            requirementText,
+            displayOrder,
+            createdAt: newOpportunity.createdAt,
+            updatedAt: newOpportunity.updatedAt,
+          })),
+        ]),
+      ),
+    );
   });
 }

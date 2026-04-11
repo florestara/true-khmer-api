@@ -12,6 +12,7 @@ import {
   createVolunteerOpportunityResponseSchema,
   getVolunteerCategoriesResponseSchema,
   getVolunteerLocationsResponseSchema,
+  getVolunteerOpportunitiesResponseSchema,
   presignVolunteerOpportunityCoverUploadResponseSchema,
   presignVolunteerOpportunityCoverUploadSchema,
   volunteerCategoryValidationErrorResponseSchema,
@@ -23,6 +24,7 @@ import {
   handleCreateVolunteerOpportunity,
   handleGetVolunteerCategories,
   handleGetVolunteerLocations,
+  handleGetVolunteerOpportunities,
   handlePresignVolunteerOpportunityCoverUpload,
 } from "./post-volunteer.service";
 
@@ -238,6 +240,48 @@ const presignVolunteerOpportunityCoverUploadRoute = createRoute({
   },
 });
 
+const getVolunteerOpportunitiesRoute = createRoute({
+  method: "get",
+  path: "/opportunities",
+  tags: ["Volunteer Post"],
+  middleware: [requireAccessToken],
+  security: [{ BearerAuth: [] }],
+  responses: {
+    200: {
+      description: "List of volunteer opportunities",
+      content: {
+        "application/json": {
+          schema: getVolunteerOpportunitiesResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: "Unauthorized",
+      content: {
+        "application/json": {
+          schema: authProtectedErrorResponseSchema,
+        },
+      },
+    },
+    403: {
+      description: "Forbidden",
+      content: {
+        "application/json": {
+          schema: authProtectedErrorResponseSchema,
+        },
+      },
+    },
+    500: {
+      description: "Internal server error",
+      content: {
+        "application/json": {
+          schema: volunteerOperationErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
 const createVolunteerOpportunityRoute = createRoute({
   method: "post",
   path: "/opportunities",
@@ -324,6 +368,10 @@ postVolunteerRouter.openapi(
     return handlePresignVolunteerOpportunityCoverUpload(c, data) as any;
   },
 );
+
+postVolunteerRouter.openapi(getVolunteerOpportunitiesRoute, async (c) => {
+  return handleGetVolunteerOpportunities(c) as any;
+});
 
 postVolunteerRouter.openapi(createVolunteerOpportunityRoute, async (c) => {
   const data = c.req.valid("json");

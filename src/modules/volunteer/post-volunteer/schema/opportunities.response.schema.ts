@@ -74,3 +74,10 @@ export const createVolunteerOpportunityResponseSchema = z
     opportunity: volunteerOpportunityResponseSchema,
   })
   .openapi("CreateVolunteerOpportunityResponse");
+
+export const getVolunteerOpportunitiesResponseSchema = z
+  .object({
+    ok: z.literal(true),
+    opportunities: z.array(volunteerOpportunityResponseSchema),
+  })
+  .openapi("GetVolunteerOpportunitiesResponse");

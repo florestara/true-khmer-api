@@ -12,6 +12,7 @@ import {
   findVolunteerLocationById,
   getVolunteerCategories,
   getVolunteerLocations,
+  getVolunteerOpportunities,
 } from "./post-volunteer.query";
 import type {
   CreateVolunteerCategoryBodyInput,
@@ -66,6 +67,26 @@ export async function handleGetVolunteerLocations(c: Context) {
     return c.json({ ok: true, locations }, 200);
   } catch (err) {
     console.error("Failed to get volunteer locations", err);
+    return c.json({ ok: false, error: "Internal server error" }, 500);
+  }
+}
+
+export async function handleGetVolunteerOpportunities(
+  c: Context,
+  isPublic = false,
+) {
+  if (!isPublic) {
+    const authResult = getAuthUserId(c);
+    if (!authResult.ok) {
+      return authResult.response;
+    }
+  }
+
+  try {
+    const opportunities = await getVolunteerOpportunities();
+    return c.json({ ok: true, opportunities }, 200);
+  } catch (err) {
+    console.error("Failed to get volunteer opportunities", err);
     return c.json({ ok: false, error: "Internal server error" }, 500);
   }
 }
