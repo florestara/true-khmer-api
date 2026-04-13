@@ -17,6 +17,7 @@ import {
 import type {
   CreateVolunteerCategoryBodyInput,
   CreateVolunteerOpportunityBodyInput,
+  GetVolunteerOpportunitiesQuery,
   PresignVolunteerOpportunityCoverUploadPayload,
 } from "./post-volunteer.schema";
 
@@ -73,6 +74,7 @@ export async function handleGetVolunteerLocations(c: Context) {
 
 export async function handleGetVolunteerOpportunities(
   c: Context,
+  query: GetVolunteerOpportunitiesQuery,
   isPublic = false,
 ) {
   if (!isPublic) {
@@ -83,8 +85,25 @@ export async function handleGetVolunteerOpportunities(
   }
 
   try {
-    const opportunities = await getVolunteerOpportunities();
-    return c.json({ ok: true, opportunities }, 200);
+    const checks = await Promise.all([
+      query.categoryId
+        ? findActiveVolunteerCategoryById(query.categoryId)
+        : Promise.resolve(null),
+      query.locationId
+        ? findVolunteerLocationById(query.locationId)
+        : Promise.resolve(null),
+    ]);
+
+    if (query.categoryId && !checks[0]) {
+      return c.json({ ok: false, error: "Volunteer category not found" }, 404);
+    }
+
+    if (query.locationId && !checks[1]) {
+      return c.json({ ok: false, error: "Location not found" }, 404);
+    }
+
+    const result = await getVolunteerOpportunities(query);
+    return c.json({ ok: true, ...result }, 200);
   } catch (err) {
     console.error("Failed to get volunteer opportunities", err);
     return c.json({ ok: false, error: "Internal server error" }, 500);

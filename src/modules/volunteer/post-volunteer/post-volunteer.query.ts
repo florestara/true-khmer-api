@@ -1,4 +1,19 @@
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  exists,
+  ilike,
+  inArray,
+  isNotNull,
+  lt,
+  or,
+  sql,
+  aliasedTable,
+  type SQL,
+  type SQLWrapper,
+} from "drizzle-orm";
 import { env } from "../../../config/env";
 import { db } from "../../../db/index";
 import {
@@ -16,7 +31,10 @@ import {
 import type {
   CreateVolunteerCategoryInput,
   CreateVolunteerOpportunityBodyInput,
+  GetVolunteerOpportunitiesQuery,
+  VolunteerOpportunitiesPageCursor,
 } from "./post-volunteer.schema";
+import { encodeVolunteerOpportunitiesPageCursor } from "./post-volunteer.schema";
 
 type VolunteerCategoryRow = typeof volunteerCategory.$inferSelect;
 type VolunteerCategoryInsert = typeof volunteerCategory.$inferInsert;
@@ -27,9 +45,40 @@ type VolunteerLocationRow = {
 type VolunteerOpportunityRow = typeof volunteerOpportunity.$inferSelect;
 type VolunteerRoleRow = typeof volunteerRole.$inferSelect;
 type VolunteerRoleRequirementRow = typeof volunteerRoleRequirement.$inferSelect;
+type HydratedVolunteerRole = Pick<
+  VolunteerRoleRow,
+  | "id"
+  | "title"
+  | "commitmentLabel"
+  | "capacity"
+  | "responsibilities"
+  | "displayOrder"
+>;
+type HydratedVolunteerRequirement = Pick<
+  VolunteerRoleRequirementRow,
+  "requirementText"
+>;
+type VolunteerOpportunitiesPagination = {
+  limit: number;
+  hasMore: boolean;
+  nextCursor: string | null;
+};
+type VolunteerOpportunitiesListResult = {
+  opportunities: CreatedVolunteerOpportunity[];
+  pagination: VolunteerOpportunitiesPagination;
+};
 
 const CAMBODIA_NORMALIZED_NAME =
   env.VOLUNTEER_COUNTRY_NORMALIZED_NAME;
+const volunteerRoleSearch = aliasedTable(volunteerRole, "volunteer_role_search");
+const volunteerRoleRequirementSearch = aliasedTable(
+  volunteerRoleRequirement,
+  "volunteer_role_requirement_search",
+);
+
+function buildJsonbTextSearch(column: SQLWrapper, pattern: string) {
+  return sql`${column}::text ilike ${pattern}`;
+}
 
 export async function getVolunteerCategories(): Promise<VolunteerCategoryRow[]> {
   return db
@@ -179,10 +228,14 @@ export type CreatedVolunteerOpportunity = {
   }>;
 };
 
+type VolunteerOpportunityListRow = {
+  opportunity: VolunteerOpportunityRow;
+};
+
 function hydrateVolunteerOpportunity(
   opportunity: VolunteerOpportunityRow,
-  roles: VolunteerRoleRow[],
-  requirementsByRoleId: Map<string, VolunteerRoleRequirementRow[]>,
+  roles: HydratedVolunteerRole[],
+  requirementsByRoleId: Map<string, HydratedVolunteerRequirement[]>,
 ): CreatedVolunteerOpportunity {
   return {
     id: opportunity.id,
@@ -214,27 +267,146 @@ function hydrateVolunteerOpportunity(
       commitmentLabel: role.commitmentLabel,
       capacity: role.capacity,
       responsibilities: role.responsibilities as string[],
-      requirements: (requirementsByRoleId.get(role.id) ?? [])
-        .sort((left, right) => left.displayOrder - right.displayOrder)
-        .map((requirement) => requirement.requirementText),
+      requirements: (requirementsByRoleId.get(role.id) ?? []).map(
+        (requirement) => requirement.requirementText,
+      ),
       displayOrder: role.displayOrder,
     })),
   };
 }
 
-export async function getVolunteerOpportunities(): Promise<
-  CreatedVolunteerOpportunity[]
-> {
-  const opportunities = await db
-    .select()
-    .from(volunteerOpportunity)
-    .where(eq(volunteerOpportunity.status, "PUBLISHED"))
-    .orderBy(
-      desc(volunteerOpportunity.publishedAt),
-      desc(volunteerOpportunity.createdAt),
-      desc(volunteerOpportunity.id),
+function buildVolunteerOpportunitiesCursorFilter(
+  cursor?: VolunteerOpportunitiesPageCursor,
+): SQL<unknown> | undefined {
+  if (!cursor) {
+    return undefined;
+  }
+
+  return or(
+    lt(volunteerOpportunity.publishedAt, cursor.publishedAt),
+    and(
+      eq(volunteerOpportunity.publishedAt, cursor.publishedAt),
+      lt(volunteerOpportunity.createdAt, cursor.createdAt),
+    ),
+    and(
+      eq(volunteerOpportunity.publishedAt, cursor.publishedAt),
+      eq(volunteerOpportunity.createdAt, cursor.createdAt),
+      lt(volunteerOpportunity.id, cursor.id),
+    ),
+  );
+}
+
+function buildVolunteerOpportunitiesWhereClause({
+  categoryId,
+  locationId,
+  search,
+  cursor,
+}: Pick<
+  GetVolunteerOpportunitiesQuery,
+  "categoryId" | "locationId" | "search" | "cursor"
+>) {
+  const filters: SQL<unknown>[] = [
+    eq(volunteerOpportunity.status, "PUBLISHED"),
+    eq(volunteerCategory.status, "ACTIVE"),
+    eq(city.isActive, true),
+    isNotNull(volunteerOpportunity.publishedAt),
+  ];
+
+  if (categoryId) {
+    filters.push(eq(volunteerOpportunity.categoryId, categoryId));
+  }
+
+  if (locationId) {
+    filters.push(eq(volunteerOpportunity.cityId, locationId));
+  }
+
+  if (search) {
+    const searchPattern = `%${search}%`;
+    const searchFilter = or(
+      ilike(volunteerOpportunity.title, searchPattern),
+      ilike(volunteerOpportunity.overview, searchPattern),
+      ilike(volunteerOpportunity.communityImpact, searchPattern),
+      ilike(volunteerOpportunity.durationLabel, searchPattern),
+      ilike(volunteerOpportunity.commitmentLabel, searchPattern),
+      buildJsonbTextSearch(volunteerOpportunity.benefits, searchPattern),
+      ilike(volunteerOpportunity.contactEmail, searchPattern),
+      ilike(volunteerOpportunity.contactTelegramUsername, searchPattern),
+      ilike(volunteerOpportunity.contactPhone, searchPattern),
+      ilike(volunteerOpportunity.contactWebsiteUrl, searchPattern),
+      ilike(volunteerCategory.name, searchPattern),
+      ilike(volunteerCategory.description, searchPattern),
+      ilike(volunteerCategory.slug, searchPattern),
+      ilike(city.name, searchPattern),
+      exists(
+        db
+          .select({ id: volunteerRoleSearch.id })
+          .from(volunteerRoleSearch)
+          .where(
+            and(
+              eq(volunteerRoleSearch.opportunityId, volunteerOpportunity.id),
+              or(
+                ilike(volunteerRoleSearch.title, searchPattern),
+                ilike(volunteerRoleSearch.commitmentLabel, searchPattern),
+                buildJsonbTextSearch(
+                  volunteerRoleSearch.responsibilities,
+                  searchPattern,
+                ),
+              ),
+            ),
+          ),
+      ),
+      exists(
+        db
+          .select({ id: volunteerRoleRequirementSearch.id })
+          .from(volunteerRoleRequirementSearch)
+          .innerJoin(
+            volunteerRoleSearch,
+            eq(volunteerRoleSearch.id, volunteerRoleRequirementSearch.roleId),
+          )
+          .where(
+            and(
+              eq(volunteerRoleSearch.opportunityId, volunteerOpportunity.id),
+              ilike(
+                volunteerRoleRequirementSearch.requirementText,
+                searchPattern,
+              ),
+            ),
+          ),
+      ),
     );
 
+    if (searchFilter) {
+      filters.push(searchFilter);
+    }
+  }
+
+  const cursorFilter = buildVolunteerOpportunitiesCursorFilter(cursor);
+  if (cursorFilter) {
+    filters.push(cursorFilter);
+  }
+
+  return and(...filters);
+}
+
+function buildNextVolunteerOpportunitiesCursor(
+  row: VolunteerOpportunityListRow,
+): string {
+  if (!row.opportunity.publishedAt) {
+    throw new Error(
+      "Cannot build volunteer opportunities cursor without publishedAt",
+    );
+  }
+
+  return encodeVolunteerOpportunitiesPageCursor({
+    publishedAt: row.opportunity.publishedAt,
+    createdAt: row.opportunity.createdAt,
+    id: row.opportunity.id,
+  });
+}
+
+async function hydrateVolunteerOpportunities(
+  opportunities: VolunteerOpportunityRow[],
+): Promise<CreatedVolunteerOpportunity[]> {
   if (opportunities.length === 0) {
     return [];
   }
@@ -293,6 +465,64 @@ export async function getVolunteerOpportunities(): Promise<
       requirementsByRoleId,
     ),
   );
+}
+
+export async function getVolunteerOpportunities({
+  categoryId,
+  locationId,
+  search,
+  limit,
+  cursor,
+}: GetVolunteerOpportunitiesQuery): Promise<VolunteerOpportunitiesListResult> {
+  const rows = await db
+    .select({
+      opportunity: volunteerOpportunity,
+    })
+    .from(volunteerOpportunity)
+    .innerJoin(
+      volunteerCategory,
+      eq(volunteerCategory.id, volunteerOpportunity.categoryId),
+    )
+    .innerJoin(city, eq(city.id, volunteerOpportunity.cityId))
+    .where(
+      buildVolunteerOpportunitiesWhereClause({
+        categoryId,
+        locationId,
+        search,
+        cursor,
+      }),
+    )
+    .orderBy(
+      desc(volunteerOpportunity.publishedAt),
+      desc(volunteerOpportunity.createdAt),
+      desc(volunteerOpportunity.id),
+    )
+    .limit(limit + 1);
+
+  const hasMore = rows.length > limit;
+  const opportunityRows: VolunteerOpportunityListRow[] = hasMore
+    ? rows.slice(0, limit)
+    : rows;
+  const opportunities = await hydrateVolunteerOpportunities(
+    opportunityRows.map((row) => row.opportunity),
+  );
+  const lastOpportunityRow =
+    opportunityRows.length > 0
+      ? opportunityRows[opportunityRows.length - 1]
+      : null;
+  const nextCursor =
+    hasMore && lastOpportunityRow
+      ? buildNextVolunteerOpportunitiesCursor(lastOpportunityRow)
+      : null;
+
+  return {
+    opportunities,
+    pagination: {
+      limit,
+      hasMore,
+      nextCursor,
+    },
+  };
 }
 
 export async function createVolunteerOpportunity(
@@ -369,25 +599,17 @@ export async function createVolunteerOpportunity(
       newOpportunity,
       createdRoles.map((role) => ({
         id: role.id,
-        opportunityId: newOpportunity.id,
         title: role.title,
         commitmentLabel: role.commitmentLabel,
         capacity: role.capacity,
         responsibilities: role.responsibilities,
         displayOrder: role.displayOrder,
-        createdAt: newOpportunity.createdAt,
-        updatedAt: newOpportunity.updatedAt,
       })),
       new Map(
         createdRoles.map((role) => [
           role.id,
-          role.requirements.map((requirementText, displayOrder) => ({
-            id: `${role.id}:${displayOrder}`,
-            roleId: role.id,
+          role.requirements.map((requirementText) => ({
             requirementText,
-            displayOrder,
-            createdAt: newOpportunity.createdAt,
-            updatedAt: newOpportunity.updatedAt,
           })),
         ]),
       ),

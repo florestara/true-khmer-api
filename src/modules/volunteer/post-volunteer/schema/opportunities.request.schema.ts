@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { VOLUNTEER_UUID_RE } from "../../lib/constants";
 
 const VOLUNTEER_COVER_IMAGE_ALLOWED_CONTENT_TYPES = [
   "image/jpeg",
@@ -6,6 +7,8 @@ const VOLUNTEER_COVER_IMAGE_ALLOWED_CONTENT_TYPES = [
   "image/webp",
 ] as const;
 const SAFE_UPLOAD_FILE_NAME = /^[A-Za-z0-9._-]+$/;
+const MAX_VOLUNTEER_OPPORTUNITIES_PAGE_SIZE = 50;
+const DEFAULT_VOLUNTEER_OPPORTUNITIES_PAGE_SIZE = 10;
 
 export const VOLUNTEER_COVER_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 
@@ -30,6 +33,88 @@ function normalizeStringList(values: string[] | null | undefined) {
   return values
     .map((value) => normalizeText(value))
     .filter((value) => value.length > 0);
+}
+
+function normalizeVolunteerOpportunitiesCursorTimestamp(
+  value: string,
+): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const normalized = trimmed
+    .replace(/^(\d{4}-\d{2}-\d{2})\s+/, "$1T")
+    .replace(/\.(\d{3})\d+(?=[+-Z])/, ".$1")
+    .replace(/([+-]\d{2})$/, "$1:00");
+  const parsed = new Date(normalized);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return parsed.toISOString();
+}
+
+const cursorTimestampSchema = z.string().trim().transform((value, ctx) => {
+  const normalized = normalizeVolunteerOpportunitiesCursorTimestamp(value);
+  if (!normalized) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "cursor timestamp must be a valid ISO datetime",
+    });
+    return z.NEVER;
+  }
+
+  return normalized;
+});
+
+const volunteerOpportunitiesPageCursorSchema = z.object({
+  publishedAt: cursorTimestampSchema,
+  createdAt: cursorTimestampSchema,
+  id: z.string().trim().regex(VOLUNTEER_UUID_RE, "cursor.id must be a valid UUID"),
+});
+
+export type VolunteerOpportunitiesPageCursor = z.infer<
+  typeof volunteerOpportunitiesPageCursorSchema
+>;
+
+export function encodeVolunteerOpportunitiesPageCursor(
+  cursor: VolunteerOpportunitiesPageCursor,
+): string {
+  const publishedAt = normalizeVolunteerOpportunitiesCursorTimestamp(
+    cursor.publishedAt,
+  );
+  const createdAt = normalizeVolunteerOpportunitiesCursorTimestamp(
+    cursor.createdAt,
+  );
+
+  if (!publishedAt || !createdAt) {
+    throw new Error(
+      "Cannot encode volunteer opportunities page cursor with invalid timestamp",
+    );
+  }
+
+  return Buffer.from(
+    JSON.stringify({
+      publishedAt,
+      createdAt,
+      id: cursor.id,
+    }),
+    "utf8",
+  ).toString("base64url");
+}
+
+function decodeVolunteerOpportunitiesPageCursor(
+  raw: string,
+): VolunteerOpportunitiesPageCursor | null {
+  try {
+    const parsed = JSON.parse(Buffer.from(raw, "base64url").toString("utf8"));
+    const cursor = volunteerOpportunitiesPageCursorSchema.safeParse(parsed);
+    return cursor.success ? cursor.data : null;
+  } catch {
+    return null;
+  }
 }
 
 const volunteerOpportunityContactSchema = z
@@ -282,6 +367,59 @@ export const createVolunteerOpportunitySchema =
 
 export type PresignVolunteerOpportunityCoverUploadPayload = z.infer<
   typeof presignVolunteerOpportunityCoverUploadSchema
+>;
+
+export const getVolunteerOpportunitiesQuerySchema = z
+  .object({
+    categoryId: z
+      .string()
+      .trim()
+      .regex(VOLUNTEER_UUID_RE, "categoryId must be a valid UUID")
+      .optional(),
+    locationId: z
+      .string()
+      .trim()
+      .regex(VOLUNTEER_UUID_RE, "locationId must be a valid UUID")
+      .optional(),
+    search: z
+      .string()
+      .trim()
+      .max(300, "search must be <= 300 characters")
+      .optional(),
+    limit: z.coerce
+      .number()
+      .int()
+      .min(1, "limit must be between 1 and 50")
+      .max(MAX_VOLUNTEER_OPPORTUNITIES_PAGE_SIZE, "limit must be between 1 and 50")
+      .default(DEFAULT_VOLUNTEER_OPPORTUNITIES_PAGE_SIZE),
+    cursor: z.string().optional().transform((value, ctx) => {
+      if (value === undefined) {
+        return undefined;
+      }
+
+      const cursor = decodeVolunteerOpportunitiesPageCursor(value);
+      if (!cursor) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "cursor must be a valid pagination cursor",
+        });
+        return z.NEVER;
+      }
+
+      return cursor;
+    }),
+  })
+  .transform((value) => ({
+    categoryId: value.categoryId,
+    locationId: value.locationId,
+    search: value.search,
+    limit: value.limit,
+    cursor: value.cursor,
+  }))
+  .openapi("GetVolunteerOpportunitiesQuery");
+
+export type GetVolunteerOpportunitiesQuery = z.infer<
+  typeof getVolunteerOpportunitiesQuerySchema
 >;
 
 export type CreateVolunteerOpportunityBodyInput = z.infer<

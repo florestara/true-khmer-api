@@ -13,6 +13,7 @@ import {
   getVolunteerCategoriesResponseSchema,
   getVolunteerLocationsResponseSchema,
   getVolunteerOpportunitiesResponseSchema,
+  getVolunteerOpportunitiesQuerySchema,
   presignVolunteerOpportunityCoverUploadResponseSchema,
   presignVolunteerOpportunityCoverUploadSchema,
   volunteerCategoryValidationErrorResponseSchema,
@@ -246,12 +247,23 @@ const getVolunteerOpportunitiesRoute = createRoute({
   tags: ["Volunteer Post"],
   middleware: [requireAccessToken],
   security: [{ BearerAuth: [] }],
+  request: {
+    query: getVolunteerOpportunitiesQuerySchema,
+  },
   responses: {
     200: {
       description: "List of volunteer opportunities",
       content: {
         "application/json": {
           schema: getVolunteerOpportunitiesResponseSchema,
+        },
+      },
+    },
+    400: {
+      description: "Validation failed",
+      content: {
+        "application/json": {
+          schema: volunteerValidationErrorResponseSchema,
         },
       },
     },
@@ -268,6 +280,14 @@ const getVolunteerOpportunitiesRoute = createRoute({
       content: {
         "application/json": {
           schema: authProtectedErrorResponseSchema,
+        },
+      },
+    },
+    404: {
+      description: "Related volunteer records were not found",
+      content: {
+        "application/json": {
+          schema: volunteerOperationErrorResponseSchema,
         },
       },
     },
@@ -370,7 +390,8 @@ postVolunteerRouter.openapi(
 );
 
 postVolunteerRouter.openapi(getVolunteerOpportunitiesRoute, async (c) => {
-  return handleGetVolunteerOpportunities(c) as any;
+  const query = c.req.valid("query");
+  return handleGetVolunteerOpportunities(c, query) as any;
 });
 
 postVolunteerRouter.openapi(createVolunteerOpportunityRoute, async (c) => {

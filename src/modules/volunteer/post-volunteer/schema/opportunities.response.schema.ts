@@ -75,9 +75,18 @@ export const createVolunteerOpportunityResponseSchema = z
   })
   .openapi("CreateVolunteerOpportunityResponse");
 
+export const volunteerOpportunitiesPaginationResponseSchema = z
+  .object({
+    limit: z.number(),
+    hasMore: z.boolean(),
+    nextCursor: z.string().nullable(),
+  })
+  .openapi("VolunteerOpportunitiesPaginationResponse");
+
 export const getVolunteerOpportunitiesResponseSchema = z
   .object({
     ok: z.literal(true),
     opportunities: z.array(volunteerOpportunityResponseSchema),
+    pagination: volunteerOpportunitiesPaginationResponseSchema,
   })
   .openapi("GetVolunteerOpportunitiesResponse");
