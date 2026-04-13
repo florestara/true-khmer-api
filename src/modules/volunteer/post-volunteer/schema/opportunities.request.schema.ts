@@ -53,7 +53,7 @@ function normalizeVolunteerOpportunitiesCursorTimestamp(
     return null;
   }
 
-  return parsed.toISOString();
+  return trimmed;
 }
 
 const cursorTimestampSchema = z.string().trim().transform((value, ctx) => {
