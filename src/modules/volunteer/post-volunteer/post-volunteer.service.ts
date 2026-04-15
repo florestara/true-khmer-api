@@ -12,10 +12,12 @@ import {
   findVolunteerLocationById,
   getVolunteerCategories,
   getVolunteerLocations,
+  getVolunteerOpportunities,
 } from "./post-volunteer.query";
 import type {
   CreateVolunteerCategoryBodyInput,
   CreateVolunteerOpportunityBodyInput,
+  GetVolunteerOpportunitiesQuery,
   PresignVolunteerOpportunityCoverUploadPayload,
 } from "./post-volunteer.schema";
 
@@ -66,6 +68,44 @@ export async function handleGetVolunteerLocations(c: Context) {
     return c.json({ ok: true, locations }, 200);
   } catch (err) {
     console.error("Failed to get volunteer locations", err);
+    return c.json({ ok: false, error: "Internal server error" }, 500);
+  }
+}
+
+export async function handleGetVolunteerOpportunities(
+  c: Context,
+  query: GetVolunteerOpportunitiesQuery,
+  isPublic = false,
+) {
+  if (!isPublic) {
+    const authResult = getAuthUserId(c);
+    if (!authResult.ok) {
+      return authResult.response;
+    }
+  }
+
+  try {
+    const checks = await Promise.all([
+      query.categoryId
+        ? findActiveVolunteerCategoryById(query.categoryId)
+        : Promise.resolve(null),
+      query.locationId
+        ? findVolunteerLocationById(query.locationId)
+        : Promise.resolve(null),
+    ]);
+
+    if (query.categoryId && !checks[0]) {
+      return c.json({ ok: false, error: "Volunteer category not found" }, 404);
+    }
+
+    if (query.locationId && !checks[1]) {
+      return c.json({ ok: false, error: "Location not found" }, 404);
+    }
+
+    const result = await getVolunteerOpportunities(query);
+    return c.json({ ok: true, ...result }, 200);
+  } catch (err) {
+    console.error("Failed to get volunteer opportunities", err);
     return c.json({ ok: false, error: "Internal server error" }, 500);
   }
 }
