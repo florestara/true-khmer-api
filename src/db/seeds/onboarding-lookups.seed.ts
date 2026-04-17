@@ -25,21 +25,36 @@ const TIER_SEED = [
     name: "Neary",
     rankOrder: 1,
     minPoints: 0,
-    description: "Starting tier.",
+    description: "The everyday Cambodian citizen - the foundation of community",
   },
   {
     slug: "yothea",
     name: "Yothea",
     rankOrder: 2,
-    minPoints: 200,
-    description: "Second tier.",
+    minPoints: 500,
+    description: "The Warrior - actively fighting for Cambodia's progress",
   },
   {
     slug: "reach",
     name: "Reach",
     rankOrder: 3,
-    minPoints: 600,
-    description: "Advanced tier.",
+    minPoints: 2000,
+    description: "The Noble - a community leader who guides others with wisdom",
+  },
+  {
+    slug: "preah",
+    name: "Preah",
+    rankOrder: 4,
+    minPoints: 5000,
+    description: "The Sacred One - embodies Khmer values at the highest level",
+  },
+  {
+    slug: "indra",
+    name: "Indra",
+    rankOrder: 5,
+    minPoints: 10000,
+    description:
+      "The Divine - king of gods in Khmer mythology; ultimate contribution",
   },
 ] satisfies Array<
   Pick<
@@ -92,9 +107,18 @@ export async function seedOnboardingLookups() {
     target: interest.slug,
   });
 
-  await db.insert(tier).values(TIER_SEED).onConflictDoNothing({
-    target: tier.slug,
-  });
+  await db
+    .insert(tier)
+    .values(TIER_SEED)
+    .onConflictDoUpdate({
+      target: tier.slug,
+      set: {
+        name: tier.name,
+        rankOrder: tier.rankOrder,
+        minPoints: tier.minPoints,
+        description: tier.description,
+      },
+    });
 
   await db.insert(country).values(CAMBODIA_COUNTRY_SEED).onConflictDoNothing({
     target: country.normalizedName,

@@ -1,5 +1,6 @@
 import type { Context } from "hono";
 import { getAuthUserId } from "../auth/utils/get-auth";
+import { awardPoints } from "../points/points.service";
 import {
   ONBOARDING_CONTRIBUTIONS_STEP,
   ONBOARDING_INTERESTS_STEP,
@@ -244,6 +245,15 @@ export async function handleCompleteOnboarding(c: Context) {
   }
 
   await completeOnboarding(authResult.userId);
+
+  // Award welcome/onboarding points through the point system
+  awardPoints({
+    userId: authResult.userId,
+    actionKey: "welcome_profile_complete",
+    referenceType: "onboarding",
+    referenceId: "step-4",
+  }).catch((err) => console.error("Failed to award onboarding points", err));
+
   const state = await getOnboardingState(authResult.userId);
 
   return c.json({ ok: true, state });

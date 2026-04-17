@@ -4,7 +4,6 @@ import {
   type EditQuestionInput,
   type GetTrendingTagsQuery,
   type GetQuestionsQuery,
-
   type QuestionIdParams,
   type VoteQuestionInput,
 } from "./questions.schema";
@@ -23,6 +22,10 @@ import {
 import { getAuthUserId } from "../../auth/utils/get-auth";
 import { POSTGRES_FOREIGN_KEY_VIOLATION } from "../../../db/constants";
 import { findCategoryById } from "../categories/categories.query";
+import {
+  awardPoints,
+  awardForumUpvotePoints,
+} from "../../points/points.service";
 
 export async function handleGetQuestions(
   c: Context,
@@ -144,6 +147,16 @@ export async function handleCreateQuestion(
     }
 
     const newQuestion = await createQuestion(data, authResult.userId);
+
+    awardPoints({
+      userId: authResult.userId,
+      actionKey: "forum_question_posted",
+      referenceType: "forum_question",
+      referenceId: newQuestion.id,
+    }).catch((err) =>
+      console.error("Failed to award points for question", err),
+    );
+
     return c.json({ ok: true, question: newQuestion }, 201);
   } catch (err) {
     const code = (err as { code?: string } | null)?.code;
@@ -294,6 +307,17 @@ export async function handleVoteQuestion(
     if (!votedQuestion) {
       return c.json({ ok: false, error: "Question not found" }, 404);
     }
+
+    awardForumUpvotePoints({
+      voterId: authResult.userId,
+      contentAuthorId: existingQuestion.authorId,
+      contentId: params.questionId,
+      contentType: "forum_question",
+      score: votedQuestion.score,
+      voteType: data.voteType,
+    }).catch((err) =>
+      console.error("Failed to award forum_upvote points", err),
+    );
 
     return c.json(
       {
