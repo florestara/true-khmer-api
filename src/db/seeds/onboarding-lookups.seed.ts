@@ -1,5 +1,5 @@
 import { db } from "../index";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { city, country, interest, tier } from "../schema";
 import { normalizeLocationName } from "../../modules/onboarding/utils";
 
@@ -113,10 +113,10 @@ export async function seedOnboardingLookups() {
     .onConflictDoUpdate({
       target: tier.slug,
       set: {
-        name: tier.name,
-        rankOrder: tier.rankOrder,
-        minPoints: tier.minPoints,
-        description: tier.description,
+        name: sql`excluded.name`,
+        rankOrder: sql`excluded.rank_order`,
+        minPoints: sql`excluded.min_points`,
+        description: sql`excluded.description`,
       },
     });
 

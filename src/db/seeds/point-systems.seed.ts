@@ -1,5 +1,6 @@
 import { pointSystems } from "../schema/point_system/point-systems";
 import { db } from "../index";
+import { sql } from "drizzle-orm";
 
 const POINT_SYSTEMS_SEED = [
   {
@@ -145,14 +146,14 @@ const POINT_SYSTEMS_SEED = [
   {
     key: "launchpad_completion_proposer",
     value: 80,
-    description: "Complete a launchpad proposal",
+    description: "Project completed - proposer",
     maxPerDay: 0,
     mode: "action",
   },
   {
     key: "launchpad_completion_participant",
     value: 40,
-    description: "Complete a launchpad proposal",
+    description: "Project completed - participant",
     maxPerDay: 0,
     mode: "support",
   },
@@ -187,14 +188,14 @@ const POINT_SYSTEMS_SEED = [
   {
     key: "mentorship_5star_bonus",
     value: 10,
-    description: "Receive a 5-star rating as a mentor or mentee",
+    description: "5-star session rating (bonus)",
     maxPerDay: 0,
     mode: "action",
   },
   {
     key: "mentorship_review_bonus",
     value: 5,
-    description: "Receive a 5-star rating as a mentor or mentee",
+    description: "Written session review (bonus)",
     maxPerDay: 0,
     mode: "action",
   },
@@ -222,14 +223,14 @@ const POINT_SYSTEMS_SEED = [
   {
     key: "event_organised",
     value: 100,
-    description: "Organize an event successfully",
+    description: "Organize event",
     maxPerDay: 0,
     mode: "action",
   },
   {
     key: "event_organised_rating_bonus",
     value: 25,
-    description: "Organize an event successfully",
+    description: "Event 4+ star bonus",
     maxPerDay: 0,
     mode: "action",
   },
@@ -269,17 +270,15 @@ const POINT_SYSTEMS_SEED = [
 >;
 
 export async function seedPointSystems() {
-  for (const system of POINT_SYSTEMS_SEED) {
-    await db
-      .insert(pointSystems)
-      .values(system)
-      .onConflictDoUpdate({
-        target: pointSystems.key,
-        set: {
-          value: system.value,
-          description: system.description,
-          maxPerDay: system.maxPerDay,
-        },
-      });
-  }
+  await db
+    .insert(pointSystems)
+    .values(POINT_SYSTEMS_SEED)
+    .onConflictDoUpdate({
+      target: pointSystems.key,
+      set: {
+        value: sql`excluded.value`,
+        description: sql`excluded.description`,
+        maxPerDay: sql`excluded.max_per_day`,
+      },
+    });
 }

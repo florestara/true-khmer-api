@@ -52,7 +52,7 @@ export const pointTransactionsActionType = pgEnum(
     "referral_active_member",
     "welcome_profile_complete",
     "tier_advancement_bonus",
-    "redemtion_deduction",
+    "redemption_deduction",
   ],
 );
 
@@ -95,11 +95,11 @@ export const pointTransactions = pgTable(
     id: uuid("id").primaryKey().notNull().defaultRandom(),
     userId: uuid("user_id")
       .notNull()
-      .references(() => user.id),
+      .references(() => user.id, { onDelete: "cascade" }),
     actionType: pointTransactionsActionType("action_type").notNull(),
     points: integer("points").notNull(),
-    reference_type: varchar("reference_type"),
-    reference_id: uuid("reference_id"),
+    referenceType: varchar("reference_type"),
+    referenceId: uuid("reference_id"),
     pool: pointTransactionsPool("pool").notNull().default("active"),
     mode: pointTransactionsMode("mode").notNull().default("action"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -116,16 +116,20 @@ export const tierHistory = pgTable(
     id: uuid("id").primaryKey().notNull().defaultRandom(),
     userId: uuid("user_id")
       .notNull()
-      .references(() => user.id),
+      .references(() => user.id, { onDelete: "cascade" }),
     tierId: uuid("tier_id")
       .notNull()
-      .references(() => tier.id),
+      .references(() => tier.id, { onDelete: "cascade" }),
     achievedAt: timestamp("achieved_at").notNull().defaultNow(),
     pointsAtTime: integer("points_at_time").notNull(),
   },
   (table) => [
     index("tier_history_user_id_idx").using("btree", table.userId),
     index("tier_history_tier_id_idx").using("btree", table.tierId),
+    uniqueIndex("tier_history_user_tier_unique_idx").on(
+      table.userId,
+      table.tierId,
+    ),
   ],
 );
 

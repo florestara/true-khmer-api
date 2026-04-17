@@ -64,6 +64,13 @@
       "when": 1776435469401,
       "tag": "0008_exotic_gideon",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1776458715509,
+      "tag": "0009_cheerful_madrox",
+      "breakpoints": true
     }
   ]
 }

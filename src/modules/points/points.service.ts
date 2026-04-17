@@ -1,14 +1,16 @@
 import {
   getPointSystemByKey,
-  countUserTransactionsToday,
   insertPointTransaction,
   getForumQuestionById,
-  countUserForumQuestions,
+  isUsersFirstQuestion,
+  countUserAnswersInThread,
+  getHighestAwardedMilestone,
 } from "./points.query";
+import type { ActionType } from "./points.query";
 
 export async function awardPoints(params: {
   userId: string;
-  actionKey: string;
+  actionKey: ActionType;
   referenceType?: string;
   referenceId?: string;
 }) {
@@ -18,56 +20,46 @@ export async function awardPoints(params: {
     return null;
   }
 
-  // Check daily limit (0 = unlimited)
-  if (config.maxPerDay > 0) {
-    const todayCount = await countUserTransactionsToday(
-      params.userId,
-      params.actionKey as any,
-    );
-    if (todayCount >= config.maxPerDay) {
-      return null;
-    }
-  }
-
   const transaction = await insertPointTransaction({
     userId: params.userId,
-    actionType: params.actionKey as any,
+    actionType: params.actionKey,
     points: config.value,
     referenceType: params.referenceType,
     referenceId: params.referenceId,
     mode: config.mode,
+    maxPerDay: config.maxPerDay,
   });
 
   return transaction;
 }
 
-/**
- * Award points for posting a forum answer.
- * Also handles the first-question bonus: if the question author's
- * first-ever question just received its first reply, award the bonus.
- */
 export async function awardForumParticipationPoints(params: {
   answerAuthorId: string;
   answerId: string;
   questionId: string;
 }) {
-  // Award participation points to the answer author
-  await awardPoints({
-    userId: params.answerAuthorId,
-    actionKey: "forum_participation",
-    referenceType: "forum_answer",
-    referenceId: params.answerId,
-  });
+  // Award participation points only for the user's first answer in this thread
+  const priorAnswers = await countUserAnswersInThread(
+    params.answerAuthorId,
+    params.questionId,
+  );
+  if (priorAnswers <= 1) {
+    await awardPoints({
+      userId: params.answerAuthorId,
+      actionKey: "forum_participation",
+      referenceType: "forum_answer",
+      referenceId: params.answerId,
+    });
+  }
 
-  // Check first-question bonus for the question author
   const question = await getForumQuestionById(params.questionId);
   if (
     question &&
     question.authorId !== params.answerAuthorId &&
-    question.answerCount <= 1 // just got its first reply
+    question.answerCount === 1
   ) {
-    const questionCount = await countUserForumQuestions(question.authorId);
-    if (questionCount === 1) {
+    const isFirst = await isUsersFirstQuestion(question.authorId, question.id);
+    if (isFirst) {
       await awardPoints({
         userId: question.authorId,
         actionKey: "forum_first_question_bonus",
@@ -78,10 +70,6 @@ export async function awardForumParticipationPoints(params: {
   }
 }
 
-/**
- * Award upvote milestone points to content author.
- * Awards points every time the score hits a multiple of 10.
- */
 export async function awardForumUpvotePoints(params: {
   voterId: string;
   contentAuthorId: string;
@@ -93,16 +81,33 @@ export async function awardForumUpvotePoints(params: {
   if (
     params.voteType !== "UPVOTE" ||
     params.contentAuthorId === params.voterId ||
-    params.score <= 0 ||
-    params.score % 10 !== 0
+    params.score <= 0
   ) {
     return null;
   }
 
-  const actionKey =
+  const actionKey: ActionType =
     params.contentType === "forum_question"
       ? "forum_question_upvotes"
       : "forum_answer_upvotes";
+
+  // Determine the current milestone (10, 20, 30, ...)
+  const currentMilestone = Math.floor(params.score / 10) * 10;
+  if (currentMilestone <= 0) {
+    return null;
+  }
+
+  // Check the highest milestone already awarded for this content
+  const highestAwarded = await getHighestAwardedMilestone(
+    params.contentAuthorId,
+    actionKey,
+    params.contentType,
+    params.contentId,
+  );
+
+  if (currentMilestone <= highestAwarded) {
+    return null;
+  }
 
   return awardPoints({
     userId: params.contentAuthorId,
