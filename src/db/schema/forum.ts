@@ -1,5 +1,6 @@
 import { relations, sql } from "drizzle-orm";
 import {
+  AnyPgColumn,
   index,
   integer,
   pgEnum,
@@ -150,6 +151,8 @@ export const forumAnswer = pgTable(
     status: forumAnswerStatus("status").default("PUBLISHED").notNull(),
     upvoteCount: integer("upvote_count").default(0).notNull(),
     downvoteCount: integer("downvote_count").default(0).notNull(),
+    replyCount: integer("reply_count").default(0).notNull(),
+    replyTo: uuid("reply_to").references((): AnyPgColumn => forumAnswer.id),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
       .defaultNow()
       .notNull(),

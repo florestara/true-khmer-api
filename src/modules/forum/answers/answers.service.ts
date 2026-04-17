@@ -87,12 +87,52 @@ export async function handleCreateAnswer(c: Context, data: CreateAnswerInput) {
       );
     }
 
+    if (data.replyTo) {
+      const parentAnswer = await findAnswerById(data.replyTo);
+      if (!parentAnswer) {
+        return c.json({ ok: false, error: "Reply target not found" }, 404);
+      }
+
+      if (parentAnswer.questionId !== data.questionId) {
+        return c.json(
+          {
+            ok: false,
+            error: "Replies must belong to the same question",
+          },
+          409,
+        );
+      }
+
+      if (parentAnswer.status !== "PUBLISHED") {
+        return c.json(
+          {
+            ok: false,
+            error: "Replies can only be posted to published answers",
+          },
+          409,
+        );
+      }
+
+      if (parentAnswer.replyTo) {
+        return c.json(
+          {
+            ok: false,
+            error: "Replies to replies are not allowed",
+          },
+          409,
+        );
+      }
+    }
+
     const newAnswer = await createAnswer(data, authResult.userId);
     return c.json({ ok: true, answer: newAnswer }, 201);
   } catch (err) {
     const code = (err as { code?: string } | null)?.code;
     if (code === POSTGRES_FOREIGN_KEY_VIOLATION) {
-      return c.json({ ok: false, error: "Question not found" }, 404);
+      return c.json(
+        { ok: false, error: "Question not found" },
+        404,
+      );
     }
     console.error("Failed to create answer", err);
     return c.json({ ok: false, error: "Internal server error" }, 500);

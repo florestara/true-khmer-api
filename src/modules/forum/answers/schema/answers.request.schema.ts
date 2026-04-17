@@ -43,10 +43,17 @@ export const createAnswerSchema = z
       .string()
       .trim()
       .regex(FORUM_UUID_RE, "questionId is required and must be a valid UUID"),
+    replyTo: z
+      .string()
+      .trim()
+      .regex(FORUM_UUID_RE, "replyTo must be a valid UUID")
+      .nullable()
+      .optional(),
     body: answerBodySchema,
   })
   .transform((value) => ({
     questionId: value.questionId,
+    replyTo: value.replyTo ?? null,
     body: value.body,
   }))
   .openapi("CreateAnswerRequest");
