@@ -141,11 +141,16 @@ export async function insertPointTransaction(data: {
         .where(eq(userProgress.userId, data.userId));
 
       if (isUpgrade) {
-        await tx.insert(tierHistory).values({
-          userId: data.userId,
-          tierId: qualifiedTier.id,
-          pointsAtTime: progress.totalPoints,
-        });
+        await tx
+          .insert(tierHistory)
+          .values({
+            userId: data.userId,
+            tierId: qualifiedTier.id,
+            pointsAtTime: progress.totalPoints,
+          })
+          .onConflictDoNothing({
+            target: [tierHistory.userId, tierHistory.tierId],
+          });
       }
     }
 

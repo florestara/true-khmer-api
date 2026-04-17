@@ -113,7 +113,7 @@ const POINT_SYSTEMS_SEED = [
     value: 2,
     description: "Question receives 10 community upvotes (+per 10)",
     maxPerDay: 0,
-    mode: "action",
+    mode: "support",
   },
   {
     key: "volunteer_opportunity_posted",
@@ -279,6 +279,7 @@ export async function seedPointSystems() {
         value: sql`excluded.value`,
         description: sql`excluded.description`,
         maxPerDay: sql`excluded.max_per_day`,
+        mode: sql`excluded.mode`,
       },
     });
 }
