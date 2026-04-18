@@ -2,6 +2,7 @@ import { seedForumCategories } from "./forum-categories.seed";
 import { seedForumReportingTypes } from "./forum-reporting-type.seed";
 import { seedOnboardingLookups } from "./onboarding-lookups.seed";
 import { closeDb } from "../index";
+import { seedPointSystems } from "./point-systems.seed";
 
 async function main() {
   console.log("🚀 Starting seed...\n");
@@ -9,6 +10,7 @@ async function main() {
   await seedForumReportingTypes();
   await seedOnboardingLookups();
   await seedForumCategories();
+  await seedPointSystems();
 
   console.log("\n🎉 All seeds complete.");
   await closeDb();

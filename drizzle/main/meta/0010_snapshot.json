@@ -1,6 +1,6 @@
 {
-  "id": "d421d181-6ad0-4d38-830d-fbd20b69a274",
-  "prevId": "73d82668-995a-4625-8dc7-901b15b3da26",
+  "id": "f801e440-ed74-4831-abf7-9e73bc02cdc7",
+  "prevId": "2b6dd30c-498c-47bb-875f-1ebffd7bec57",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1445,6 +1445,19 @@
           "notNull": true,
           "default": 0
         },
+        "reply_count": {
+          "name": "reply_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "reply_to": {
+          "name": "reply_to",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -1548,6 +1561,19 @@
           "tableTo": "user",
           "columnsFrom": [
             "author_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "forum_answer_reply_to_forum_answer_id_fk": {
+          "name": "forum_answer_reply_to_forum_answer_id_fk",
+          "tableFrom": "forum_answer",
+          "tableTo": "forum_answer",
+          "columnsFrom": [
+            "reply_to"
           ],
           "columnsTo": [
             "id"
@@ -3421,7 +3447,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
@@ -3498,6 +3524,27 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "tier_history_user_tier_unique_idx": {
+          "name": "tier_history_user_tier_unique_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "tier_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -3511,7 +3558,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         },
         "tier_history_tier_id_tier_id_fk": {
@@ -3524,7 +3571,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
@@ -3655,7 +3702,7 @@
         "referral_active_member",
         "welcome_profile_complete",
         "tier_advancement_bonus",
-        "redemtion_deduction"
+        "redemption_deduction"
       ]
     },
     "public.point_transactions_mode": {

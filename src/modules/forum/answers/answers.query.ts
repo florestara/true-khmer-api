@@ -72,7 +72,10 @@ type ReplyTargetEmbeddedAnswer = {
     avatarKey: string | null;
   };
 };
-type ForumAnswerWithViewerVote = Omit<ForumAnswerRow, "authorId" | "deletedAt"> & {
+type ForumAnswerWithViewerVote = Omit<
+  ForumAnswerRow,
+  "authorId" | "deletedAt"
+> & {
   score: number;
   viewerVote: AnswerVoteType | null;
   replyToAnswer: ReplyTargetEmbeddedAnswer | null;
@@ -104,7 +107,9 @@ function resolveOptionalAuthorName(
 }
 
 function resolveAuthorName(row: AnswerHydrationRow): string {
-  return resolveOptionalAuthorName(row.authorDisplayName, row.authorFullName) ?? "";
+  return (
+    resolveOptionalAuthorName(row.authorDisplayName, row.authorFullName) ?? ""
+  );
 }
 
 function hydrateReplyTarget(
@@ -256,15 +261,15 @@ function buildPublicAnswersBaseQuery(executor: Pick<typeof db, "select">) {
     );
 }
 
-function hydrateAnswer(
-  row: AnswerHydrationRow,
-): ForumAnswerWithViewerVote {
+function hydrateAnswer(row: AnswerHydrationRow): ForumAnswerWithViewerVote {
   const { authorId, deletedAt: _deletedAt, ...answer } = row.answer;
 
   return {
     ...answer,
     score: answer.upvoteCount - answer.downvoteCount,
-    viewerVote: row.viewerVoteType ? (row.viewerVoteType as AnswerVoteType) : null,
+    viewerVote: row.viewerVoteType
+      ? (row.viewerVoteType as AnswerVoteType)
+      : null,
     replyToAnswer: hydrateReplyTarget(row),
     author: {
       id: authorId,

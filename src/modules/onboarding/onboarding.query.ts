@@ -9,7 +9,6 @@ import {
   user,
   userContributionOnboard,
   userInterest,
-  userPointLedger,
   userProfile,
   userProgress,
 } from "../../db/schema";
@@ -455,18 +454,6 @@ export async function completeOnboarding(userId: string) {
           updatedAt: new Date(),
         },
       });
-
-    await tx
-      .insert(userPointLedger)
-      .values({
-        userId,
-        pointsDelta: 0,
-        actionType: "ONBOARDING_COMPLETED",
-        eventKey: `onboarding_completed:${userId}`,
-        referenceType: "onboarding",
-        referenceId: "step-4",
-      })
-      .onConflictDoNothing({ target: userPointLedger.eventKey });
 
     await tx
       .update(user)

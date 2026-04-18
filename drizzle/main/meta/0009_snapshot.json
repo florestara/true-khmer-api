@@ -1,6 +1,6 @@
 {
-  "id": "d421d181-6ad0-4d38-830d-fbd20b69a274",
-  "prevId": "73d82668-995a-4625-8dc7-901b15b3da26",
+  "id": "2b6dd30c-498c-47bb-875f-1ebffd7bec57",
+  "prevId": "d421d181-6ad0-4d38-830d-fbd20b69a274",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -3421,7 +3421,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
@@ -3498,6 +3498,27 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "tier_history_user_tier_unique_idx": {
+          "name": "tier_history_user_tier_unique_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "tier_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -3511,7 +3532,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         },
         "tier_history_tier_id_tier_id_fk": {
@@ -3524,7 +3545,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
@@ -3655,7 +3676,7 @@
         "referral_active_member",
         "welcome_profile_complete",
         "tier_advancement_bonus",
-        "redemtion_deduction"
+        "redemption_deduction"
       ]
     },
     "public.point_transactions_mode": {

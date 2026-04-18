@@ -19,6 +19,10 @@ import {
 } from "./answers.query";
 import { POSTGRES_FOREIGN_KEY_VIOLATION } from "../../../db/constants";
 import { getAuthUserId } from "../../../modules/auth/utils/get-auth";
+import {
+  awardForumParticipationPoints,
+  awardForumUpvotePoints,
+} from "../../points/points.service";
 
 export async function handleGetAnswers(
   c: Context,
@@ -125,6 +129,16 @@ export async function handleCreateAnswer(c: Context, data: CreateAnswerInput) {
     }
 
     const newAnswer = await createAnswer(data, authResult.userId);
+
+    // Award forum participation + first question bonus (handled by point service)
+    awardForumParticipationPoints({
+      answerAuthorId: authResult.userId,
+      answerId: newAnswer.id,
+      questionId: data.questionId,
+    }).catch((err) =>
+      console.error("Failed to award forum answer points", err),
+    );
+
     return c.json({ ok: true, answer: newAnswer }, 201);
   } catch (err) {
     const code = (err as { code?: string } | null)?.code;
@@ -254,6 +268,17 @@ export async function handleVoteAnswer(
     if (!votedAnswer) {
       return c.json({ ok: false, error: "Answer not found" }, 404);
     }
+
+    awardForumUpvotePoints({
+      voterId: authResult.userId,
+      contentAuthorId: existingAnswer.authorId,
+      contentId: params.answerId,
+      contentType: "forum_answer",
+      score: votedAnswer.score,
+      voteType: data.voteType,
+    }).catch((err) =>
+      console.error("Failed to award forum_answer_upvotes points", err),
+    );
 
     return c.json(
       {

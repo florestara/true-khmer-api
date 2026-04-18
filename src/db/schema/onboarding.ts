@@ -19,7 +19,9 @@ export const country = pgTable(
     name: varchar("name", { length: 120 }).notNull(),
     normalizedName: varchar("normalized_name", { length: 120 }).notNull(),
     iso2: varchar("iso2", { length: 2 }),
-    provider: varchar("provider", { length: 40 }).default("countriesnow").notNull(),
+    provider: varchar("provider", { length: 40 })
+      .default("countriesnow")
+      .notNull(),
     providerRef: varchar("provider_ref", { length: 120 }),
     isActive: boolean("is_active").default(true).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -43,7 +45,9 @@ export const city = pgTable(
       .references(() => country.id, { onDelete: "cascade" }),
     name: varchar("name", { length: 120 }).notNull(),
     normalizedName: varchar("normalized_name", { length: 120 }).notNull(),
-    provider: varchar("provider", { length: 40 }).default("countriesnow").notNull(),
+    provider: varchar("provider", { length: 40 })
+      .default("countriesnow")
+      .notNull(),
     providerRef: varchar("provider_ref", { length: 120 }),
     isActive: boolean("is_active").default(true).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -178,27 +182,6 @@ export const tier = pgTable(
   ],
 );
 
-export const userPointLedger = pgTable(
-  "user_point_ledger",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    userId: uuid("user_id")
-      .notNull()
-      .references(() => user.id, { onDelete: "cascade" }),
-    pointsDelta: integer("points_delta").notNull(),
-    actionType: varchar("action_type", { length: 80 }).notNull(),
-    eventKey: varchar("event_key", { length: 120 }),
-    referenceType: varchar("reference_type", { length: 80 }),
-    referenceId: varchar("reference_id", { length: 120 }),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-  },
-  (table) => [
-    uniqueIndex("user_point_ledger_event_key_unique_idx").on(table.eventKey),
-    index("user_point_ledger_user_id_idx").on(table.userId),
-    index("user_point_ledger_action_type_idx").on(table.actionType),
-  ],
-);
-
 export const userProgress = pgTable(
   "user_progress",
   {
@@ -215,7 +198,9 @@ export const userProgress = pgTable(
       .$onUpdate(() => /* @__PURE__ */ new Date())
       .notNull(),
   },
-  (table) => [index("user_progress_current_tier_id_idx").on(table.currentTierId)],
+  (table) => [
+    index("user_progress_current_tier_id_idx").on(table.currentTierId),
+  ],
 );
 
 export const countryRelations = relations(country, ({ many }) => ({
@@ -273,13 +258,6 @@ export const userContributionOnboardRelations = relations(
 
 export const tierRelations = relations(tier, ({ many }) => ({
   userProgressRows: many(userProgress),
-}));
-
-export const userPointLedgerRelations = relations(userPointLedger, ({ one }) => ({
-  user: one(user, {
-    fields: [userPointLedger.userId],
-    references: [user.id],
-  }),
 }));
 
 export const userProgressRelations = relations(userProgress, ({ one }) => ({
