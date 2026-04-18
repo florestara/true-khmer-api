@@ -71,6 +71,13 @@
       "when": 1776458715509,
       "tag": "0009_cheerful_madrox",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1776458715510,
+      "tag": "0010_flaky_the_professor",
+      "breakpoints": true
     }
   ]
 }

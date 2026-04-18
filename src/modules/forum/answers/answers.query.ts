@@ -1,4 +1,5 @@
-import { and, desc, eq, ne, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { db } from "../../../db/index";
 import {
   forumAnswer,
@@ -19,20 +20,65 @@ type ForumQuestionRow = typeof forumQuestion.$inferSelect;
 type ForumAnswerRow = typeof forumAnswer.$inferSelect;
 type ForumAnswerInsert = typeof forumAnswer.$inferInsert;
 type ForumAnswerVoteInsert = typeof forumAnswerVote.$inferInsert;
+const replyTargetAnswer = alias(forumAnswer, "reply_target_answer");
+const replyTargetUser = alias(user, "reply_target_user");
+const replyTargetUserProfile = alias(
+  userProfile,
+  "reply_target_user_profile",
+);
+const replyTargetVote = alias(forumAnswerVote, "reply_target_vote");
+
 type AnswerHydrationRow = {
   answer: ForumAnswerRow;
   authorDisplayName: string | null;
   authorFullName: string;
   authorAvatarKey: string | null;
   viewerVoteType: string | null;
+  replyTargetId: string | null;
+  replyTargetBody: string | null;
+  replyTargetStatus: ForumAnswerRow["status"] | null;
+  replyTargetAuthorId: string | null;
+  replyTargetAuthorDisplayName: string | null;
+  replyTargetAuthorFullName: string | null;
+  replyTargetAuthorAvatarKey: string | null;
+  replyTargetUpvoteCount: number | null;
+  replyTargetDownvoteCount: number | null;
+  replyTargetReplyCount: number | null;
+  replyTargetCreatedAt: string | null;
+  replyTargetUpdatedAt: string | null;
+  replyTargetQuestionId: string | null;
+  replyTargetViewerVoteType: string | null;
 };
-type PublicAnswerHydrationRow = Omit<AnswerHydrationRow, "viewerVoteType">;
+type PublicAnswerHydrationRow = Omit<
+  AnswerHydrationRow,
+  "viewerVoteType" | "replyTargetViewerVoteType"
+>;
+type ReplyTargetEmbeddedAnswer = {
+  id: string;
+  body: string;
+  upvoteCount: number;
+  downvoteCount: number;
+  replyCount: number;
+  score: number;
+  viewerVote: AnswerVoteType | null;
+  createdAt: string;
+  updatedAt: string;
+  questionId: string;
+  status: "PUBLISHED";
+  replyTo: null;
+  author: {
+    id: string;
+    name: string;
+    avatarKey: string | null;
+  };
+};
 type ForumAnswerWithViewerVote = Omit<
   ForumAnswerRow,
   "authorId" | "deletedAt"
 > & {
   score: number;
   viewerVote: AnswerVoteType | null;
+  replyToAnswer: ReplyTargetEmbeddedAnswer | null;
   author: {
     id: string;
     name: string;
@@ -45,10 +91,90 @@ function toInteger(value: unknown, fallback = 0): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function resolveOptionalAuthorName(
+  displayName: string | null,
+  fullName: string | null,
+): string | null {
+  const normalizedDisplayName = displayName?.trim();
+  if (normalizedDisplayName && normalizedDisplayName.length > 0) {
+    return normalizedDisplayName;
+  }
+
+  const normalizedFullName = fullName?.trim();
+  return normalizedFullName && normalizedFullName.length > 0
+    ? normalizedFullName
+    : null;
+}
+
 function resolveAuthorName(row: AnswerHydrationRow): string {
-  const displayName = row.authorDisplayName?.trim();
-  const fullName = row.authorFullName.trim();
-  return displayName && displayName.length > 0 ? displayName : fullName;
+  return (
+    resolveOptionalAuthorName(row.authorDisplayName, row.authorFullName) ?? ""
+  );
+}
+
+function hydrateReplyTarget(
+  row: Pick<
+    AnswerHydrationRow,
+    | "replyTargetId"
+    | "replyTargetBody"
+    | "replyTargetStatus"
+    | "replyTargetAuthorId"
+    | "replyTargetAuthorDisplayName"
+    | "replyTargetAuthorFullName"
+    | "replyTargetAuthorAvatarKey"
+    | "replyTargetUpvoteCount"
+    | "replyTargetDownvoteCount"
+    | "replyTargetReplyCount"
+    | "replyTargetCreatedAt"
+    | "replyTargetUpdatedAt"
+    | "replyTargetQuestionId"
+    | "replyTargetViewerVoteType"
+  >,
+): ReplyTargetEmbeddedAnswer | null {
+  if (!row.replyTargetId || row.replyTargetStatus !== "PUBLISHED") {
+    return null;
+  }
+
+  const replyTargetAuthorName = resolveOptionalAuthorName(
+    row.replyTargetAuthorDisplayName,
+    row.replyTargetAuthorFullName,
+  );
+
+  if (
+    !row.replyTargetAuthorId ||
+    !replyTargetAuthorName ||
+    row.replyTargetBody === null ||
+    row.replyTargetUpvoteCount === null ||
+    row.replyTargetDownvoteCount === null ||
+    row.replyTargetReplyCount === null ||
+    row.replyTargetCreatedAt === null ||
+    row.replyTargetUpdatedAt === null ||
+    row.replyTargetQuestionId === null
+  ) {
+    return null;
+  }
+
+  return {
+    id: row.replyTargetId,
+    body: row.replyTargetBody,
+    upvoteCount: row.replyTargetUpvoteCount,
+    downvoteCount: row.replyTargetDownvoteCount,
+    replyCount: row.replyTargetReplyCount,
+    score: row.replyTargetUpvoteCount - row.replyTargetDownvoteCount,
+    viewerVote: row.replyTargetViewerVoteType
+      ? (row.replyTargetViewerVoteType as AnswerVoteType)
+      : null,
+    createdAt: row.replyTargetCreatedAt,
+    updatedAt: row.replyTargetUpdatedAt,
+    questionId: row.replyTargetQuestionId,
+    status: "PUBLISHED",
+    replyTo: null,
+    author: {
+      id: row.replyTargetAuthorId,
+      name: replyTargetAuthorName,
+      avatarKey: row.replyTargetAuthorAvatarKey,
+    },
+  };
 }
 
 function buildAnswersBaseQuery(
@@ -62,6 +188,20 @@ function buildAnswersBaseQuery(
       authorFullName: user.name,
       authorAvatarKey: userProfile.avatarKey,
       viewerVoteType: forumAnswerVote.voteType,
+      replyTargetId: replyTargetAnswer.id,
+      replyTargetBody: replyTargetAnswer.body,
+      replyTargetStatus: replyTargetAnswer.status,
+      replyTargetAuthorId: replyTargetAnswer.authorId,
+      replyTargetAuthorDisplayName: replyTargetUserProfile.displayName,
+      replyTargetAuthorFullName: replyTargetUser.name,
+      replyTargetAuthorAvatarKey: replyTargetUserProfile.avatarKey,
+      replyTargetUpvoteCount: replyTargetAnswer.upvoteCount,
+      replyTargetDownvoteCount: replyTargetAnswer.downvoteCount,
+      replyTargetReplyCount: replyTargetAnswer.replyCount,
+      replyTargetCreatedAt: replyTargetAnswer.createdAt,
+      replyTargetUpdatedAt: replyTargetAnswer.updatedAt,
+      replyTargetQuestionId: replyTargetAnswer.questionId,
+      replyTargetViewerVoteType: replyTargetVote.voteType,
     })
     .from(forumAnswer)
     .innerJoin(user, eq(user.id, forumAnswer.authorId))
@@ -71,6 +211,19 @@ function buildAnswersBaseQuery(
       and(
         eq(forumAnswerVote.answerId, forumAnswer.id),
         eq(forumAnswerVote.voterId, viewerId),
+      ),
+    )
+    .leftJoin(replyTargetAnswer, eq(replyTargetAnswer.id, forumAnswer.replyTo))
+    .leftJoin(replyTargetUser, eq(replyTargetUser.id, replyTargetAnswer.authorId))
+    .leftJoin(
+      replyTargetUserProfile,
+      eq(replyTargetUserProfile.userId, replyTargetUser.id),
+    )
+    .leftJoin(
+      replyTargetVote,
+      and(
+        eq(replyTargetVote.answerId, replyTargetAnswer.id),
+        eq(replyTargetVote.voterId, viewerId),
       ),
     );
 }
@@ -82,10 +235,30 @@ function buildPublicAnswersBaseQuery(executor: Pick<typeof db, "select">) {
       authorDisplayName: userProfile.displayName,
       authorFullName: user.name,
       authorAvatarKey: userProfile.avatarKey,
+      replyTargetId: replyTargetAnswer.id,
+      replyTargetBody: replyTargetAnswer.body,
+      replyTargetStatus: replyTargetAnswer.status,
+      replyTargetAuthorId: replyTargetAnswer.authorId,
+      replyTargetAuthorDisplayName: replyTargetUserProfile.displayName,
+      replyTargetAuthorFullName: replyTargetUser.name,
+      replyTargetAuthorAvatarKey: replyTargetUserProfile.avatarKey,
+      replyTargetUpvoteCount: replyTargetAnswer.upvoteCount,
+      replyTargetDownvoteCount: replyTargetAnswer.downvoteCount,
+      replyTargetReplyCount: replyTargetAnswer.replyCount,
+      replyTargetCreatedAt: replyTargetAnswer.createdAt,
+      replyTargetUpdatedAt: replyTargetAnswer.updatedAt,
+      replyTargetQuestionId: replyTargetAnswer.questionId,
+      replyTargetViewerVoteType: sql<null>`null`,
     })
     .from(forumAnswer)
     .innerJoin(user, eq(user.id, forumAnswer.authorId))
-    .leftJoin(userProfile, eq(userProfile.userId, user.id));
+    .leftJoin(userProfile, eq(userProfile.userId, user.id))
+    .leftJoin(replyTargetAnswer, eq(replyTargetAnswer.id, forumAnswer.replyTo))
+    .leftJoin(replyTargetUser, eq(replyTargetUser.id, replyTargetAnswer.authorId))
+    .leftJoin(
+      replyTargetUserProfile,
+      eq(replyTargetUserProfile.userId, replyTargetUser.id),
+    );
 }
 
 function hydrateAnswer(row: AnswerHydrationRow): ForumAnswerWithViewerVote {
@@ -97,6 +270,7 @@ function hydrateAnswer(row: AnswerHydrationRow): ForumAnswerWithViewerVote {
     viewerVote: row.viewerVoteType
       ? (row.viewerVoteType as AnswerVoteType)
       : null,
+    replyToAnswer: hydrateReplyTarget(row),
     author: {
       id: authorId,
       name: resolveAuthorName(row),
@@ -111,6 +285,7 @@ function hydratePublicAnswer(
   return hydrateAnswer({
     ...row,
     viewerVoteType: null,
+    replyTargetViewerVoteType: null,
   });
 }
 
@@ -202,9 +377,11 @@ export async function createAnswer(
       questionId: data.questionId,
       authorId,
       body: data.body,
+      replyTo: data.replyTo,
       status: "PUBLISHED",
       upvoteCount: 0,
       downvoteCount: 0,
+      replyCount: 0,
     };
 
     const [newAnswer] = await tx
@@ -219,6 +396,26 @@ export async function createAnswer(
         updatedAt: sql`now()`,
       })
       .where(eq(forumQuestion.id, data.questionId));
+
+    if (data.replyTo) {
+      const updatedParentAnswers = await tx
+        .update(forumAnswer)
+        .set({
+          replyCount: sql`greatest(${forumAnswer.replyCount} + 1, 0)`,
+          updatedAt: sql`now()`,
+        })
+        .where(
+          and(
+            eq(forumAnswer.id, data.replyTo),
+            eq(forumAnswer.status, "PUBLISHED"),
+          ),
+        )
+        .returning({ id: forumAnswer.id });
+
+      if (updatedParentAnswers.length === 0) {
+        throw new Error("Reply target is no longer available");
+      }
+    }
 
     const createdRows = await buildAnswersBaseQuery(tx, authorId)
       .where(
@@ -301,10 +498,46 @@ export async function softDeleteAnswer(
       return null;
     }
 
+    let totalDeletedCount = 1;
+
+    if (deletedAnswer.replyTo) {
+      await tx
+        .update(forumAnswer)
+        .set({
+          replyCount: sql`greatest(${forumAnswer.replyCount} - 1, 0)`,
+          updatedAt: sql`now()`,
+        })
+        .where(
+          and(
+            eq(forumAnswer.id, deletedAnswer.replyTo),
+            eq(forumAnswer.status, "PUBLISHED"),
+          ),
+        );
+    }
+
+    if (!deletedAnswer.replyTo) {
+      const deletedReplies = await tx
+        .update(forumAnswer)
+        .set({
+          status: "DELETED",
+          deletedAt: sql`now()`,
+          updatedAt: sql`now()`,
+        })
+        .where(
+          and(
+            eq(forumAnswer.replyTo, deletedAnswer.id),
+            eq(forumAnswer.status, "PUBLISHED"),
+          ),
+        )
+        .returning({ id: forumAnswer.id });
+
+      totalDeletedCount += deletedReplies.length;
+    }
+
     await tx
       .update(forumQuestion)
       .set({
-        answerCount: sql`greatest(${forumQuestion.answerCount} - 1, 0)`,
+        answerCount: sql`greatest(${forumQuestion.answerCount} - ${totalDeletedCount}, 0)`,
         updatedAt: sql`now()`,
       })
       .where(eq(forumQuestion.id, deletedAnswer.questionId));
