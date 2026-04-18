@@ -393,7 +393,7 @@ export async function createAnswer(
       .where(eq(forumQuestion.id, data.questionId));
 
     if (data.replyTo) {
-      await tx
+      const updatedParentAnswers = await tx
         .update(forumAnswer)
         .set({
           replyCount: sql`greatest(${forumAnswer.replyCount} + 1, 0)`,
@@ -404,7 +404,12 @@ export async function createAnswer(
             eq(forumAnswer.id, data.replyTo),
             eq(forumAnswer.status, "PUBLISHED"),
           ),
-        );
+        )
+        .returning({ id: forumAnswer.id });
+
+      if (updatedParentAnswers.length === 0) {
+        throw new Error("Reply target is no longer available");
+      }
     }
 
     const createdRows = await buildAnswersBaseQuery(tx, authorId)
