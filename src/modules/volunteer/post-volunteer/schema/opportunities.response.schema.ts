@@ -44,11 +44,32 @@ const volunteerOpportunityRoleResponseSchema = z
   })
   .openapi("VolunteerOpportunityRoleResponse");
 
+const volunteerOpportunityReferenceSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+  })
+  .openapi("VolunteerOpportunityReference");
+
+export const volunteerOpportunityListItemResponseSchema = z
+  .object({
+    id: z.string(),
+    title: z.string(),
+    overview: z.string(),
+    durationLabel: z.string(),
+    commitmentLabel: z.string(),
+    applicationDeadline: z.string(),
+    coverImageUrl: z.string().nullable(),
+    category: volunteerOpportunityReferenceSchema,
+    location: volunteerOpportunityReferenceSchema,
+  })
+  .openapi("VolunteerOpportunityListItemResponse");
+
 export const volunteerOpportunityResponseSchema = z
   .object({
     id: z.string(),
-    categoryId: z.string(),
-    locationId: z.string(),
+    category: volunteerOpportunityReferenceSchema,
+    location: volunteerOpportunityReferenceSchema,
     title: z.string(),
     overview: z.string(),
     communityImpact: z.string().nullable(),
@@ -75,6 +96,13 @@ export const createVolunteerOpportunityResponseSchema = z
   })
   .openapi("CreateVolunteerOpportunityResponse");
 
+export const getVolunteerOpportunityResponseSchema = z
+  .object({
+    ok: z.literal(true),
+    opportunity: volunteerOpportunityResponseSchema,
+  })
+  .openapi("GetVolunteerOpportunityResponse");
+
 export const volunteerOpportunitiesPaginationResponseSchema = z
   .object({
     limit: z.number(),
@@ -86,7 +114,7 @@ export const volunteerOpportunitiesPaginationResponseSchema = z
 export const getVolunteerOpportunitiesResponseSchema = z
   .object({
     ok: z.literal(true),
-    opportunities: z.array(volunteerOpportunityResponseSchema),
+    opportunities: z.array(volunteerOpportunityListItemResponseSchema),
     pagination: volunteerOpportunitiesPaginationResponseSchema,
   })
   .openapi("GetVolunteerOpportunitiesResponse");

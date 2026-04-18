@@ -3,6 +3,8 @@ import type { AppBindings } from "../../../lib/types";
 import {
   getVolunteerCategoriesResponseSchema,
   getVolunteerLocationsResponseSchema,
+  getVolunteerOpportunityParamsSchema,
+  getVolunteerOpportunityResponseSchema,
   getVolunteerOpportunitiesResponseSchema,
   getVolunteerOpportunitiesQuerySchema,
   volunteerOperationErrorResponseSchema,
@@ -11,6 +13,7 @@ import {
 import {
   handleGetVolunteerCategories,
   handleGetVolunteerLocations,
+  handleGetVolunteerOpportunity,
   handleGetVolunteerOpportunities,
 } from "./post-volunteer.service";
 
@@ -110,6 +113,42 @@ const getPublicVolunteerOpportunitiesRoute = createRoute({
   },
 });
 
+const getPublicVolunteerOpportunityRoute = createRoute({
+  method: "get",
+  path: "/opportunities/{opportunityId}",
+  tags: ["Public", "Public Volunteer"],
+  security: [],
+  request: {
+    params: getVolunteerOpportunityParamsSchema,
+  },
+  responses: {
+    200: {
+      description: "Volunteer opportunity details",
+      content: {
+        "application/json": {
+          schema: getVolunteerOpportunityResponseSchema,
+        },
+      },
+    },
+    404: {
+      description: "Volunteer opportunity not found",
+      content: {
+        "application/json": {
+          schema: volunteerOperationErrorResponseSchema,
+        },
+      },
+    },
+    500: {
+      description: "Internal server error",
+      content: {
+        "application/json": {
+          schema: volunteerOperationErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
 publicPostVolunteerRouter.openapi(getPublicVolunteerCategoriesRoute, async (c) => {
   return handleGetVolunteerCategories(c) as any;
 });
@@ -125,3 +164,8 @@ publicPostVolunteerRouter.openapi(
     return handleGetVolunteerOpportunities(c, query, true) as any;
   },
 );
+
+publicPostVolunteerRouter.openapi(getPublicVolunteerOpportunityRoute, async (c) => {
+  const params = c.req.valid("param");
+  return handleGetVolunteerOpportunity(c, params, true) as any;
+});

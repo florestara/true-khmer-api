@@ -63,8 +63,57 @@ type VolunteerOpportunitiesPagination = {
   hasMore: boolean;
   nextCursor: string | null;
 };
+type VolunteerReference = {
+  id: string;
+  name: string;
+};
+export type VolunteerOpportunityListItem = {
+  id: string;
+  title: string;
+  overview: string;
+  durationLabel: string;
+  commitmentLabel: string;
+  applicationDeadline: string;
+  coverImageUrl: string | null;
+  category: VolunteerReference;
+  location: VolunteerReference;
+};
+export type VolunteerOpportunityDetail = {
+  id: string;
+  category: VolunteerReference;
+  location: VolunteerReference;
+  title: string;
+  overview: string;
+  communityImpact: string | null;
+  durationLabel: string;
+  commitmentLabel: string;
+  applicationDeadline: string;
+  coverImageKey: string;
+  coverImageUrl: string | null;
+  benefits: string[];
+  contact: {
+    email: string;
+    telegramUsername: string | null;
+    phone: string | null;
+    websiteUrl: string | null;
+  };
+  status: VolunteerOpportunityRow["status"];
+  publishedAt: string | null;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  roles: Array<{
+    id: string;
+    title: string;
+    commitmentLabel: string;
+    capacity: number;
+    responsibilities: string[];
+    requirements: string[];
+    displayOrder: number;
+  }>;
+};
 type VolunteerOpportunitiesListResult = {
-  opportunities: CreatedVolunteerOpportunity[];
+  opportunities: VolunteerOpportunityListItem[];
   pagination: VolunteerOpportunitiesPagination;
 };
 
@@ -149,10 +198,13 @@ export async function getVolunteerLocations(): Promise<VolunteerLocationRow[]> {
     .orderBy(asc(city.name));
 }
 
-export async function findActiveVolunteerCategoryById(categoryId: string) {
+export async function findActiveVolunteerCategoryById(
+  categoryId: string,
+): Promise<VolunteerReference | null> {
   const [categoryRow] = await db
     .select({
       id: volunteerCategory.id,
+      name: volunteerCategory.name,
     })
     .from(volunteerCategory)
     .where(
@@ -166,7 +218,9 @@ export async function findActiveVolunteerCategoryById(categoryId: string) {
   return categoryRow ?? null;
 }
 
-export async function findVolunteerLocationById(locationId: string) {
+export async function findVolunteerLocationById(
+  locationId: string,
+): Promise<VolunteerLocationRow | null> {
   const [locationRow] = await db
     .select({
       id: city.id,
@@ -191,56 +245,43 @@ export type CreateVolunteerOpportunityInput =
   CreateVolunteerOpportunityBodyInput & {
     createdBy: string;
     coverImageUrl: string | null;
+    category: VolunteerReference;
+    location: VolunteerReference;
   };
-
-export type CreatedVolunteerOpportunity = {
-  id: string;
-  categoryId: string;
-  locationId: string;
-  title: string;
-  overview: string;
-  communityImpact: string | null;
-  durationLabel: string;
-  commitmentLabel: string;
-  applicationDeadline: string;
-  coverImageKey: string;
-  coverImageUrl: string | null;
-  benefits: string[];
-  contact: {
-    email: string;
-    telegramUsername: string | null;
-    phone: string | null;
-    websiteUrl: string | null;
-  };
-  status: VolunteerOpportunityRow["status"];
-  publishedAt: string | null;
-  createdBy: string;
-  createdAt: string;
-  updatedAt: string;
-  roles: Array<{
-    id: string;
-    title: string;
-    commitmentLabel: string;
-    capacity: number;
-    responsibilities: string[];
-    requirements: string[];
-    displayOrder: number;
-  }>;
-};
 
 type VolunteerOpportunityListRow = {
   opportunity: VolunteerOpportunityRow;
+  category: VolunteerReference;
+  location: VolunteerReference;
 };
 
-function hydrateVolunteerOpportunity(
+function hydrateVolunteerOpportunityListItem(
+  row: VolunteerOpportunityListRow,
+): VolunteerOpportunityListItem {
+  return {
+    id: row.opportunity.id,
+    title: row.opportunity.title,
+    overview: row.opportunity.overview,
+    durationLabel: row.opportunity.durationLabel,
+    commitmentLabel: row.opportunity.commitmentLabel,
+    applicationDeadline: row.opportunity.applicationDeadline,
+    coverImageUrl: row.opportunity.coverImageUrl,
+    category: row.category,
+    location: row.location,
+  };
+}
+
+function hydrateVolunteerOpportunityDetail(
   opportunity: VolunteerOpportunityRow,
+  category: VolunteerReference,
+  location: VolunteerReference,
   roles: HydratedVolunteerRole[],
   requirementsByRoleId: Map<string, HydratedVolunteerRequirement[]>,
-): CreatedVolunteerOpportunity {
+): VolunteerOpportunityDetail {
   return {
     id: opportunity.id,
-    categoryId: opportunity.categoryId,
-    locationId: opportunity.cityId,
+    category,
+    location,
     title: opportunity.title,
     overview: opportunity.overview,
     communityImpact: opportunity.communityImpact,
@@ -404,14 +445,14 @@ function buildNextVolunteerOpportunitiesCursor(
   });
 }
 
-async function hydrateVolunteerOpportunities(
-  opportunities: VolunteerOpportunityRow[],
-): Promise<CreatedVolunteerOpportunity[]> {
-  if (opportunities.length === 0) {
+async function hydrateVolunteerOpportunityDetails(
+  rows: VolunteerOpportunityListRow[],
+): Promise<VolunteerOpportunityDetail[]> {
+  if (rows.length === 0) {
     return [];
   }
 
-  const opportunityIds = opportunities.map((opportunity) => opportunity.id);
+  const opportunityIds = rows.map((row) => row.opportunity.id);
   const roles = await db
     .select()
     .from(volunteerRole)
@@ -458,10 +499,12 @@ async function hydrateVolunteerOpportunities(
     roleRequirements.push(requirement);
   }
 
-  return opportunities.map((opportunity) =>
-    hydrateVolunteerOpportunity(
-      opportunity,
-      rolesByOpportunityId.get(opportunity.id) ?? [],
+  return rows.map((row) =>
+    hydrateVolunteerOpportunityDetail(
+      row.opportunity,
+      row.category,
+      row.location,
+      rolesByOpportunityId.get(row.opportunity.id) ?? [],
       requirementsByRoleId,
     ),
   );
@@ -477,6 +520,14 @@ export async function getVolunteerOpportunities({
   const rows = await db
     .select({
       opportunity: volunteerOpportunity,
+      category: {
+        id: volunteerCategory.id,
+        name: volunteerCategory.name,
+      },
+      location: {
+        id: city.id,
+        name: city.name,
+      },
     })
     .from(volunteerOpportunity)
     .innerJoin(
@@ -503,8 +554,8 @@ export async function getVolunteerOpportunities({
   const opportunityRows: VolunteerOpportunityListRow[] = hasMore
     ? rows.slice(0, limit)
     : rows;
-  const opportunities = await hydrateVolunteerOpportunities(
-    opportunityRows.map((row) => row.opportunity),
+  const opportunities = opportunityRows.map((row) =>
+    hydrateVolunteerOpportunityListItem(row),
   );
   const lastOpportunityRow =
     opportunityRows.length > 0
@@ -525,9 +576,47 @@ export async function getVolunteerOpportunities({
   };
 }
 
+export async function getVolunteerOpportunityById(opportunityId: string) {
+  const [row] = await db
+    .select({
+      opportunity: volunteerOpportunity,
+      category: {
+        id: volunteerCategory.id,
+        name: volunteerCategory.name,
+      },
+      location: {
+        id: city.id,
+        name: city.name,
+      },
+    })
+    .from(volunteerOpportunity)
+    .innerJoin(
+      volunteerCategory,
+      eq(volunteerCategory.id, volunteerOpportunity.categoryId),
+    )
+    .innerJoin(city, eq(city.id, volunteerOpportunity.cityId))
+    .where(
+      and(
+        eq(volunteerOpportunity.id, opportunityId),
+        eq(volunteerOpportunity.status, "PUBLISHED"),
+        eq(volunteerCategory.status, "ACTIVE"),
+        eq(city.isActive, true),
+        isNotNull(volunteerOpportunity.publishedAt),
+      ),
+    )
+    .limit(1);
+
+  if (!row) {
+    return null;
+  }
+
+  const [opportunity] = await hydrateVolunteerOpportunityDetails([row]);
+  return opportunity ?? null;
+}
+
 export async function createVolunteerOpportunity(
   data: CreateVolunteerOpportunityInput,
-): Promise<CreatedVolunteerOpportunity> {
+): Promise<VolunteerOpportunityDetail> {
   return db.transaction(async (tx) => {
     const [newOpportunity] = await tx
       .insert(volunteerOpportunity)
@@ -553,7 +642,7 @@ export async function createVolunteerOpportunity(
       })
       .returning();
 
-    const createdRoles: CreatedVolunteerOpportunity["roles"] = [];
+    const createdRoles: VolunteerOpportunityDetail["roles"] = [];
 
     for (const [roleIndex, roleInput] of data.roles.entries()) {
       const [newRole] = await tx
@@ -595,8 +684,10 @@ export async function createVolunteerOpportunity(
       });
     }
 
-    return hydrateVolunteerOpportunity(
+    return hydrateVolunteerOpportunityDetail(
       newOpportunity,
+      data.category,
+      data.location,
       createdRoles.map((role) => ({
         id: role.id,
         title: role.title,
