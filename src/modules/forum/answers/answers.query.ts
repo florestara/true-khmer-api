@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, ne, sql } from "drizzle-orm";
 import { db } from "../../../db/index";
 import {
   forumAnswer,
@@ -27,7 +27,10 @@ type AnswerHydrationRow = {
   viewerVoteType: string | null;
 };
 type PublicAnswerHydrationRow = Omit<AnswerHydrationRow, "viewerVoteType">;
-type ForumAnswerWithViewerVote = Omit<ForumAnswerRow, "authorId" | "deletedAt"> & {
+type ForumAnswerWithViewerVote = Omit<
+  ForumAnswerRow,
+  "authorId" | "deletedAt"
+> & {
   score: number;
   viewerVote: AnswerVoteType | null;
   author: {
@@ -85,15 +88,15 @@ function buildPublicAnswersBaseQuery(executor: Pick<typeof db, "select">) {
     .leftJoin(userProfile, eq(userProfile.userId, user.id));
 }
 
-function hydrateAnswer(
-  row: AnswerHydrationRow,
-): ForumAnswerWithViewerVote {
+function hydrateAnswer(row: AnswerHydrationRow): ForumAnswerWithViewerVote {
   const { authorId, deletedAt: _deletedAt, ...answer } = row.answer;
 
   return {
     ...answer,
     score: answer.upvoteCount - answer.downvoteCount,
-    viewerVote: row.viewerVoteType ? (row.viewerVoteType as AnswerVoteType) : null,
+    viewerVote: row.viewerVoteType
+      ? (row.viewerVoteType as AnswerVoteType)
+      : null,
     author: {
       id: authorId,
       name: resolveAuthorName(row),
