@@ -28,6 +28,6 @@ routes.route("/forum/public/questions", publicQuestionsRouter);
 routes.route("/forum/public/category", publicCategoriesRouter);
 routes.route("/forum/public/answer", publicAnswersRouter);
 routes.route("/forum/public/reporting-type", reportingTypeRouter);
-routes.route("/forum/public/reporting", reportingRouter);
+routes.route("/forum/reporting", reportingRouter);
 
 export default routes;
