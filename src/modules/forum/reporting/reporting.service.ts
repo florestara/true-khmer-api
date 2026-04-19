@@ -1,15 +1,18 @@
 import { Context } from "hono";
 import { CreateReportingInput } from "./reporting.schema";
-import { AuthContext } from "../../auth/lib/types";
 import { findAnswerById, findQuestionById } from "../answers/answers.query";
 import { findReportingTypeById } from "../reportingType/reportingType.query";
 import { createReporting } from "./reporting.query";
+import { getAuthUserId } from "../../auth/utils/get-auth";
 
 export async function handleCreateReporting(
   c: Context,
   data: CreateReportingInput,
 ) {
-  const auth = c.get("auth") as AuthContext | undefined;
+  const authResult = getAuthUserId(c);
+  if (!authResult.ok) {
+    return authResult.response;
+  }
 
   try {
     if (data.questionId) {
@@ -28,7 +31,7 @@ export async function handleCreateReporting(
       return c.json({ ok: false, error: "Reporting type not found" }, 404);
     }
 
-    const createResult = await createReporting(data, auth?.userId);
+    const createResult = await createReporting(data, authResult.userId);
     if (!createResult.ok) {
       return c.json({ ok: false, error: createResult.error }, 500);
     }
