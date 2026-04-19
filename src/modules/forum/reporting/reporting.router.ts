@@ -5,13 +5,16 @@ import {
 } from "./reporting.schema";
 import { AppBindings } from "../../../lib/types";
 import { handleCreateReporting } from "./reporting.service";
+import { requireAccessToken } from "../../../middlewares/auth.middleware";
 
 export const reportingRouter = new OpenAPIHono<AppBindings>();
 
 const createReportingRoute = createRoute({
   method: "post",
   path: "/",
-  tags: ["Public", "Forum Reporting"],
+  tags: ["Forum Reporting"],
+  middleware: [requireAccessToken],
+  security: [{ BearerAuth: [] }],
   request: {
     body: {
       content: {
