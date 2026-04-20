@@ -28,6 +28,21 @@ const VOLUNTEER_CATEGORY_SLUG_UNIQUE_INDEX =
 const VOLUNTEER_CATEGORY_NAME_UNIQUE_INDEX =
   "volunteer_category_name_unique_idx";
 
+function sanitizePublicVolunteerOpportunity<
+  T extends {
+    coverImageKey: string;
+    createdBy: string;
+  },
+>(opportunity: T) {
+  const {
+    coverImageKey: _coverImageKey,
+    createdBy: _createdBy,
+    ...publicOpportunity
+  } = opportunity;
+
+  return publicOpportunity;
+}
+
 function normalizeOwnedCoverImageKey(
   userId: string,
   coverImageKey: string,
@@ -131,7 +146,11 @@ export async function handleGetVolunteerOpportunity(
       return c.json({ ok: false, error: "Volunteer opportunity not found" }, 404);
     }
 
-    return c.json({ ok: true, opportunity }, 200);
+    const responseOpportunity = isPublic
+      ? sanitizePublicVolunteerOpportunity(opportunity)
+      : opportunity;
+
+    return c.json({ ok: true, opportunity: responseOpportunity }, 200);
   } catch (err) {
     console.error("Failed to get volunteer opportunity", err);
     return c.json({ ok: false, error: "Internal server error" }, 500);

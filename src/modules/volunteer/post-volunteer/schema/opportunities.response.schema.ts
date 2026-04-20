@@ -51,6 +51,17 @@ const volunteerOpportunityReferenceSchema = z
   })
   .openapi("VolunteerOpportunityReference");
 
+const volunteerOpportunityOrganizerResponseSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    avatarUrl: z.string().nullable(),
+    opportunityCount: z.number(),
+    organizerLocation: volunteerOpportunityReferenceSchema.nullable(),
+    contact: volunteerOpportunityContactResponseSchema,
+  })
+  .openapi("VolunteerOpportunityOrganizerResponse");
+
 export const volunteerOpportunityListItemResponseSchema = z
   .object({
     id: z.string(),
@@ -79,15 +90,23 @@ export const volunteerOpportunityResponseSchema = z
     coverImageKey: z.string(),
     coverImageUrl: z.string().nullable(),
     benefits: z.array(z.string()),
-    contact: volunteerOpportunityContactResponseSchema,
     status: z.enum(["DRAFT", "PUBLISHED", "ARCHIVED", "CLOSED"]),
     publishedAt: z.string().nullable(),
+    organizer: volunteerOpportunityOrganizerResponseSchema,
     createdBy: z.string(),
     createdAt: z.string(),
     updatedAt: z.string(),
     roles: z.array(volunteerOpportunityRoleResponseSchema),
   })
   .openapi("VolunteerOpportunityResponse");
+
+export const publicVolunteerOpportunityResponseSchema =
+  volunteerOpportunityResponseSchema
+    .omit({
+      coverImageKey: true,
+      createdBy: true,
+    })
+    .openapi("PublicVolunteerOpportunityResponse");
 
 export const createVolunteerOpportunityResponseSchema = z
   .object({
@@ -102,6 +121,13 @@ export const getVolunteerOpportunityResponseSchema = z
     opportunity: volunteerOpportunityResponseSchema,
   })
   .openapi("GetVolunteerOpportunityResponse");
+
+export const getPublicVolunteerOpportunityResponseSchema = z
+  .object({
+    ok: z.literal(true),
+    opportunity: publicVolunteerOpportunityResponseSchema,
+  })
+  .openapi("GetPublicVolunteerOpportunityResponse");
 
 export const volunteerOpportunitiesPaginationResponseSchema = z
   .object({

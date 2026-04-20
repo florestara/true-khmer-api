@@ -323,6 +323,14 @@ const getVolunteerOpportunityRoute = createRoute({
         },
       },
     },
+    400: {
+      description: "Bad Request - invalid opportunityId",
+      content: {
+        "application/json": {
+          schema: volunteerValidationErrorResponseSchema,
+        },
+      },
+    },
     401: {
       description: "Unauthorized",
       content: {

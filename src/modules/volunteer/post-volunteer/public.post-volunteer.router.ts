@@ -4,7 +4,7 @@ import {
   getVolunteerCategoriesResponseSchema,
   getVolunteerLocationsResponseSchema,
   getVolunteerOpportunityParamsSchema,
-  getVolunteerOpportunityResponseSchema,
+  getPublicVolunteerOpportunityResponseSchema,
   getVolunteerOpportunitiesResponseSchema,
   getVolunteerOpportunitiesQuerySchema,
   volunteerOperationErrorResponseSchema,
@@ -126,7 +126,15 @@ const getPublicVolunteerOpportunityRoute = createRoute({
       description: "Volunteer opportunity details",
       content: {
         "application/json": {
-          schema: getVolunteerOpportunityResponseSchema,
+          schema: getPublicVolunteerOpportunityResponseSchema,
+        },
+      },
+    },
+    400: {
+      description: "Invalid request",
+      content: {
+        "application/json": {
+          schema: volunteerValidationErrorResponseSchema,
         },
       },
     },
