@@ -7,6 +7,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
@@ -19,6 +20,13 @@ export const volunteerOpportunityStatus = pgEnum("volunteer_opportunity_status",
   "PUBLISHED",
   "ARCHIVED",
   "CLOSED",
+]);
+
+export const volunteerApplicationStatus = pgEnum("volunteer_application_status", [
+  "SUBMITTED",
+  "ACCEPTED",
+  "REJECTED",
+  "WITHDRAWN",
 ]);
 
 export const volunteerOpportunity = pgTable(
@@ -136,5 +144,52 @@ export const volunteerRoleRequirement = pgTable(
       "btree",
       table.displayOrder,
     ),
+  ],
+);
+
+export const volunteerApplication = pgTable(
+  "volunteer_application",
+  {
+    id: uuid("id").defaultRandom().primaryKey().notNull(),
+    opportunityId: uuid("opportunity_id")
+      .notNull()
+      .references(() => volunteerOpportunity.id, { onDelete: "cascade" }),
+    roleId: uuid("role_id")
+      .notNull()
+      .references(() => volunteerRole.id, { onDelete: "cascade" }),
+    applicantId: uuid("applicant_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    availability: text("availability").notNull(),
+    relevantExperience: text("relevant_experience").notNull(),
+    supportingDocumentKeys: jsonb("supporting_document_keys")
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    status: volunteerApplicationStatus("status")
+      .default("SUBMITTED")
+      .notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("volunteer_application_applicant_opportunity_unique_idx").on(
+      table.applicantId,
+      table.opportunityId,
+    ),
+    index("volunteer_application_opportunity_idx").using(
+      "btree",
+      table.opportunityId,
+    ),
+    index("volunteer_application_role_idx").using("btree", table.roleId),
+    index("volunteer_application_applicant_idx").using(
+      "btree",
+      table.applicantId,
+    ),
+    index("volunteer_application_status_idx").using("btree", table.status),
   ],
 );

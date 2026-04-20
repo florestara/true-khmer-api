@@ -23,6 +23,23 @@ export const presignVolunteerOpportunityCoverUploadResponseSchema = z
   })
   .openapi("PresignVolunteerOpportunityCoverUploadResponse");
 
+export const presignVolunteerApplicationDocumentUploadResultSchema = z
+  .object({
+    uploadUrl: z.string(),
+    method: z.literal("PUT"),
+    requiredHeaders: presignedUploadHeadersSchema,
+    supportingDocumentKey: z.string(),
+    expiresInSeconds: z.number(),
+  })
+  .openapi("PresignVolunteerApplicationDocumentUploadResult");
+
+export const presignVolunteerApplicationDocumentUploadResponseSchema = z
+  .object({
+    ok: z.literal(true),
+    uploads: z.array(presignVolunteerApplicationDocumentUploadResultSchema),
+  })
+  .openapi("PresignVolunteerApplicationDocumentUploadResponse");
+
 const volunteerOpportunityContactResponseSchema = z
   .object({
     email: z.string(),
@@ -144,3 +161,31 @@ export const getVolunteerOpportunitiesResponseSchema = z
     pagination: volunteerOpportunitiesPaginationResponseSchema,
   })
   .openapi("GetVolunteerOpportunitiesResponse");
+
+const volunteerApplicationRoleResponseSchema = z
+  .object({
+    id: z.string(),
+    title: z.string(),
+  })
+  .openapi("VolunteerApplicationRoleResponse");
+
+export const volunteerApplicationResponseSchema = z
+  .object({
+    id: z.string(),
+    opportunityId: z.string(),
+    role: volunteerApplicationRoleResponseSchema,
+    availability: z.string(),
+    relevantExperience: z.string(),
+    supportingDocumentKeys: z.array(z.string()),
+    status: z.enum(["SUBMITTED", "ACCEPTED", "REJECTED", "WITHDRAWN"]),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  })
+  .openapi("VolunteerApplicationResponse");
+
+export const createVolunteerApplicationResponseSchema = z
+  .object({
+    ok: z.literal(true),
+    application: volunteerApplicationResponseSchema,
+  })
+  .openapi("CreateVolunteerApplicationResponse");
