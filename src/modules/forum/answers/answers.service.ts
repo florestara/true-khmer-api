@@ -91,8 +91,8 @@ export async function handleCreateAnswer(c: Context, data: CreateAnswerInput) {
       );
     }
 
-    if (data.replyTo) {
-      const parentAnswer = await findAnswerById(data.replyTo);
+    if (data.replyToAnswer) {
+      const parentAnswer = await findAnswerById(data.replyToAnswer);
       if (!parentAnswer) {
         return c.json({ ok: false, error: "Reply target not found" }, 404);
       }

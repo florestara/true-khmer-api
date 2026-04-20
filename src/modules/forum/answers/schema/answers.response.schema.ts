@@ -6,7 +6,7 @@ const answerAuthorSchema = z.object({
   avatarKey: z.string().nullable(),
 });
 
-const replyToAnswerSchema = z
+const repliedAnswerSchema = z
   .object({
     id: z.string(),
     body: z.string(),
@@ -20,9 +20,9 @@ const replyToAnswerSchema = z
     updatedAt: z.string(),
     questionId: z.string(),
     status: z.literal("PUBLISHED"),
-    replyTo: z.null(),
+    replyTo: z.string().nullable(),
   })
-  .openapi("ReplyToAnswerResponse");
+  .openapi("RepliedAnswerResponse");
 
 export const answerResponseSchema = z
   .object({
@@ -39,7 +39,7 @@ export const answerResponseSchema = z
     questionId: z.string(),
     status: z.literal("PUBLISHED"),
     replyTo: z.string().nullable(),
-    replyToAnswer: replyToAnswerSchema.nullable(),
+    repliedAnswers: z.array(repliedAnswerSchema).nullable(),
   })
   .openapi("AnswerResponse");
 
