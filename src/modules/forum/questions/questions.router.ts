@@ -6,6 +6,7 @@ import {
   handleDeleteQuestion,
   handleEditQuestion,
   handleGetQuestion,
+  handleGetMyQuestions,
   handleGetQuestions,
   handleGetTrendingTags,
   handleVoteQuestion,
@@ -17,6 +18,7 @@ import {
   getTrendingTagsResponseSchema,
   editQuestionSchema,
   getQuestionResponseSchema,
+  getMyQuestionsResponseSchema,
   getQuestionsResponseSchema,
   getQuestionsQuerySchema,
   getQuestionParamsSchema,
@@ -65,6 +67,24 @@ const getRoute = createRoute({
       },
     },
     404: { description: "Question not found" },
+  },
+});
+
+const getMyQuestionsRoute = createRoute({
+  method: "get",
+  path: "/my-questions",
+  tags: ["Forum Question"],
+  middleware: [requireAccessToken],
+  security: [{ BearerAuth: [] }],
+  responses: {
+    200: {
+      description: "List of questions created by the authenticated user",
+      content: {
+        "application/json": {
+          schema: getMyQuestionsResponseSchema,
+        },
+      },
+    },
   },
 });
 
@@ -195,6 +215,10 @@ questionsRouter.openapi(listRoute, async (c) => {
 questionsRouter.openapi(trendingTagsRoute, async (c) => {
   const query = c.req.valid("query");
   return handleGetTrendingTags(c, query) as any;
+});
+
+questionsRouter.openapi(getMyQuestionsRoute, async (c) => {
+  return handleGetMyQuestions(c) as any;
 });
 
 questionsRouter.openapi(getRoute, async (c) => {

@@ -591,6 +591,21 @@ export async function findQuestions(
   };
 }
 
+export async function findQuestionsByAuthorId(
+  authorId: string,
+): Promise<ForumQuestionWithTags[]> {
+  const rows = await buildQuestionsBaseQuery(authorId)
+    .where(
+      and(
+        eq(forumQuestion.authorId, authorId),
+        inArray(forumQuestion.status, VISIBLE_QUESTION_STATUSES),
+      ),
+    )
+    .orderBy(desc(forumQuestion.createdAt), desc(forumQuestion.id));
+
+  return attachTagsToQuestions(rows);
+}
+
 export async function findQuestionsPublic({
   categoryId,
   tagId,

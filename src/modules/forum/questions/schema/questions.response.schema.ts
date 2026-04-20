@@ -45,6 +45,13 @@ export const getQuestionsResponseSchema = z
   })
   .openapi("GetQuestionsResponse");
 
+export const getMyQuestionsResponseSchema = z
+  .object({
+    ok: z.boolean(),
+    questions: z.array(questionResponseSchema),
+  })
+  .openapi("GetMyQuestionsResponse");
+
 export const getQuestionResponseSchema = z
   .object({
     ok: z.boolean(),
