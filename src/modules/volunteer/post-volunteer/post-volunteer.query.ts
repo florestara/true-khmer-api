@@ -84,6 +84,16 @@ type VolunteerOrganizer = VolunteerOrganizerBase & {
     websiteUrl: string | null;
   };
 };
+type VolunteerOrganizerQueryRow = {
+  id: string;
+  displayName: string | null;
+  fullName: string;
+  avatarUrl: string | null;
+  locationId: string | null;
+  locationName: string | null;
+  opportunityCount: number;
+};
+type VolunteerQueryExecutor = Pick<typeof db, "select">;
 export type VolunteerOpportunityListItem = {
   id: string;
   title: string;
@@ -564,38 +574,54 @@ async function hydrateVolunteerOpportunityDetails(
   }
 
   const organizerIds = [...new Set(rows.map((row) => row.opportunity.createdBy))];
-  const organizers = await Promise.all(
-    organizerIds.map((organizerId) => getVolunteerOrganizerByUserId(organizerId)),
-  );
-  const organizerById = new Map<string, VolunteerOrganizerBase>();
-  for (const organizer of organizers) {
-    if (organizer) {
-      organizerById.set(organizer.id, organizer);
-    }
-  }
+  const organizerById = await getVolunteerOrganizersByUserIds(db, organizerIds);
 
-  return rows.map((row) =>
-    hydrateVolunteerOpportunityDetail(
+  return rows.map((row) => {
+    const organizer = organizerById.get(row.opportunity.createdBy);
+
+    if (!organizer) {
+      throw new Error(
+        `Volunteer organizer could not be loaded for user ${row.opportunity.createdBy}`,
+      );
+    }
+
+    return hydrateVolunteerOpportunityDetail(
       row.opportunity,
       row.category,
       row.location,
-      organizerById.get(row.opportunity.createdBy) ?? {
-        id: row.opportunity.createdBy,
-        name: "Unknown Organizer",
-        avatarUrl: null,
-        opportunityCount: 0,
-        location: null,
-      },
+      organizer,
       rolesByOpportunityId.get(row.opportunity.id) ?? [],
       requirementsByRoleId,
-    ),
-  );
+    );
+  });
 }
 
-async function getVolunteerOrganizerByUserId(
-  userId: string,
-): Promise<VolunteerOrganizerBase | null> {
-  const [row] = await db
+async function getVolunteerOrganizersByUserIds(
+  executor: VolunteerQueryExecutor,
+  userIds: string[],
+): Promise<Map<string, VolunteerOrganizerBase>> {
+  const uniqueUserIds = [...new Set(userIds)];
+  if (uniqueUserIds.length === 0) {
+    return new Map();
+  }
+
+  const opportunityCounts = executor
+    .select({
+      userId: volunteerOpportunity.createdBy,
+      opportunityCount: sql<number>`count(*)::int`,
+    })
+    .from(volunteerOpportunity)
+    .where(
+      and(
+        inArray(volunteerOpportunity.createdBy, uniqueUserIds),
+        eq(volunteerOpportunity.status, "PUBLISHED"),
+        isNotNull(volunteerOpportunity.publishedAt),
+      ),
+    )
+    .groupBy(volunteerOpportunity.createdBy)
+    .as("opportunity_counts");
+
+  const rows = await executor
     .select({
       id: user.id,
       displayName: userProfile.displayName,
@@ -603,21 +629,31 @@ async function getVolunteerOrganizerByUserId(
       avatarUrl: userProfile.avatarUrl,
       locationId: organizerProfileCity.id,
       locationName: organizerProfileCity.name,
-      opportunityCount: sql<number>`(
-        select count(*)::int
-        from ${volunteerOpportunity}
-        where ${volunteerOpportunity.createdBy} = ${user.id}
-          and ${volunteerOpportunity.status} = 'PUBLISHED'
-          and ${volunteerOpportunity.publishedAt} is not null
-      )`,
+      opportunityCount:
+        sql<number>`coalesce(${opportunityCounts.opportunityCount}, 0)::int`.as(
+          "opportunityCount",
+        ),
     })
     .from(user)
     .leftJoin(userProfile, eq(userProfile.userId, user.id))
     .leftJoin(organizerProfileCity, eq(organizerProfileCity.id, userProfile.cityId))
-    .where(eq(user.id, userId))
-    .limit(1);
+    .leftJoin(opportunityCounts, eq(opportunityCounts.userId, user.id))
+    .where(inArray(user.id, uniqueUserIds));
 
-  return row ? hydrateVolunteerOrganizer(row) : null;
+  return new Map(
+    rows.map((row) => [
+      row.id,
+      hydrateVolunteerOrganizer(row as VolunteerOrganizerQueryRow),
+    ]),
+  );
+}
+
+async function getVolunteerOrganizerByUserId(
+  executor: VolunteerQueryExecutor,
+  userId: string,
+): Promise<VolunteerOrganizerBase | null> {
+  const organizersById = await getVolunteerOrganizersByUserIds(executor, [userId]);
+  return organizersById.get(userId) ?? null;
 }
 
 export async function getVolunteerOpportunities({
@@ -797,7 +833,7 @@ export async function createVolunteerOpportunity(
       });
     }
 
-    const organizer = await getVolunteerOrganizerByUserId(data.createdBy);
+    const organizer = await getVolunteerOrganizerByUserId(tx, data.createdBy);
 
     if (!organizer) {
       throw new Error(
