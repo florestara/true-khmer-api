@@ -78,6 +78,13 @@
       "when": 1776458715510,
       "tag": "0010_flaky_the_professor",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1776708527195,
+      "tag": "0011_right_anita_blake",
+      "breakpoints": true
     }
   ]
 }

@@ -273,13 +273,6 @@ export async function seedPointSystems() {
   await db
     .insert(pointSystems)
     .values(POINT_SYSTEMS_SEED)
-    .onConflictDoUpdate({
-      target: pointSystems.key,
-      set: {
-        value: sql`excluded.value`,
-        description: sql`excluded.description`,
-        maxPerDay: sql`excluded.max_per_day`,
-        mode: sql`excluded.mode`,
-      },
-    });
+    .onConflictDoNothing()
+    .returning({ key: pointSystems.key });
 }
