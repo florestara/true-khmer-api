@@ -33,7 +33,7 @@ export async function handleCreateReporting(
 
     const createResult = await createReporting(data, authResult.userId);
     if (!createResult.ok) {
-      return c.json({ ok: false, error: createResult.error }, 500);
+      return c.json({ ok: false, error: createResult.error }, 400);
     }
 
     return c.json({ ok: true, reportingId: createResult.reportingId });
