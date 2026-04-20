@@ -13,6 +13,7 @@ import {
   findAnswersByQuestionId,
   findAnswersByQuestionIdPublic,
   findQuestionById,
+  ReplyTargetUnavailableError,
   setAnswerVote,
   softDeleteAnswer,
   updateAnswer,
@@ -141,6 +142,10 @@ export async function handleCreateAnswer(c: Context, data: CreateAnswerInput) {
 
     return c.json({ ok: true, answer: newAnswer }, 201);
   } catch (err) {
+    if (err instanceof ReplyTargetUnavailableError) {
+      return c.json({ ok: false, error: err.message }, 409);
+    }
+
     const code = (err as { code?: string } | null)?.code;
     if (code === POSTGRES_FOREIGN_KEY_VIOLATION) {
       return c.json(

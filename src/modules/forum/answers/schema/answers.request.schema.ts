@@ -51,6 +51,7 @@ export const createAnswerSchema = z
       .optional(),
     body: answerBodySchema,
   })
+  .strict()
   .transform((value) => ({
     questionId: value.questionId,
     replyToAnswer: value.replyToAnswer ?? null,

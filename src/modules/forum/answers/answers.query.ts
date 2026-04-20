@@ -20,6 +20,13 @@ type ForumAnswerRow = typeof forumAnswer.$inferSelect;
 type ForumAnswerInsert = typeof forumAnswer.$inferInsert;
 type ForumAnswerVoteInsert = typeof forumAnswerVote.$inferInsert;
 
+export class ReplyTargetUnavailableError extends Error {
+  constructor() {
+    super("Reply target is no longer available");
+    this.name = "ReplyTargetUnavailableError";
+  }
+}
+
 type AnswerHydrationRow = {
   answer: ForumAnswerRow;
   authorDisplayName: string | null;
@@ -311,7 +318,7 @@ export async function createAnswer(
         .returning({ id: forumAnswer.id });
 
       if (updatedParentAnswers.length === 0) {
-        throw new Error("Reply target is no longer available");
+        throw new ReplyTargetUnavailableError();
       }
     }
 
