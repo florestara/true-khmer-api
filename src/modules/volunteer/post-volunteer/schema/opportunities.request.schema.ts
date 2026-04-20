@@ -418,8 +418,21 @@ export const getVolunteerOpportunitiesQuerySchema = z
   }))
   .openapi("GetVolunteerOpportunitiesQuery");
 
+export const getVolunteerOpportunityParamsSchema = z
+  .object({
+    opportunityId: z
+      .string()
+      .trim()
+      .regex(VOLUNTEER_UUID_RE, "opportunityId must be a valid UUID"),
+  })
+  .openapi("GetVolunteerOpportunityParams");
+
 export type GetVolunteerOpportunitiesQuery = z.infer<
   typeof getVolunteerOpportunitiesQuerySchema
+>;
+
+export type GetVolunteerOpportunityParams = z.infer<
+  typeof getVolunteerOpportunityParamsSchema
 >;
 
 export type CreateVolunteerOpportunityBodyInput = z.infer<

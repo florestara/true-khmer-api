@@ -11,12 +11,14 @@ import {
   findActiveVolunteerCategoryById,
   findVolunteerLocationById,
   getVolunteerCategories,
+  getVolunteerOpportunityById,
   getVolunteerLocations,
   getVolunteerOpportunities,
 } from "./post-volunteer.query";
 import type {
   CreateVolunteerCategoryBodyInput,
   CreateVolunteerOpportunityBodyInput,
+  GetVolunteerOpportunityParams,
   GetVolunteerOpportunitiesQuery,
   PresignVolunteerOpportunityCoverUploadPayload,
 } from "./post-volunteer.schema";
@@ -25,6 +27,21 @@ const VOLUNTEER_CATEGORY_SLUG_UNIQUE_INDEX =
   "volunteer_category_slug_unique_idx";
 const VOLUNTEER_CATEGORY_NAME_UNIQUE_INDEX =
   "volunteer_category_name_unique_idx";
+
+function sanitizePublicVolunteerOpportunity<
+  T extends {
+    coverImageKey: string;
+    createdBy: string;
+  },
+>(opportunity: T) {
+  const {
+    coverImageKey: _coverImageKey,
+    createdBy: _createdBy,
+    ...publicOpportunity
+  } = opportunity;
+
+  return publicOpportunity;
+}
 
 function normalizeOwnedCoverImageKey(
   userId: string,
@@ -106,6 +123,36 @@ export async function handleGetVolunteerOpportunities(
     return c.json({ ok: true, ...result }, 200);
   } catch (err) {
     console.error("Failed to get volunteer opportunities", err);
+    return c.json({ ok: false, error: "Internal server error" }, 500);
+  }
+}
+
+export async function handleGetVolunteerOpportunity(
+  c: Context,
+  params: GetVolunteerOpportunityParams,
+  isPublic = false,
+) {
+  if (!isPublic) {
+    const authResult = getAuthUserId(c);
+    if (!authResult.ok) {
+      return authResult.response;
+    }
+  }
+
+  try {
+    const opportunity = await getVolunteerOpportunityById(params.opportunityId);
+
+    if (!opportunity) {
+      return c.json({ ok: false, error: "Volunteer opportunity not found" }, 404);
+    }
+
+    const responseOpportunity = isPublic
+      ? sanitizePublicVolunteerOpportunity(opportunity)
+      : opportunity;
+
+    return c.json({ ok: true, opportunity: responseOpportunity }, 200);
+  } catch (err) {
+    console.error("Failed to get volunteer opportunity", err);
     return c.json({ ok: false, error: "Internal server error" }, 500);
   }
 }
@@ -222,6 +269,8 @@ export async function handleCreateVolunteerOpportunity(
 
     const opportunity = await createVolunteerOpportunity({
       ...data,
+      category,
+      location,
       coverImageKey: normalizedCoverImageKey,
       createdBy: authResult.userId,
       coverImageUrl: resolveR2PublicUrl(normalizedCoverImageKey),

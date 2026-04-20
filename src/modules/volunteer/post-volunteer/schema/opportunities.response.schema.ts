@@ -44,11 +44,43 @@ const volunteerOpportunityRoleResponseSchema = z
   })
   .openapi("VolunteerOpportunityRoleResponse");
 
+const volunteerOpportunityReferenceSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+  })
+  .openapi("VolunteerOpportunityReference");
+
+const volunteerOpportunityOrganizerResponseSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    avatarUrl: z.string().nullable(),
+    opportunityCount: z.number(),
+    organizerLocation: volunteerOpportunityReferenceSchema.nullable(),
+    contact: volunteerOpportunityContactResponseSchema,
+  })
+  .openapi("VolunteerOpportunityOrganizerResponse");
+
+export const volunteerOpportunityListItemResponseSchema = z
+  .object({
+    id: z.string(),
+    title: z.string(),
+    overview: z.string(),
+    durationLabel: z.string(),
+    commitmentLabel: z.string(),
+    applicationDeadline: z.string(),
+    coverImageUrl: z.string().nullable(),
+    category: volunteerOpportunityReferenceSchema,
+    location: volunteerOpportunityReferenceSchema,
+  })
+  .openapi("VolunteerOpportunityListItemResponse");
+
 export const volunteerOpportunityResponseSchema = z
   .object({
     id: z.string(),
-    categoryId: z.string(),
-    locationId: z.string(),
+    category: volunteerOpportunityReferenceSchema,
+    location: volunteerOpportunityReferenceSchema,
     title: z.string(),
     overview: z.string(),
     communityImpact: z.string().nullable(),
@@ -58,9 +90,9 @@ export const volunteerOpportunityResponseSchema = z
     coverImageKey: z.string(),
     coverImageUrl: z.string().nullable(),
     benefits: z.array(z.string()),
-    contact: volunteerOpportunityContactResponseSchema,
     status: z.enum(["DRAFT", "PUBLISHED", "ARCHIVED", "CLOSED"]),
     publishedAt: z.string().nullable(),
+    organizer: volunteerOpportunityOrganizerResponseSchema,
     createdBy: z.string(),
     createdAt: z.string(),
     updatedAt: z.string(),
@@ -68,12 +100,34 @@ export const volunteerOpportunityResponseSchema = z
   })
   .openapi("VolunteerOpportunityResponse");
 
+export const publicVolunteerOpportunityResponseSchema =
+  volunteerOpportunityResponseSchema
+    .omit({
+      coverImageKey: true,
+      createdBy: true,
+    })
+    .openapi("PublicVolunteerOpportunityResponse");
+
 export const createVolunteerOpportunityResponseSchema = z
   .object({
     ok: z.literal(true),
     opportunity: volunteerOpportunityResponseSchema,
   })
   .openapi("CreateVolunteerOpportunityResponse");
+
+export const getVolunteerOpportunityResponseSchema = z
+  .object({
+    ok: z.literal(true),
+    opportunity: volunteerOpportunityResponseSchema,
+  })
+  .openapi("GetVolunteerOpportunityResponse");
+
+export const getPublicVolunteerOpportunityResponseSchema = z
+  .object({
+    ok: z.literal(true),
+    opportunity: publicVolunteerOpportunityResponseSchema,
+  })
+  .openapi("GetPublicVolunteerOpportunityResponse");
 
 export const volunteerOpportunitiesPaginationResponseSchema = z
   .object({
@@ -86,7 +140,7 @@ export const volunteerOpportunitiesPaginationResponseSchema = z
 export const getVolunteerOpportunitiesResponseSchema = z
   .object({
     ok: z.literal(true),
-    opportunities: z.array(volunteerOpportunityResponseSchema),
+    opportunities: z.array(volunteerOpportunityListItemResponseSchema),
     pagination: volunteerOpportunitiesPaginationResponseSchema,
   })
   .openapi("GetVolunteerOpportunitiesResponse");

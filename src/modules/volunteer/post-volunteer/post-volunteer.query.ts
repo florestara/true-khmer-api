@@ -19,6 +19,8 @@ import { db } from "../../../db/index";
 import {
   city,
   country,
+  user,
+  userProfile,
   volunteerCategory,
   volunteerOpportunity,
   volunteerRole,
@@ -63,8 +65,77 @@ type VolunteerOpportunitiesPagination = {
   hasMore: boolean;
   nextCursor: string | null;
 };
+type VolunteerReference = {
+  id: string;
+  name: string;
+};
+type VolunteerOrganizerBase = {
+  id: string;
+  name: string;
+  avatarUrl: string | null;
+  opportunityCount: number;
+  location: VolunteerReference | null;
+};
+type VolunteerOrganizer = VolunteerOrganizerBase & {
+  contact: {
+    email: string;
+    telegramUsername: string | null;
+    phone: string | null;
+    websiteUrl: string | null;
+  };
+};
+type VolunteerOrganizerQueryRow = {
+  id: string;
+  displayName: string | null;
+  fullName: string;
+  avatarUrl: string | null;
+  locationId: string | null;
+  locationName: string | null;
+  opportunityCount: number;
+};
+type VolunteerQueryExecutor = Pick<typeof db, "select">;
+export type VolunteerOpportunityListItem = {
+  id: string;
+  title: string;
+  overview: string;
+  durationLabel: string;
+  commitmentLabel: string;
+  applicationDeadline: string;
+  coverImageUrl: string | null;
+  category: VolunteerReference;
+  location: VolunteerReference;
+};
+export type VolunteerOpportunityDetail = {
+  id: string;
+  category: VolunteerReference;
+  location: VolunteerReference;
+  title: string;
+  overview: string;
+  communityImpact: string | null;
+  durationLabel: string;
+  commitmentLabel: string;
+  applicationDeadline: string;
+  coverImageKey: string;
+  coverImageUrl: string | null;
+  benefits: string[];
+  status: VolunteerOpportunityRow["status"];
+  publishedAt: string | null;
+  organizer: VolunteerOrganizer;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  roles: Array<{
+    id: string;
+    title: string;
+    commitmentLabel: string;
+    capacity: number;
+    responsibilities: string[];
+    requirements: string[];
+    displayOrder: number;
+  }>;
+};
 type VolunteerOpportunitiesListResult = {
-  opportunities: CreatedVolunteerOpportunity[];
+  opportunities: VolunteerOpportunityListItem[];
   pagination: VolunteerOpportunitiesPagination;
 };
 
@@ -75,9 +146,27 @@ const volunteerRoleRequirementSearch = aliasedTable(
   volunteerRoleRequirement,
   "volunteer_role_requirement_search",
 );
+const organizerProfileCity = aliasedTable(city, "organizer_profile_city");
 
 function buildJsonbTextSearch(column: SQLWrapper, pattern: string) {
   return sql`${column}::text ilike ${pattern}`;
+}
+
+function resolveVolunteerOrganizerName(
+  displayName: string | null,
+  fullName: string,
+): string {
+  const normalizedDisplayName = displayName?.trim();
+  if (normalizedDisplayName && normalizedDisplayName.length > 0) {
+    return normalizedDisplayName;
+  }
+
+  return fullName.trim();
+}
+
+function toInteger(value: unknown, fallback = 0): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
 }
 
 export async function getVolunteerCategories(): Promise<VolunteerCategoryRow[]> {
@@ -149,10 +238,13 @@ export async function getVolunteerLocations(): Promise<VolunteerLocationRow[]> {
     .orderBy(asc(city.name));
 }
 
-export async function findActiveVolunteerCategoryById(categoryId: string) {
+export async function findActiveVolunteerCategoryById(
+  categoryId: string,
+): Promise<VolunteerReference | null> {
   const [categoryRow] = await db
     .select({
       id: volunteerCategory.id,
+      name: volunteerCategory.name,
     })
     .from(volunteerCategory)
     .where(
@@ -166,7 +258,9 @@ export async function findActiveVolunteerCategoryById(categoryId: string) {
   return categoryRow ?? null;
 }
 
-export async function findVolunteerLocationById(locationId: string) {
+export async function findVolunteerLocationById(
+  locationId: string,
+): Promise<VolunteerLocationRow | null> {
   const [locationRow] = await db
     .select({
       id: city.id,
@@ -191,56 +285,74 @@ export type CreateVolunteerOpportunityInput =
   CreateVolunteerOpportunityBodyInput & {
     createdBy: string;
     coverImageUrl: string | null;
+    category: VolunteerReference;
+    location: VolunteerReference;
   };
-
-export type CreatedVolunteerOpportunity = {
-  id: string;
-  categoryId: string;
-  locationId: string;
-  title: string;
-  overview: string;
-  communityImpact: string | null;
-  durationLabel: string;
-  commitmentLabel: string;
-  applicationDeadline: string;
-  coverImageKey: string;
-  coverImageUrl: string | null;
-  benefits: string[];
-  contact: {
-    email: string;
-    telegramUsername: string | null;
-    phone: string | null;
-    websiteUrl: string | null;
-  };
-  status: VolunteerOpportunityRow["status"];
-  publishedAt: string | null;
-  createdBy: string;
-  createdAt: string;
-  updatedAt: string;
-  roles: Array<{
-    id: string;
-    title: string;
-    commitmentLabel: string;
-    capacity: number;
-    responsibilities: string[];
-    requirements: string[];
-    displayOrder: number;
-  }>;
-};
 
 type VolunteerOpportunityListRow = {
   opportunity: VolunteerOpportunityRow;
+  category: VolunteerReference;
+  location: VolunteerReference;
+};
+type VolunteerOrganizerRow = {
+  id: string;
+  displayName: string | null;
+  fullName: string;
+  avatarUrl: string | null;
+  locationId: string | null;
+  locationName: string | null;
+  opportunityCount: number;
 };
 
-function hydrateVolunteerOpportunity(
+function hydrateVolunteerOpportunityListItem(
+  row: VolunteerOpportunityListRow,
+): VolunteerOpportunityListItem {
+  return {
+    id: row.opportunity.id,
+    title: row.opportunity.title,
+    overview: row.opportunity.overview,
+    durationLabel: row.opportunity.durationLabel,
+    commitmentLabel: row.opportunity.commitmentLabel,
+    applicationDeadline: row.opportunity.applicationDeadline,
+    coverImageUrl: row.opportunity.coverImageUrl,
+    category: row.category,
+    location: row.location,
+  };
+}
+
+function hydrateVolunteerOrganizer(
+  organizer: VolunteerOrganizerRow,
+): VolunteerOrganizerBase {
+  return {
+    id: organizer.id,
+    name: resolveVolunteerOrganizerName(
+      organizer.displayName,
+      organizer.fullName,
+    ),
+    avatarUrl: organizer.avatarUrl,
+    opportunityCount: toInteger(organizer.opportunityCount),
+    location:
+      organizer.locationId && organizer.locationName
+        ? {
+            id: organizer.locationId,
+            name: organizer.locationName,
+          }
+        : null,
+  };
+}
+
+function hydrateVolunteerOpportunityDetail(
   opportunity: VolunteerOpportunityRow,
+  category: VolunteerReference,
+  location: VolunteerReference,
+  organizer: VolunteerOrganizerBase,
   roles: HydratedVolunteerRole[],
   requirementsByRoleId: Map<string, HydratedVolunteerRequirement[]>,
-): CreatedVolunteerOpportunity {
+): VolunteerOpportunityDetail {
   return {
     id: opportunity.id,
-    categoryId: opportunity.categoryId,
-    locationId: opportunity.cityId,
+    category,
+    location,
     title: opportunity.title,
     overview: opportunity.overview,
     communityImpact: opportunity.communityImpact,
@@ -250,14 +362,17 @@ function hydrateVolunteerOpportunity(
     coverImageKey: opportunity.coverImageKey,
     coverImageUrl: opportunity.coverImageUrl,
     benefits: opportunity.benefits as string[],
-    contact: {
-      email: opportunity.contactEmail,
-      telegramUsername: opportunity.contactTelegramUsername,
-      phone: opportunity.contactPhone,
-      websiteUrl: opportunity.contactWebsiteUrl,
-    },
     status: opportunity.status,
     publishedAt: opportunity.publishedAt,
+    organizer: {
+      ...organizer,
+      contact: {
+        email: opportunity.contactEmail,
+        telegramUsername: opportunity.contactTelegramUsername,
+        phone: opportunity.contactPhone,
+        websiteUrl: opportunity.contactWebsiteUrl,
+      },
+    },
     createdBy: opportunity.createdBy,
     createdAt: opportunity.createdAt,
     updatedAt: opportunity.updatedAt,
@@ -404,14 +519,14 @@ function buildNextVolunteerOpportunitiesCursor(
   });
 }
 
-async function hydrateVolunteerOpportunities(
-  opportunities: VolunteerOpportunityRow[],
-): Promise<CreatedVolunteerOpportunity[]> {
-  if (opportunities.length === 0) {
+async function hydrateVolunteerOpportunityDetails(
+  rows: VolunteerOpportunityListRow[],
+): Promise<VolunteerOpportunityDetail[]> {
+  if (rows.length === 0) {
     return [];
   }
 
-  const opportunityIds = opportunities.map((opportunity) => opportunity.id);
+  const opportunityIds = rows.map((row) => row.opportunity.id);
   const roles = await db
     .select()
     .from(volunteerRole)
@@ -458,13 +573,87 @@ async function hydrateVolunteerOpportunities(
     roleRequirements.push(requirement);
   }
 
-  return opportunities.map((opportunity) =>
-    hydrateVolunteerOpportunity(
-      opportunity,
-      rolesByOpportunityId.get(opportunity.id) ?? [],
+  const organizerIds = [...new Set(rows.map((row) => row.opportunity.createdBy))];
+  const organizerById = await getVolunteerOrganizersByUserIds(db, organizerIds);
+
+  return rows.map((row) => {
+    const organizer = organizerById.get(row.opportunity.createdBy);
+
+    if (!organizer) {
+      throw new Error(
+        `Volunteer organizer could not be loaded for user ${row.opportunity.createdBy}`,
+      );
+    }
+
+    return hydrateVolunteerOpportunityDetail(
+      row.opportunity,
+      row.category,
+      row.location,
+      organizer,
+      rolesByOpportunityId.get(row.opportunity.id) ?? [],
       requirementsByRoleId,
-    ),
+    );
+  });
+}
+
+async function getVolunteerOrganizersByUserIds(
+  executor: VolunteerQueryExecutor,
+  userIds: string[],
+): Promise<Map<string, VolunteerOrganizerBase>> {
+  const uniqueUserIds = [...new Set(userIds)];
+  if (uniqueUserIds.length === 0) {
+    return new Map();
+  }
+
+  const opportunityCounts = executor
+    .select({
+      userId: volunteerOpportunity.createdBy,
+      opportunityCount: sql<number>`count(*)::int`.as("opportunity_count"),
+    })
+    .from(volunteerOpportunity)
+    .where(
+      and(
+        inArray(volunteerOpportunity.createdBy, uniqueUserIds),
+        eq(volunteerOpportunity.status, "PUBLISHED"),
+        isNotNull(volunteerOpportunity.publishedAt),
+      ),
+    )
+    .groupBy(volunteerOpportunity.createdBy)
+    .as("opportunity_counts");
+
+  const rows = await executor
+    .select({
+      id: user.id,
+      displayName: userProfile.displayName,
+      fullName: user.name,
+      avatarUrl: userProfile.avatarUrl,
+      locationId: organizerProfileCity.id,
+      locationName: organizerProfileCity.name,
+      opportunityCount:
+        sql<number>`coalesce(${opportunityCounts.opportunityCount}, 0)::int`.as(
+          "opportunityCount",
+        ),
+    })
+    .from(user)
+    .leftJoin(userProfile, eq(userProfile.userId, user.id))
+    .leftJoin(organizerProfileCity, eq(organizerProfileCity.id, userProfile.cityId))
+    .leftJoin(opportunityCounts, eq(opportunityCounts.userId, user.id))
+    .where(inArray(user.id, uniqueUserIds));
+
+  return new Map(
+    rows.map((row) => [
+      row.id,
+      hydrateVolunteerOrganizer(row as VolunteerOrganizerQueryRow),
+    ]),
   );
+}
+
+async function getVolunteerOrganizerByUserId(
+  executor: VolunteerQueryExecutor,
+  userId: string,
+): Promise<VolunteerOrganizerBase | null> {
+  const organizersById = await getVolunteerOrganizersByUserIds(executor, [userId]);
+  return organizersById.get(userId) ?? null;
 }
 
 export async function getVolunteerOpportunities({
@@ -477,6 +666,14 @@ export async function getVolunteerOpportunities({
   const rows = await db
     .select({
       opportunity: volunteerOpportunity,
+      category: {
+        id: volunteerCategory.id,
+        name: volunteerCategory.name,
+      },
+      location: {
+        id: city.id,
+        name: city.name,
+      },
     })
     .from(volunteerOpportunity)
     .innerJoin(
@@ -503,8 +700,8 @@ export async function getVolunteerOpportunities({
   const opportunityRows: VolunteerOpportunityListRow[] = hasMore
     ? rows.slice(0, limit)
     : rows;
-  const opportunities = await hydrateVolunteerOpportunities(
-    opportunityRows.map((row) => row.opportunity),
+  const opportunities = opportunityRows.map((row) =>
+    hydrateVolunteerOpportunityListItem(row),
   );
   const lastOpportunityRow =
     opportunityRows.length > 0
@@ -525,9 +722,50 @@ export async function getVolunteerOpportunities({
   };
 }
 
+export async function getVolunteerOpportunityById(opportunityId: string) {
+  const [row] = await db
+    .select({
+      opportunity: volunteerOpportunity,
+      category: {
+        id: volunteerCategory.id,
+        name: volunteerCategory.name,
+      },
+      location: {
+        id: city.id,
+        name: city.name,
+      },
+    })
+    .from(volunteerOpportunity)
+    .innerJoin(
+      volunteerCategory,
+      eq(volunteerCategory.id, volunteerOpportunity.categoryId),
+    )
+    .innerJoin(city, eq(city.id, volunteerOpportunity.cityId))
+    .innerJoin(country, eq(city.countryId, country.id))
+    .where(
+      and(
+        eq(volunteerOpportunity.id, opportunityId),
+        eq(volunteerOpportunity.status, "PUBLISHED"),
+        eq(volunteerCategory.status, "ACTIVE"),
+        eq(city.isActive, true),
+        eq(country.isActive, true),
+        eq(country.normalizedName, CAMBODIA_NORMALIZED_NAME),
+        isNotNull(volunteerOpportunity.publishedAt),
+      ),
+    )
+    .limit(1);
+
+  if (!row) {
+    return null;
+  }
+
+  const [opportunity] = await hydrateVolunteerOpportunityDetails([row]);
+  return opportunity ?? null;
+}
+
 export async function createVolunteerOpportunity(
   data: CreateVolunteerOpportunityInput,
-): Promise<CreatedVolunteerOpportunity> {
+): Promise<VolunteerOpportunityDetail> {
   return db.transaction(async (tx) => {
     const [newOpportunity] = await tx
       .insert(volunteerOpportunity)
@@ -553,7 +791,7 @@ export async function createVolunteerOpportunity(
       })
       .returning();
 
-    const createdRoles: CreatedVolunteerOpportunity["roles"] = [];
+    const createdRoles: VolunteerOpportunityDetail["roles"] = [];
 
     for (const [roleIndex, roleInput] of data.roles.entries()) {
       const [newRole] = await tx
@@ -595,8 +833,19 @@ export async function createVolunteerOpportunity(
       });
     }
 
-    return hydrateVolunteerOpportunity(
+    const organizer = await getVolunteerOrganizerByUserId(tx, data.createdBy);
+
+    if (!organizer) {
+      throw new Error(
+        "Created volunteer opportunity organizer could not be loaded",
+      );
+    }
+
+    return hydrateVolunteerOpportunityDetail(
       newOpportunity,
+      data.category,
+      data.location,
+      organizer,
       createdRoles.map((role) => ({
         id: role.id,
         title: role.title,
