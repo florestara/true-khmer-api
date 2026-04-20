@@ -608,7 +608,7 @@ async function getVolunteerOrganizersByUserIds(
   const opportunityCounts = executor
     .select({
       userId: volunteerOpportunity.createdBy,
-      opportunityCount: sql<number>`count(*)::int`,
+      opportunityCount: sql<number>`count(*)::int`.as("opportunity_count"),
     })
     .from(volunteerOpportunity)
     .where(
