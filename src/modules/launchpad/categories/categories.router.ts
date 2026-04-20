@@ -34,7 +34,7 @@ const getRouteById = createRoute({
   },
   responses: {
     200: {
-      description: "List of launchpad categories",
+      description: "Launchpad category details",
       content: {
         "application/json": {
           schema: getLaunchpadCategoriesResponseSchema,
@@ -56,5 +56,6 @@ launchpadCategoriesRouter.openapi(getRoute, async (c) => {
 });
 
 launchpadCategoriesRouter.openapi(getRouteById, async (c) => {
-  return handleGetLaunchpadCategory(c) as any;
+  const params = c.req.valid("param");
+  return handleGetLaunchpadCategory(c, params) as any;
 });

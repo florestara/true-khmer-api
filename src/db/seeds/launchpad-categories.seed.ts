@@ -7,7 +7,7 @@ const LAUNCHPAD_CATEGORY_SEED = [
   {
     name: "Education",
     slug: "education",
-    iconKey: "bookOpen",
+    iconKey: "BookOpen",
     displayOrder: 1,
   },
   {
@@ -58,7 +58,7 @@ export async function seedLaunchpadCategories() {
       const message = error instanceof Error ? error.message : "unknown error";
 
       throw new Error(
-        `Failed to insert forum category "${category.slug}": ${message}`,
+        `Failed to insert launchpad category "${category.slug}": ${message}`,
       );
     }
   }

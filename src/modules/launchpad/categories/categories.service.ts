@@ -4,6 +4,7 @@ import {
   getLaunchpadCategories,
 } from "./categories.query";
 import { launchpadCategory } from "../../../db/schema";
+import { LaunchpadCategoriesParams } from "./schema/categories.request.schema";
 
 type LaunchpadCategoryRow = typeof launchpadCategory.$inferSelect;
 
@@ -15,6 +16,7 @@ function formatCategory(category: LaunchpadCategoryRow) {
     iconKey: category?.iconKey,
     displayOrder: category?.displayOrder,
     status: category?.status,
+    roleCount: category?.totalRoles,
     createdBy: category?.createdBy,
     updatedBy: category?.updatedBy,
     createdAt: category?.createdAt,
@@ -39,11 +41,13 @@ export async function handleGetLaunchpadCategories(c: Context) {
   }
 }
 
-export async function handleGetLaunchpadCategory(c: Context) {
-  const { categoryId } = c.req.param();
+export async function handleGetLaunchpadCategory(
+  c: Context,
+  params: LaunchpadCategoriesParams,
+) {
   try {
     const category = await findLaunchpadCategoryById({
-      id: categoryId as string,
+      id: params.categoryId,
     });
 
     if (!category) {
