@@ -177,10 +177,11 @@ export const volunteerApplication = pgTable(
       .notNull(),
   },
   (table) => [
-    uniqueIndex("volunteer_application_applicant_opportunity_unique_idx").on(
-      table.applicantId,
-      table.opportunityId,
-    ),
+    uniqueIndex("volunteer_application_applicant_opportunity_active_unique_idx")
+      .on(table.applicantId, table.opportunityId)
+      .where(
+        sql`${table.status} in ('SUBMITTED', 'ACCEPTED')`,
+      ),
     index("volunteer_application_opportunity_idx").using(
       "btree",
       table.opportunityId,

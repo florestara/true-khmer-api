@@ -2834,8 +2834,8 @@
         }
       },
       "indexes": {
-        "volunteer_application_applicant_opportunity_unique_idx": {
-          "name": "volunteer_application_applicant_opportunity_unique_idx",
+        "volunteer_application_applicant_opportunity_active_unique_idx": {
+          "name": "volunteer_application_applicant_opportunity_active_unique_idx",
           "columns": [
             {
               "expression": "applicant_id",
@@ -2853,7 +2853,8 @@
           "isUnique": true,
           "concurrently": false,
           "method": "btree",
-          "with": {}
+          "with": {},
+          "where": "\"status\" in ('SUBMITTED', 'ACCEPTED')"
         },
         "volunteer_application_opportunity_idx": {
           "name": "volunteer_application_opportunity_idx",

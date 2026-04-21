@@ -35,7 +35,7 @@ const VOLUNTEER_CATEGORY_SLUG_UNIQUE_INDEX =
 const VOLUNTEER_CATEGORY_NAME_UNIQUE_INDEX =
   "volunteer_category_name_unique_idx";
 const VOLUNTEER_APPLICATION_APPLICANT_OPPORTUNITY_UNIQUE_INDEX =
-  "volunteer_application_applicant_opportunity_unique_idx";
+  "volunteer_application_applicant_opportunity_active_unique_idx";
 
 function sanitizePublicVolunteerOpportunity<
   T extends {

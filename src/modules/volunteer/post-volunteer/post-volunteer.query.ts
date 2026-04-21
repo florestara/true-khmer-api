@@ -38,6 +38,11 @@ import type {
   GetVolunteerOpportunitiesQuery,
   VolunteerOpportunitiesPageCursor,
 } from "./post-volunteer.schema";
+
+const ACTIVE_VOLUNTEER_APPLICATION_STATUSES = [
+  "SUBMITTED",
+  "ACCEPTED",
+] as const;
 import { encodeVolunteerOpportunitiesPageCursor } from "./post-volunteer.schema";
 
 type VolunteerCategoryRow = typeof volunteerCategory.$inferSelect;
@@ -364,6 +369,10 @@ export async function hasVolunteerApplicationForOpportunity(
       and(
         eq(volunteerApplication.applicantId, applicantId),
         eq(volunteerApplication.opportunityId, opportunityId),
+        inArray(
+          volunteerApplication.status,
+          ACTIVE_VOLUNTEER_APPLICATION_STATUSES,
+        ),
       ),
     )
     .limit(1);
