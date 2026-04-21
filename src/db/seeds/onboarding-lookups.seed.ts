@@ -107,18 +107,9 @@ export async function seedOnboardingLookups() {
     target: interest.slug,
   });
 
-  await db
-    .insert(tier)
-    .values(TIER_SEED)
-    .onConflictDoUpdate({
-      target: tier.slug,
-      set: {
-        name: sql`excluded.name`,
-        rankOrder: sql`excluded.rank_order`,
-        minPoints: sql`excluded.min_points`,
-        description: sql`excluded.description`,
-      },
-    });
+  await db.insert(tier).values(TIER_SEED).onConflictDoNothing({
+    target: tier.slug,
+  });
 
   await db.insert(country).values(CAMBODIA_COUNTRY_SEED).onConflictDoNothing({
     target: country.normalizedName,
