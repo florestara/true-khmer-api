@@ -2976,7 +2976,12 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "volunteer_application_supporting_document_keys_array_check": {
+          "name": "volunteer_application_supporting_document_keys_array_check",
+          "value": "jsonb_typeof(\"supporting_document_keys\") = 'array'"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.volunteer_opportunity": {

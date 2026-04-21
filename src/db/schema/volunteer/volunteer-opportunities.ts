@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  check,
   foreignKey,
   index,
   integer,
@@ -187,6 +188,10 @@ export const volunteerApplication = pgTable(
       columns: [table.roleId, table.opportunityId],
       foreignColumns: [volunteerRole.id, volunteerRole.opportunityId],
     }).onDelete("cascade"),
+    check(
+      "volunteer_application_supporting_document_keys_array_check",
+      sql`jsonb_typeof(${table.supportingDocumentKeys}) = 'array'`,
+    ),
     uniqueIndex("volunteer_application_applicant_opportunity_active_unique_idx")
       .on(table.applicantId, table.opportunityId)
       .where(

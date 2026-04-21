@@ -7,6 +7,7 @@ CREATE TABLE "volunteer_application" (
 	"availability" text NOT NULL,
 	"relevant_experience" text NOT NULL,
 	"supporting_document_keys" jsonb DEFAULT '[]'::jsonb NOT NULL,
+	CONSTRAINT "volunteer_application_supporting_document_keys_array_check" CHECK (jsonb_typeof("supporting_document_keys") = 'array'),
 	"status" "volunteer_application_status" DEFAULT 'SUBMITTED' NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
