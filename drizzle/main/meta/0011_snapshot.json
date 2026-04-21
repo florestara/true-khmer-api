@@ -2944,6 +2944,21 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
+        "volunteer_application_role_opportunity_match_fk": {
+          "name": "volunteer_application_role_opportunity_match_fk",
+          "tableFrom": "volunteer_application",
+          "tableTo": "volunteer_role",
+          "columnsFrom": [
+            "role_id",
+            "opportunity_id"
+          ],
+          "columnsTo": [
+            "id",
+            "opportunity_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
         "volunteer_application_applicant_id_user_id_fk": {
           "name": "volunteer_application_applicant_id_user_id_fk",
           "tableFrom": "volunteer_application",
@@ -3315,6 +3330,27 @@
         }
       },
       "indexes": {
+        "volunteer_role_id_opportunity_unique_idx": {
+          "name": "volunteer_role_id_opportunity_unique_idx",
+          "columns": [
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "opportunity_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "volunteer_role_opportunity_idx": {
           "name": "volunteer_role_opportunity_idx",
           "columns": [

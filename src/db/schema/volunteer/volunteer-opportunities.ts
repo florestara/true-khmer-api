@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  foreignKey,
   index,
   integer,
   jsonb,
@@ -117,6 +118,10 @@ export const volunteerRole = pgTable(
       .notNull(),
   },
   (table) => [
+    uniqueIndex("volunteer_role_id_opportunity_unique_idx").on(
+      table.id,
+      table.opportunityId,
+    ),
     index("volunteer_role_opportunity_idx").using("btree", table.opportunityId),
     index("volunteer_role_order_idx").using("btree", table.displayOrder),
   ],
@@ -177,6 +182,11 @@ export const volunteerApplication = pgTable(
       .notNull(),
   },
   (table) => [
+    foreignKey({
+      name: "volunteer_application_role_opportunity_match_fk",
+      columns: [table.roleId, table.opportunityId],
+      foreignColumns: [volunteerRole.id, volunteerRole.opportunityId],
+    }).onDelete("cascade"),
     uniqueIndex("volunteer_application_applicant_opportunity_active_unique_idx")
       .on(table.applicantId, table.opportunityId)
       .where(
