@@ -2,6 +2,7 @@ import type { Context } from "hono";
 import type {
   AnswerIdParams,
   CreateAnswerInput,
+  GetAnswersQuery,
   QuestionIdParams,
   UpdateAnswerInput,
   VoteAnswerInput,
@@ -28,6 +29,7 @@ import {
 export async function handleGetAnswers(
   c: Context,
   params: QuestionIdParams,
+  query: GetAnswersQuery,
   isPublic = false,
 ) {
   let userId: string | undefined;
@@ -46,8 +48,12 @@ export async function handleGetAnswers(
     }
 
     const answers = isPublic
-      ? await findAnswersByQuestionIdPublic(params.questionId)
-      : await findAnswersByQuestionId(params.questionId, userId as string);
+      ? await findAnswersByQuestionIdPublic(params.questionId, query.sortBy)
+      : await findAnswersByQuestionId(
+          params.questionId,
+          userId as string,
+          query.sortBy,
+        );
     return c.json({ ok: true, answers }, 200);
   } catch (err) {
     console.error("Failed to get answers", err);

@@ -2,6 +2,15 @@ import { z } from "zod";
 import { FORUM_UUID_RE } from "../../lib/constants";
 
 const MAX_ANSWER_BODY_LENGTH = 10000;
+const answerSortBySchema = z
+  .enum(["popular", "newest", "oldest"])
+  .openapi({
+    description:
+      "Answer ordering. Allowed values: popular, newest, oldest.",
+    example: "popular",
+  });
+
+export type AnswerSortBy = z.infer<typeof answerSortBySchema>;
 
 const answerBodySchema = z
   .string()
@@ -36,6 +45,14 @@ export const questionIdParamsSchema = z
   .openapi("AnswerQuestionIdParams");
 
 export type QuestionIdParams = z.infer<typeof questionIdParamsSchema>;
+
+export const getAnswersQuerySchema = z
+  .object({
+    sortBy: answerSortBySchema.default("popular"),
+  })
+  .openapi("GetAnswersQuery");
+
+export type GetAnswersQuery = z.infer<typeof getAnswersQuerySchema>;
 
 export const createAnswerSchema = z
   .object({
