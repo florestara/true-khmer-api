@@ -82,8 +82,15 @@
     {
       "idx": 11,
       "version": "7",
+      "when": 1776708527195,
+      "tag": "0011_right_anita_blake",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
       "when": 1776660751032,
-      "tag": "0011_broken_proudstar",
+      "tag": "0012_broken_proudstar",
       "breakpoints": true
     }
   ]

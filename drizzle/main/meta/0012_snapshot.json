@@ -1,6 +1,6 @@
 {
-  "id": "ec31a31d-dd4f-4209-b371-37844b3ad8f1",
-  "prevId": "f801e440-ed74-4831-abf7-9e73bc02cdc7",
+  "id": "2736bd34-e591-4132-aa63-4d12d2ef0694",
+  "prevId": "ec31a31d-dd4f-4209-b371-37844b3ad8f1",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2762,6 +2762,228 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.volunteer_application": {
+      "name": "volunteer_application",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "opportunity_id": {
+          "name": "opportunity_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "role_id": {
+          "name": "role_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "applicant_id": {
+          "name": "applicant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "availability": {
+          "name": "availability",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "relevant_experience": {
+          "name": "relevant_experience",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "supporting_document_keys": {
+          "name": "supporting_document_keys",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "status": {
+          "name": "status",
+          "type": "volunteer_application_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'SUBMITTED'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "volunteer_application_applicant_opportunity_active_unique_idx": {
+          "name": "volunteer_application_applicant_opportunity_active_unique_idx",
+          "columns": [
+            {
+              "expression": "applicant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "opportunity_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {},
+          "where": "\"status\" in ('SUBMITTED', 'ACCEPTED')"
+        },
+        "volunteer_application_opportunity_idx": {
+          "name": "volunteer_application_opportunity_idx",
+          "columns": [
+            {
+              "expression": "opportunity_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "volunteer_application_role_idx": {
+          "name": "volunteer_application_role_idx",
+          "columns": [
+            {
+              "expression": "role_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "volunteer_application_applicant_idx": {
+          "name": "volunteer_application_applicant_idx",
+          "columns": [
+            {
+              "expression": "applicant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "volunteer_application_status_idx": {
+          "name": "volunteer_application_status_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "volunteer_application_opportunity_id_volunteer_opportunity_id_fk": {
+          "name": "volunteer_application_opportunity_id_volunteer_opportunity_id_fk",
+          "tableFrom": "volunteer_application",
+          "tableTo": "volunteer_opportunity",
+          "columnsFrom": [
+            "opportunity_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "volunteer_application_role_id_volunteer_role_id_fk": {
+          "name": "volunteer_application_role_id_volunteer_role_id_fk",
+          "tableFrom": "volunteer_application",
+          "tableTo": "volunteer_role",
+          "columnsFrom": [
+            "role_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "volunteer_application_role_opportunity_match_fk": {
+          "name": "volunteer_application_role_opportunity_match_fk",
+          "tableFrom": "volunteer_application",
+          "tableTo": "volunteer_role",
+          "columnsFrom": [
+            "role_id",
+            "opportunity_id"
+          ],
+          "columnsTo": [
+            "id",
+            "opportunity_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "volunteer_application_applicant_id_user_id_fk": {
+          "name": "volunteer_application_applicant_id_user_id_fk",
+          "tableFrom": "volunteer_application",
+          "tableTo": "user",
+          "columnsFrom": [
+            "applicant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "volunteer_application_supporting_document_keys_array_check": {
+          "name": "volunteer_application_supporting_document_keys_array_check",
+          "value": "jsonb_typeof(\"supporting_document_keys\") = 'array'"
+        }
+      },
+      "isRLSEnabled": false
+    },
     "public.volunteer_opportunity": {
       "name": "volunteer_opportunity",
       "schema": "",
@@ -3113,6 +3335,27 @@
         }
       },
       "indexes": {
+        "volunteer_role_id_opportunity_unique_idx": {
+          "name": "volunteer_role_id_opportunity_unique_idx",
+          "columns": [
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "opportunity_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "volunteer_role_opportunity_idx": {
           "name": "volunteer_role_opportunity_idx",
           "columns": [
@@ -3406,14 +3649,14 @@
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp with time zone",
+          "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
         },
         "updated_at": {
           "name": "updated_at",
-          "type": "timestamp with time zone",
+          "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
@@ -3580,159 +3823,6 @@
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
-    },
-    "public.launchpad_category": {
-      "name": "launchpad_category",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "slug": {
-          "name": "slug",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "name": {
-          "name": "name",
-          "type": "varchar(120)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "icon_key": {
-          "name": "icon_key",
-          "type": "varchar(100)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "display_order": {
-          "name": "display_order",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "status": {
-          "name": "status",
-          "type": "launchpad_category_status",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'ACTIVE'"
-        },
-        "total_roles": {
-          "name": "total_roles",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "created_by": {
-          "name": "created_by",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "updated_by": {
-          "name": "updated_by",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "archived_at": {
-          "name": "archived_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "launchpad_category_slug_unique_idx": {
-          "name": "launchpad_category_slug_unique_idx",
-          "columns": [
-            {
-              "expression": "slug",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "launchpad_category_name_unique_idx": {
-          "name": "launchpad_category_name_unique_idx",
-          "columns": [
-            {
-              "expression": "lower(\"name\")",
-              "asc": true,
-              "isExpression": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "launchpad_category_status_idx": {
-          "name": "launchpad_category_status_idx",
-          "columns": [
-            {
-              "expression": "status",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "launchpad_category_order_idx": {
-          "name": "launchpad_category_order_idx",
-          "columns": [
-            {
-              "expression": "display_order",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
     }
   },
   "enums": {
@@ -3794,6 +3884,16 @@
         "ACTIVE",
         "ARCHIVED",
         "HIDDEN"
+      ]
+    },
+    "public.volunteer_application_status": {
+      "name": "volunteer_application_status",
+      "schema": "public",
+      "values": [
+        "SUBMITTED",
+        "ACCEPTED",
+        "REJECTED",
+        "WITHDRAWN"
       ]
     },
     "public.volunteer_opportunity_status": {
@@ -3873,15 +3973,6 @@
         "active",
         "legacy",
         "tier"
-      ]
-    },
-    "public.launchpad_category_status": {
-      "name": "launchpad_category_status",
-      "schema": "public",
-      "values": [
-        "ACTIVE",
-        "ARCHIVED",
-        "HIDDEN"
       ]
     }
   },
