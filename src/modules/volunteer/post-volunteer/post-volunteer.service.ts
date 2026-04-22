@@ -1,25 +1,32 @@
 import type { Context } from "hono";
 import { POSTGRES_UNIQUE_VIOLATION } from "../../../db/constants";
 import {
+  presignVolunteerApplicationDocumentUpload,
   presignVolunteerCoverUpload,
   resolveR2PublicUrl,
 } from "../../uploads/uploads.service";
 import { getAuthUserId } from "../../auth/utils/get-auth";
 import {
+  createVolunteerApplication,
   createVolunteerCategory,
   createVolunteerOpportunity,
   findActiveVolunteerCategoryById,
+  findVolunteerApplicationTargetByRoleId,
   findVolunteerLocationById,
+  findVolunteerOpportunityApplicationTargetById,
   getVolunteerCategories,
   getVolunteerOpportunityById,
   getVolunteerLocations,
   getVolunteerOpportunities,
+  hasVolunteerApplicationForOpportunity,
 } from "./post-volunteer.query";
 import type {
+  CreateVolunteerApplicationBodyInput,
   CreateVolunteerCategoryBodyInput,
   CreateVolunteerOpportunityBodyInput,
   GetVolunteerOpportunityParams,
   GetVolunteerOpportunitiesQuery,
+  PresignVolunteerApplicationDocumentUploadPayload,
   PresignVolunteerOpportunityCoverUploadPayload,
 } from "./post-volunteer.schema";
 
@@ -27,6 +34,8 @@ const VOLUNTEER_CATEGORY_SLUG_UNIQUE_INDEX =
   "volunteer_category_slug_unique_idx";
 const VOLUNTEER_CATEGORY_NAME_UNIQUE_INDEX =
   "volunteer_category_name_unique_idx";
+const VOLUNTEER_APPLICATION_APPLICANT_OPPORTUNITY_UNIQUE_INDEX =
+  "volunteer_application_applicant_opportunity_active_unique_idx";
 
 function sanitizePublicVolunteerOpportunity<
   T extends {
@@ -47,9 +56,46 @@ function normalizeOwnedCoverImageKey(
   userId: string,
   coverImageKey: string,
 ): string | null {
-  const rawKey = coverImageKey.startsWith("/")
-    ? coverImageKey.slice(1)
-    : coverImageKey;
+  return normalizeOwnedObjectKey(`volunteer-covers/${userId}/`, coverImageKey);
+}
+
+function normalizeOwnedSupportingDocumentKey(
+  opportunityId: string,
+  applicantId: string,
+  supportingDocumentKey: string,
+): string | null {
+  return normalizeOwnedObjectKey(
+    `volunteer-applicant/supporting-docs/${opportunityId}/${applicantId}/`,
+    supportingDocumentKey,
+  );
+}
+
+function normalizeOwnedSupportingDocumentKeys(
+  opportunityId: string,
+  applicantId: string,
+  supportingDocumentKeys: string[],
+): string[] | null {
+  const normalizedKeys = supportingDocumentKeys.map((key) =>
+    normalizeOwnedSupportingDocumentKey(opportunityId, applicantId, key),
+  );
+
+  if (normalizedKeys.some((key) => key === null)) {
+    return null;
+  }
+
+  const resolvedNormalizedKeys = normalizedKeys as string[];
+  if (new Set(resolvedNormalizedKeys).size !== resolvedNormalizedKeys.length) {
+    return null;
+  }
+
+  return resolvedNormalizedKeys;
+}
+
+function normalizeOwnedObjectKey(
+  expectedPrefix: string,
+  objectKey: string,
+): string | null {
+  const rawKey = objectKey.startsWith("/") ? objectKey.slice(1) : objectKey;
   let normalizedKey: string;
   try {
     normalizedKey = decodeURIComponent(rawKey);
@@ -62,11 +108,44 @@ function normalizeOwnedCoverImageKey(
     return null;
   }
 
-  if (!normalizedKey.startsWith(`volunteer-covers/${userId}/`)) {
+  if (!normalizedKey.startsWith(expectedPrefix)) {
     return null;
   }
 
   return normalizedKey;
+}
+
+function resolveVolunteerApplicationTargetError(
+  target:
+    | {
+        createdBy: string;
+        applicationDeadline: string;
+        status: string;
+        publishedAt: string | null;
+      }
+    | null,
+  applicantId: string,
+  notFoundError: string,
+) {
+  if (!target || target.status !== "PUBLISHED" || !target.publishedAt) {
+    return { status: 404 as const, error: notFoundError };
+  }
+
+  if (target.createdBy === applicantId) {
+    return {
+      status: 400 as const,
+      error: "You cannot apply to your own volunteer opportunity",
+    };
+  }
+
+  if (Date.parse(target.applicationDeadline) <= Date.now()) {
+    return {
+      status: 400 as const,
+      error: "Application deadline has passed or been reached",
+    };
+  }
+
+  return null;
 }
 
 export async function handleGetVolunteerCategories(c: Context) {
@@ -220,6 +299,135 @@ export async function handlePresignVolunteerOpportunityCoverUpload(
   } catch (error) {
     console.error("Failed to generate volunteer cover upload URL", error);
     return c.json({ ok: false, error: "Failed to generate upload URL" }, 500);
+  }
+}
+
+export async function handlePresignVolunteerApplicationDocumentUpload(
+  c: Context,
+  payload: PresignVolunteerApplicationDocumentUploadPayload,
+) {
+  const authResult = getAuthUserId(c);
+  if (!authResult.ok) {
+    return authResult.response;
+  }
+
+  try {
+    const target = await findVolunteerOpportunityApplicationTargetById(
+      payload.opportunityId,
+    );
+    const targetError = resolveVolunteerApplicationTargetError(
+      target,
+      authResult.userId,
+      "Volunteer opportunity not found",
+    );
+
+    if (targetError) {
+      return c.json({ ok: false, error: targetError.error }, targetError.status);
+    }
+
+    const alreadyApplied = await hasVolunteerApplicationForOpportunity(
+      authResult.userId,
+      payload.opportunityId,
+    );
+
+    if (alreadyApplied) {
+      return c.json(
+        { ok: false, error: "You have already applied to this opportunity" },
+        409,
+      );
+    }
+
+    const uploads = payload.files.map((file) =>
+      presignVolunteerApplicationDocumentUpload({
+        opportunityId: payload.opportunityId,
+        applicantId: authResult.userId,
+        contentType: file.contentType,
+        fileSize: file.fileSize,
+      }),
+    );
+
+    return c.json({ ok: true, uploads }, 200);
+  } catch (error) {
+    console.error(
+      "Failed to generate volunteer application document upload URL",
+      error,
+    );
+    return c.json({ ok: false, error: "Failed to generate upload URL" }, 500);
+  }
+}
+
+export async function handleCreateVolunteerApplication(
+  c: Context,
+  data: CreateVolunteerApplicationBodyInput,
+) {
+  const authResult = getAuthUserId(c);
+  if (!authResult.ok) {
+    return authResult.response;
+  }
+
+  try {
+    const target = await findVolunteerApplicationTargetByRoleId(data.roleId);
+    const targetError = resolveVolunteerApplicationTargetError(
+      target,
+      authResult.userId,
+      "Volunteer role not found",
+    );
+
+    if (targetError) {
+      return c.json({ ok: false, error: targetError.error }, targetError.status);
+    }
+
+    if (!target) {
+      throw new Error("Volunteer application target missing after validation");
+    }
+
+    const normalizedSupportingDocumentKeys = normalizeOwnedSupportingDocumentKeys(
+      target.opportunityId,
+      authResult.userId,
+      data.supportingDocumentKeys,
+    );
+
+    if (!normalizedSupportingDocumentKeys) {
+      return c.json(
+        {
+          ok: false,
+          error: "Validation failed",
+          issues: [
+            {
+              path: "supportingDocumentKeys",
+              message:
+                "supportingDocumentKeys must belong to current user and opportunity",
+            },
+          ],
+        },
+        400,
+      );
+    }
+
+    const application = await createVolunteerApplication({
+      ...data,
+      applicantId: authResult.userId,
+      opportunityId: target.opportunityId,
+      roleTitle: target.roleTitle,
+      supportingDocumentKeys: normalizedSupportingDocumentKeys,
+    });
+
+    return c.json({ ok: true, application }, 201);
+  } catch (err) {
+    const error = err as { code?: string; constraint?: string } | null;
+
+    if (
+      error?.code === POSTGRES_UNIQUE_VIOLATION &&
+      error.constraint === VOLUNTEER_APPLICATION_APPLICANT_OPPORTUNITY_UNIQUE_INDEX
+    ) {
+      return c.json(
+        { ok: false, error: "You have already applied to this opportunity" },
+        409,
+      );
+    }
+
+    console.error("Failed to create volunteer application", err);
+    return c.json({ ok: false, error: "Internal server error" }, 500);
   }
 }
 

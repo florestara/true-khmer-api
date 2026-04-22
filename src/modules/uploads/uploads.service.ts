@@ -4,6 +4,7 @@ import { getAuthUserId } from "../auth/utils/get-auth";
 import type { PresignAvatarUploadPayload } from "./uploads.schema";
 import type {
   PresignAvatarUploadResponse,
+  PresignVolunteerApplicationDocumentUploadResponse,
   PresignVolunteerCoverUploadResponse,
 } from "./types";
 
@@ -53,6 +54,19 @@ function buildVolunteerCoverKey(userId: string, fileName: string) {
   );
 }
 
+function buildVolunteerApplicationDocumentKey(
+  opportunityId: string,
+  applicantId: string,
+) {
+  return [
+    "volunteer-applicant",
+    "supporting-docs",
+    opportunityId,
+    applicantId,
+    buildVolunteerApplicationDocumentFileName(),
+  ].join("/");
+}
+
 function buildImageObjectFileName(fileName: string) {
   const baseName = fileName.split(/[\\/]/).pop() || "";
   const extension = baseName.includes(".")
@@ -61,6 +75,10 @@ function buildImageObjectFileName(fileName: string) {
   const safeExtension =
     extension.toLowerCase().replace(/[^a-z0-9]/g, "") || "bin";
   return `${Date.now()}-${randomUUID()}.${safeExtension}`;
+}
+
+function buildVolunteerApplicationDocumentFileName() {
+  return `${randomUUID()}.pdf`;
 }
 
 function buildNestedImageObjectKey(
@@ -182,6 +200,33 @@ export function presignVolunteerCoverUpload(options: {
     requiredHeaders: presigned.requiredHeaders,
     coverImageKey,
     publicUrl: resolvePublicUrl(coverImageKey),
+    expiresInSeconds: presigned.expiresInSeconds,
+  };
+
+  return response;
+}
+
+export function presignVolunteerApplicationDocumentUpload(options: {
+  opportunityId: string;
+  applicantId: string;
+  contentType: string;
+  fileSize: number;
+}) {
+  const supportingDocumentKey = buildVolunteerApplicationDocumentKey(
+    options.opportunityId,
+    options.applicantId,
+  );
+  const presigned = buildPresignedPutUrl(
+    supportingDocumentKey,
+    options.contentType,
+    options.fileSize,
+  );
+
+  const response: PresignVolunteerApplicationDocumentUploadResponse = {
+    uploadUrl: presigned.uploadUrl,
+    method: "PUT",
+    requiredHeaders: presigned.requiredHeaders,
+    supportingDocumentKey,
     expiresInSeconds: presigned.expiresInSeconds,
   };
 
