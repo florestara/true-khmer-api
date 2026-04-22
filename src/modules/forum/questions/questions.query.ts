@@ -55,7 +55,6 @@ type BaseQuestionHydrationRow = {
   authorFullName: string;
   authorAvatarKey: string | null;
   viewerVoteType: string | null;
-  relevanceScore: number;
   voteCount: number;
   trendingScore: number;
   trendingEngagementScore: number;
@@ -212,32 +211,6 @@ function buildQuestionAnswerSearchExists(searchPattern: string) {
   );
 }
 
-function buildQuestionRelevanceSql(search?: string) {
-  if (!search) {
-    return sql<number>`0`;
-  }
-
-  const searchPattern = `%${escapeLikePattern(search)}%`;
-  const tagMatchExists = buildQuestionTagSearchExists(searchPattern);
-  const answerMatchExists = buildQuestionAnswerSearchExists(searchPattern);
-
-  return sql<number>`(
-    case when ${ilike(forumQuestion.title, searchPattern)} then 8 else 0 end +
-    case when ${ilike(forumQuestion.body, searchPattern)} then 4 else 0 end +
-    case when ${ilike(forumCategory.name, searchPattern)} then 3 else 0 end +
-    case when ${ilike(forumCategory.description, searchPattern)} then 2 else 0 end +
-    case when ${ilike(forumCategory.slug, searchPattern)} then 1 else 0 end +
-    case when ${ilike(user.name, searchPattern)} then 2 else 0 end +
-    case when ${ilike(user.firstName, searchPattern)} then 1 else 0 end +
-    case when ${ilike(user.lastName, searchPattern)} then 1 else 0 end +
-    case when ${ilike(user.occupation, searchPattern)} then 1 else 0 end +
-    case when ${ilike(userProfile.displayName, searchPattern)} then 2 else 0 end +
-    case when ${ilike(userProfile.bio, searchPattern)} then 1 else 0 end +
-    case when ${tagMatchExists} then 3 else 0 end +
-    case when ${answerMatchExists} then 2 else 0 end
-  )`;
-}
-
 function buildTrendingRankingTimestampSql(cursor?: QuestionsPageCursor): SQL {
   if (cursor?.sortBy === "trending") {
     return sql`${cursor.rankingTimestamp}::timestamptz`;
@@ -370,17 +343,6 @@ function buildNextQuestionsCursor(
     });
   }
 
-  if (sortBy === "mostRelevant") {
-    return encodeQuestionsPageCursor({
-      sortBy: "mostRelevant",
-      relevance: row.relevanceScore,
-      score: row.question.upvoteCount - row.question.downvoteCount,
-      answerCount: row.question.answerCount,
-      createdAt: row.question.createdAt,
-      id: row.question.id,
-    });
-  }
-
   if (sortBy === "mostVoted") {
     return encodeQuestionsPageCursor({
       sortBy: "mostVoted",
@@ -451,10 +413,8 @@ function hydratePublicQuestion(
 
 function buildQuestionsBaseQuery(
   viewerId: string,
-  search?: string,
   trendingRankingTimestampSql: SQL = sql`statement_timestamp()`,
 ) {
-  const relevanceScore = buildQuestionRelevanceSql(search);
   const trendingScore = buildTrendingScoreSql(trendingRankingTimestampSql);
   const trendingEngagementScore =
     buildTrendingRecentEngagementScoreSql(trendingRankingTimestampSql);
@@ -468,7 +428,6 @@ function buildQuestionsBaseQuery(
       authorFullName: user.name,
       authorAvatarKey: userProfile.avatarKey,
       viewerVoteType: forumQuestionVote.voteType,
-      relevanceScore: relevanceScore.mapWith(toInteger),
       voteCount: QUESTION_VOTE_COUNT_SQL.mapWith(toInteger),
       trendingScore: trendingScore.mapWith(Number),
       trendingEngagementScore: trendingEngagementScore.mapWith(toInteger),
@@ -490,7 +449,6 @@ function buildQuestionsBaseQuery(
 
 function buildQuestionsCursorFilter(
   sortBy: QuestionSortBy,
-  search: string | undefined,
   isTrending: boolean,
   trendingRankingTimestampSql: SQL,
   cursor?: QuestionsPageCursor,
@@ -527,35 +485,6 @@ function buildQuestionsCursorFilter(
         sql`${trendingScoreSql} = ${cursor.trendingScore}`,
         sql`${engagementScoreSql} = ${cursor.engagementScore}`,
         sql`${lastActivitySql}::timestamptz = ${cursor.lastActivityAt}::timestamptz`,
-        eq(forumQuestion.createdAt, cursor.createdAt),
-        lt(forumQuestion.id, cursor.id),
-      ),
-    );
-  }
-
-  if (sortBy === "mostRelevant" && cursor.sortBy === "mostRelevant") {
-    const relevanceSql = buildQuestionRelevanceSql(search);
-    return or(
-      sql`${relevanceSql} < ${cursor.relevance}`,
-      and(
-        sql`${relevanceSql} = ${cursor.relevance}`,
-        sql`${QUESTION_SCORE_SQL} < ${cursor.score}`,
-      ),
-      and(
-        sql`${relevanceSql} = ${cursor.relevance}`,
-        sql`${QUESTION_SCORE_SQL} = ${cursor.score}`,
-        lt(forumQuestion.answerCount, cursor.answerCount),
-      ),
-      and(
-        sql`${relevanceSql} = ${cursor.relevance}`,
-        sql`${QUESTION_SCORE_SQL} = ${cursor.score}`,
-        eq(forumQuestion.answerCount, cursor.answerCount),
-        lt(forumQuestion.createdAt, cursor.createdAt),
-      ),
-      and(
-        sql`${relevanceSql} = ${cursor.relevance}`,
-        sql`${QUESTION_SCORE_SQL} = ${cursor.score}`,
-        eq(forumQuestion.answerCount, cursor.answerCount),
         eq(forumQuestion.createdAt, cursor.createdAt),
         lt(forumQuestion.id, cursor.id),
       ),
@@ -616,10 +545,8 @@ function buildQuestionsCursorFilter(
 }
 
 function buildPublicQuestionsBaseQuery(
-  search?: string,
   trendingRankingTimestampSql: SQL = sql`statement_timestamp()`,
 ) {
-  const relevanceScore = buildQuestionRelevanceSql(search);
   const trendingScore = buildTrendingScoreSql(trendingRankingTimestampSql);
   const trendingEngagementScore =
     buildTrendingRecentEngagementScoreSql(trendingRankingTimestampSql);
@@ -633,7 +560,6 @@ function buildPublicQuestionsBaseQuery(
       authorFullName: user.name,
       authorAvatarKey: userProfile.avatarKey,
       viewerVoteType: sql<string | null>`null`,
-      relevanceScore: relevanceScore.mapWith(toInteger),
       voteCount: QUESTION_VOTE_COUNT_SQL.mapWith(toInteger),
       trendingScore: trendingScore.mapWith(Number),
       trendingEngagementScore: trendingEngagementScore.mapWith(toInteger),
@@ -710,7 +636,6 @@ function buildQuestionsWhereClause(
 
   const cursorFilter = buildQuestionsCursorFilter(
     sortBy,
-    search,
     isTrending,
     trendingRankingTimestampSql,
     cursor,
@@ -724,7 +649,6 @@ function buildQuestionsWhereClause(
 
 function buildQuestionsOrderBy(
   sortBy: QuestionSortBy,
-  search?: string,
   isTrending = false,
   trendingRankingTimestampSql: SQL = sql`statement_timestamp()`,
 ) {
@@ -739,17 +663,6 @@ function buildQuestionsOrderBy(
       desc(trendingScore),
       desc(engagementScore),
       desc(sql`${lastActivityAt}::timestamptz`),
-      desc(forumQuestion.createdAt),
-      desc(forumQuestion.id),
-    ] as const;
-  }
-
-  if (sortBy === "mostRelevant") {
-    const relevanceSql = buildQuestionRelevanceSql(search);
-    return [
-      desc(relevanceSql),
-      desc(QUESTION_SCORE_SQL),
-      desc(forumQuestion.answerCount),
       desc(forumQuestion.createdAt),
       desc(forumQuestion.id),
     ] as const;
@@ -878,7 +791,6 @@ export async function findQuestionById(
     authorFullName: rows[0].authorFullName,
     authorAvatarKey: rows[0].authorAvatarKey,
     viewerVoteType: rows[0].viewerVoteType,
-    relevanceScore: 0,
     voteCount: toInteger(
       rows[0].question.upvoteCount + rows[0].question.downvoteCount,
     ),
@@ -940,7 +852,6 @@ export async function findQuestionByIdPublic(
     authorDisplayName: rows[0].authorDisplayName,
     authorFullName: rows[0].authorFullName,
     authorAvatarKey: rows[0].authorAvatarKey,
-    relevanceScore: 0,
     voteCount: toInteger(
       rows[0].question.upvoteCount + rows[0].question.downvoteCount,
     ),
@@ -990,14 +901,12 @@ export async function findQuestions(
   );
   const baseQuery = buildQuestionsBaseQuery(
     viewerId,
-    search,
     trendingRankingTimestampSql,
   )
     .where(whereClause)
     .orderBy(
       ...buildQuestionsOrderBy(
         sortBy,
-        search,
         isTrending,
         trendingRankingTimestampSql,
       ),
@@ -1062,14 +971,12 @@ export async function findQuestionsPublic({
     cursor,
   );
   const baseQuery = buildPublicQuestionsBaseQuery(
-    search,
     trendingRankingTimestampSql,
   )
     .where(whereClause)
     .orderBy(
       ...buildQuestionsOrderBy(
         sortBy,
-        search,
         isTrending,
         trendingRankingTimestampSql,
       ),

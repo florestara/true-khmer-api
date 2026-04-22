@@ -12,7 +12,6 @@ const MAX_QUESTIONS_PAGE_SIZE = 50;
 const DEFAULT_QUESTIONS_PAGE_SIZE = 10;
 const questionSortBySchema = z
   .enum([
-    "mostRelevant",
     "newest",
     "oldest",
     "mostVoted",
@@ -20,7 +19,7 @@ const questionSortBySchema = z
   ])
   .openapi({
     description:
-      "Question ordering. Allowed values: mostRelevant, newest, oldest, mostVoted, mostAnswered.",
+      "Question ordering. Allowed values: newest, oldest, mostVoted, mostAnswered.",
     example: "newest",
   });
 export type QuestionSortBy = z.infer<typeof questionSortBySchema>;
@@ -219,15 +218,6 @@ const trendingQuestionsPageCursorSchema = z.object({
   id: z.string().trim().regex(FORUM_UUID_RE, "cursor.id must be a valid UUID"),
 });
 
-const mostRelevantQuestionsPageCursorSchema = z.object({
-  sortBy: z.literal("mostRelevant"),
-  relevance: z.number().int(),
-  score: z.number().int(),
-  answerCount: z.number().int().nonnegative(),
-  createdAt: cursorCreatedAtSchema,
-  id: z.string().trim().regex(FORUM_UUID_RE, "cursor.id must be a valid UUID"),
-});
-
 const mostVotedQuestionsPageCursorSchema = z.object({
   sortBy: z.literal("mostVoted"),
   voteCount: z.number().int().nonnegative(),
@@ -244,7 +234,6 @@ const mostAnsweredQuestionsPageCursorSchema = z.object({
 
 const questionsPageCursorSchema = z.discriminatedUnion("sortBy", [
   trendingQuestionsPageCursorSchema,
-  mostRelevantQuestionsPageCursorSchema,
   newestQuestionsPageCursorSchema,
   oldestQuestionsPageCursorSchema,
   mostVotedQuestionsPageCursorSchema,
@@ -289,15 +278,6 @@ export function encodeQuestionsPageCursor(cursor: QuestionsPageCursor): string {
             engagementScore: cursor.engagementScore,
             rankingTimestamp: normalizedRankingTimestamp,
             lastActivityAt: normalizedLastActivityAt,
-            createdAt: normalizedTimestamp,
-            id: cursor.id,
-          }
-        : cursor.sortBy === "mostRelevant"
-        ? {
-            sortBy: cursor.sortBy,
-            relevance: cursor.relevance,
-            score: cursor.score,
-            answerCount: cursor.answerCount,
             createdAt: normalizedTimestamp,
             id: cursor.id,
           }
