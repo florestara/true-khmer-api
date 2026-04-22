@@ -12,6 +12,7 @@ import {
   findQuestionById,
   findQuestionByIdPublic,
   findQuestionRowById,
+  findQuestionsByAuthorId,
   findQuestions,
   findQuestionsPublic,
   getTrendingTags,
@@ -89,6 +90,21 @@ export async function handleGetQuestion(
     return c.json({ ok: true, question }, 200);
   } catch (err) {
     console.error("Failed to get question", err);
+    return c.json({ ok: false, error: "Internal server error" }, 500);
+  }
+}
+
+export async function handleGetMyQuestions(c: Context) {
+  const authResult = getAuthUserId(c);
+  if (!authResult.ok) {
+    return authResult.response;
+  }
+
+  try {
+    const questions = await findQuestionsByAuthorId(authResult.userId);
+    return c.json({ ok: true, questions }, 200);
+  } catch (err) {
+    console.error("Failed to get my questions", err);
     return c.json({ ok: false, error: "Internal server error" }, 500);
   }
 }
