@@ -1,3 +1,4 @@
+import { and, eq } from "drizzle-orm";
 import { db } from "../../../db";
 import { forumReporting } from "../../../db/schema";
 import { CreateReportingInput } from "./reporting.schema";
@@ -10,9 +11,31 @@ type CreateReportingResult = {
 
 export async function createReporting(
   data: CreateReportingInput,
-  userId?: string,
+  userId: string,
 ): Promise<CreateReportingResult> {
   return await db.transaction(async (tx) => {
+    if (data.questionId || data.answerId) {
+      const conditions = [eq(forumReporting.createdBy, userId)];
+
+      if (data.questionId) {
+        conditions.push(eq(forumReporting.questionId, data.questionId));
+      }
+      if (data.answerId) {
+        conditions.push(eq(forumReporting.answerId, data.answerId));
+      }
+
+      const [existing] = await tx
+        .select({ id: forumReporting.id })
+        .from(forumReporting)
+        .where(and(...conditions))
+        .limit(1);
+
+      if (existing) {
+        const target = data.answerId ? "answer" : "question";
+        return { ok: false, error: `This ${target} has already been reported` };
+      }
+    }
+
     const fieldToInsert: CreateReportingInput & {
       createdBy: string | undefined;
     } = {

@@ -102,8 +102,12 @@ export const pointTransactions = pgTable(
     referenceId: uuid("reference_id"),
     pool: pointTransactionsPool("pool").notNull().default("active"),
     mode: pointTransactionsMode("mode").notNull().default("action"),
-    createdAt: timestamp("created_at").notNull().defaultNow(),
-    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" })
+      .notNull()
+      .defaultNow(),
   },
   (table) => [
     index("point_transactions_user_id_idx").using("btree", table.userId),
