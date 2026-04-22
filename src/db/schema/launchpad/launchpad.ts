@@ -18,11 +18,9 @@ export const launchpad = pgTable(
   "launchpad",
   {
     id: uuid("id").defaultRandom().primaryKey().notNull(),
-    categoryId: uuid("category_id")
-      .notNull()
-      .references(() => launchpadCategory.id, {
-        onDelete: "set null",
-      }),
+    categoryId: uuid("category_id").references(() => launchpadCategory.id, {
+      onDelete: "set null",
+    }),
     name: varchar("name", { length: 120 }).notNull(),
     description: text("description"),
     cityId: uuid("city_id").references(() => city.id, {

@@ -19,7 +19,7 @@ export const presignLaunchpadLogoUploadResultSchema = z
 export const presignLaunchpadLogoUploadResponseSchema = z
   .object({
     ok: z.literal(true),
-    uploads: z.array(presignLaunchpadLogoUploadResultSchema),
+    upload: presignLaunchpadLogoUploadResultSchema,
   })
   .openapi("PresignLaunchpadLogoUploadResponse");
 
@@ -37,7 +37,7 @@ export const presignLaunchpadCoverUploadResultSchema = z
 export const presignLaunchpadCoverUploadResponseSchema = z
   .object({
     ok: z.literal(true),
-    uploads: z.array(presignLaunchpadCoverUploadResultSchema),
+    upload: presignLaunchpadCoverUploadResultSchema,
   })
   .openapi("PresignLaunchpadCoverUploadResponse");
 
@@ -55,7 +55,7 @@ export const presignLaunchpadDocumentUploadResultSchema = z
 export const presignLaunchpadDocumentUploadResponseSchema = z
   .object({
     ok: z.literal(true),
-    uploads: z.array(presignLaunchpadDocumentUploadResultSchema),
+    upload: presignLaunchpadDocumentUploadResultSchema,
   })
   .openapi("PresignLaunchpadDocumentUploadResponse");
 

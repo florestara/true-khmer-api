@@ -94,7 +94,7 @@ export async function handlePresignLaunchpadDocumentUpload(
       200,
     );
   } catch (error) {
-    console.error("Failed to generate launchpad cover upload URL", error);
+    console.error("Failed to generate launchpad document upload URL", error);
     return c.json({ ok: false, error: "Failed to generate upload URL" }, 500);
   }
 }
