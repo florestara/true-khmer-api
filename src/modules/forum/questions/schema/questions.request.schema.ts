@@ -10,12 +10,19 @@ const MAX_TAG_LENGTH = 30;
 const MAX_BODY_LENGTH = 10000;
 const MAX_QUESTIONS_PAGE_SIZE = 50;
 const DEFAULT_QUESTIONS_PAGE_SIZE = 10;
-const questionSortBySchema = z.enum([
-  "recent",
-  "topRated",
-  "unanswered",
-  "myActivity",
-]);
+const questionSortBySchema = z
+  .enum([
+    "mostRelevant",
+    "newest",
+    "oldest",
+    "mostVoted",
+    "mostAnswered",
+  ])
+  .openapi({
+    description:
+      "Question ordering. Allowed values: mostRelevant, newest, oldest, mostVoted, mostAnswered.",
+    example: "newest",
+  });
 export type QuestionSortBy = z.infer<typeof questionSortBySchema>;
 
 function normalizeTagText(value: string) {
@@ -168,24 +175,8 @@ const cursorCreatedAtSchema = z
     return normalized;
   });
 
-const cursorActivityAtSchema = z
-  .string()
-  .trim()
-  .transform((value, ctx) => {
-    const normalized = normalizeQuestionsCursorTimestamp(value);
-    if (!normalized) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "cursor.activityAt must be a valid ISO datetime",
-      });
-      return z.NEVER;
-    }
-
-    return normalized;
-  });
-
 function buildChronologicalQuestionsPageCursorSchema<
-  TSortBy extends "recent" | "unanswered",
+  TSortBy extends "newest" | "oldest",
 >(sortBy: TSortBy) {
   return z.object({
     sortBy: z.literal(sortBy),
@@ -197,69 +188,281 @@ function buildChronologicalQuestionsPageCursorSchema<
   });
 }
 
-const recentQuestionsPageCursorSchema =
-  buildChronologicalQuestionsPageCursorSchema("recent");
-const unansweredQuestionsPageCursorSchema =
-  buildChronologicalQuestionsPageCursorSchema("unanswered");
+const newestQuestionsPageCursorSchema =
+  buildChronologicalQuestionsPageCursorSchema("newest");
+const oldestQuestionsPageCursorSchema =
+  buildChronologicalQuestionsPageCursorSchema("oldest");
 
-const myActivityQuestionsPageCursorSchema = z.object({
-  sortBy: z.literal("myActivity"),
-  activityAt: cursorActivityAtSchema,
+const cursorLastActivityAtSchema = z
+  .string()
+  .trim()
+  .transform((value, ctx) => {
+    const normalized = normalizeQuestionsCursorTimestamp(value);
+    if (!normalized) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "cursor.lastActivityAt must be a valid ISO datetime",
+      });
+      return z.NEVER;
+    }
+
+    return normalized;
+  });
+
+const trendingQuestionsPageCursorSchema = z.object({
+  sortBy: z.literal("trending"),
+  trendingScore: z.number(),
+  engagementScore: z.number().int().nonnegative(),
+  lastActivityAt: cursorLastActivityAtSchema,
+  createdAt: cursorCreatedAtSchema,
   id: z.string().trim().regex(FORUM_UUID_RE, "cursor.id must be a valid UUID"),
 });
 
-const topRatedQuestionsPageCursorSchema = z.object({
-  sortBy: z.literal("topRated"),
+const mostRelevantQuestionsPageCursorSchema = z.object({
+  sortBy: z.literal("mostRelevant"),
+  relevance: z.number().int(),
   score: z.number().int(),
+  answerCount: z.number().int().nonnegative(),
+  createdAt: cursorCreatedAtSchema,
+  id: z.string().trim().regex(FORUM_UUID_RE, "cursor.id must be a valid UUID"),
+});
+
+const mostVotedQuestionsPageCursorSchema = z.object({
+  sortBy: z.literal("mostVoted"),
+  voteCount: z.number().int().nonnegative(),
+  createdAt: cursorCreatedAtSchema,
+  id: z.string().trim().regex(FORUM_UUID_RE, "cursor.id must be a valid UUID"),
+});
+
+const mostAnsweredQuestionsPageCursorSchema = z.object({
+  sortBy: z.literal("mostAnswered"),
+  answerCount: z.number().int().nonnegative(),
   createdAt: cursorCreatedAtSchema,
   id: z.string().trim().regex(FORUM_UUID_RE, "cursor.id must be a valid UUID"),
 });
 
 const questionsPageCursorSchema = z.discriminatedUnion("sortBy", [
-  recentQuestionsPageCursorSchema,
-  unansweredQuestionsPageCursorSchema,
-  myActivityQuestionsPageCursorSchema,
-  topRatedQuestionsPageCursorSchema,
+  trendingQuestionsPageCursorSchema,
+  mostRelevantQuestionsPageCursorSchema,
+  newestQuestionsPageCursorSchema,
+  oldestQuestionsPageCursorSchema,
+  mostVotedQuestionsPageCursorSchema,
+  mostAnsweredQuestionsPageCursorSchema,
 ]);
 
 export type QuestionsPageCursor = z.infer<typeof questionsPageCursorSchema>;
 
 export function encodeQuestionsPageCursor(cursor: QuestionsPageCursor): string {
-  const rawTimestamp =
-    cursor.sortBy === "myActivity" ? cursor.activityAt : cursor.createdAt;
-  const normalizedTimestamp = normalizeQuestionsCursorTimestamp(rawTimestamp);
+  const normalizedTimestamp = normalizeQuestionsCursorTimestamp(cursor.createdAt);
   if (!normalizedTimestamp) {
+    throw new Error("Cannot encode question page cursor with invalid createdAt");
+  }
+
+  const normalizedLastActivityAt =
+    cursor.sortBy === "trending"
+      ? normalizeQuestionsCursorTimestamp(cursor.lastActivityAt)
+      : null;
+
+  if (cursor.sortBy === "trending" && !normalizedLastActivityAt) {
     throw new Error(
-      `Cannot encode question page cursor with invalid ${
-        cursor.sortBy === "myActivity" ? "activityAt" : "createdAt"
-      }`,
+      "Cannot encode question page cursor with invalid lastActivityAt",
     );
   }
 
   return Buffer.from(
     JSON.stringify(
-      cursor.sortBy === "topRated"
+      cursor.sortBy === "trending"
         ? {
             sortBy: cursor.sortBy,
-            score: cursor.score,
+            trendingScore: cursor.trendingScore,
+            engagementScore: cursor.engagementScore,
+            lastActivityAt: normalizedLastActivityAt,
             createdAt: normalizedTimestamp,
             id: cursor.id,
           }
-        : cursor.sortBy === "myActivity"
+        : cursor.sortBy === "mostRelevant"
+        ? {
+            sortBy: cursor.sortBy,
+            relevance: cursor.relevance,
+            score: cursor.score,
+            answerCount: cursor.answerCount,
+            createdAt: normalizedTimestamp,
+            id: cursor.id,
+          }
+        : cursor.sortBy === "mostVoted"
           ? {
               sortBy: cursor.sortBy,
-              activityAt: normalizedTimestamp,
-              id: cursor.id,
-            }
-          : {
-              sortBy: cursor.sortBy,
+              voteCount: cursor.voteCount,
               createdAt: normalizedTimestamp,
               id: cursor.id,
-            },
+            }
+          : cursor.sortBy === "mostAnswered"
+            ? {
+                sortBy: cursor.sortBy,
+                answerCount: cursor.answerCount,
+                createdAt: normalizedTimestamp,
+                id: cursor.id,
+              }
+            : {
+                sortBy: cursor.sortBy,
+                createdAt: normalizedTimestamp,
+                id: cursor.id,
+              },
     ),
     "utf8",
   ).toString("base64url");
 }
+
+function parseOptionalBooleanQueryParam(
+  value: unknown,
+): boolean | undefined | typeof z.NEVER {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const normalizedValue = value.trim().toLowerCase();
+    if (normalizedValue === "true") {
+      return true;
+    }
+
+    if (normalizedValue === "false") {
+      return false;
+    }
+  }
+
+  return z.NEVER;
+}
+
+const isUnansweredQuerySchema = z
+  .union([z.boolean(), z.string()])
+  .optional()
+  .transform((value, ctx) => {
+    const parsedValue = parseOptionalBooleanQueryParam(value);
+    if (parsedValue !== z.NEVER) {
+      return parsedValue ?? false;
+    }
+
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "isUnanswered must be true or false",
+    });
+
+    return z.NEVER;
+  })
+  .openapi({
+    description:
+      "Filter questions without answers. Use true to return only unanswered questions.",
+    example: true,
+  });
+
+const isTrendingQuerySchema = z
+  .union([z.boolean(), z.string()])
+  .optional()
+  .transform((value, ctx) => {
+    const parsedValue = parseOptionalBooleanQueryParam(value);
+    if (parsedValue !== z.NEVER) {
+      return parsedValue ?? false;
+    }
+
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "isTrending must be true or false",
+    });
+
+    return z.NEVER;
+  })
+  .openapi({
+    description:
+      "Filter and rank questions by recent engagement trend score. When true, trending ranking takes precedence over sortBy.",
+    example: true,
+  });
+
+function resolveQuestionsCursorSortKey(
+  sortBy: QuestionSortBy,
+  isTrending: boolean,
+): QuestionsPageCursor["sortBy"] {
+  return isTrending ? "trending" : sortBy;
+}
+
+export const getQuestionsQuerySchema = z
+  .object({
+    categoryId: z
+      .string()
+      .trim()
+      .regex(FORUM_UUID_RE, "categoryId must be a valid UUID")
+      .optional(),
+    tagId: z
+      .string()
+      .trim()
+      .regex(FORUM_UUID_RE, "tagId must be a valid UUID")
+      .optional(),
+    search: z
+      .string()
+      .trim()
+      .max(300, "search must be <= 300 characters")
+      .optional(),
+    isUnanswered: isUnansweredQuerySchema,
+    isTrending: isTrendingQuerySchema,
+    limit: z.coerce
+      .number()
+      .int()
+      .min(1, "limit must be between 1 and 50")
+      .max(MAX_QUESTIONS_PAGE_SIZE, "limit must be between 1 and 50")
+      .default(DEFAULT_QUESTIONS_PAGE_SIZE),
+    sortBy: questionSortBySchema.default("newest"),
+    cursor: z
+      .string()
+      .optional()
+      .openapi({
+        description:
+          "Opaque pagination cursor returned by a previous questions list response.",
+      }),
+  })
+  .superRefine((value, ctx) => {
+    const decodedCursor = value.cursor
+      ? decodeQuestionsPageCursor(value.cursor)
+      : undefined;
+
+    if (value.cursor && !decodedCursor) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "cursor must be a valid pagination cursor",
+        path: ["cursor"],
+      });
+      return;
+    }
+
+    const expectedCursorSortKey = resolveQuestionsCursorSortKey(
+      value.sortBy,
+      value.isTrending,
+    );
+
+    if (decodedCursor && decodedCursor.sortBy !== expectedCursorSortKey) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "cursor sort does not match sortBy",
+        path: ["cursor"],
+      });
+    }
+  })
+  .transform((value) => ({
+    categoryId: value.categoryId,
+    tagId: value.tagId,
+    search: value.search,
+    isUnanswered: value.isUnanswered,
+    isTrending: value.isTrending,
+    limit: value.limit,
+    sortBy: value.sortBy,
+    cursor: value.cursor
+      ? (decodeQuestionsPageCursor(value.cursor) as QuestionsPageCursor)
+      : undefined,
+  }))
+  .openapi("GetQuestionsQuery");
 
 function decodeQuestionsPageCursor(raw: string): QuestionsPageCursor | null {
   try {
@@ -289,74 +492,6 @@ function normalizeQuestionsCursorTimestamp(value: string): string | null {
 
   return parsed.toISOString();
 }
-
-export const getQuestionsQuerySchema = z
-  .object({
-    categoryId: z
-      .string()
-      .trim()
-      .regex(FORUM_UUID_RE, "categoryId must be a valid UUID")
-      .optional(),
-    tagId: z
-      .string()
-      .trim()
-      .regex(FORUM_UUID_RE, "tagId must be a valid UUID")
-      .optional(),
-    title: z
-      .string()
-      .trim()
-      .max(300, "title is required and must be 1..300 characters")
-      .optional(),
-    limit: z.coerce
-      .number()
-      .int()
-      .min(1, "limit must be between 1 and 50")
-      .max(MAX_QUESTIONS_PAGE_SIZE, "limit must be between 1 and 50")
-      .default(DEFAULT_QUESTIONS_PAGE_SIZE),
-    sortBy: z
-      .string()
-      .trim()
-      .optional()
-      .transform((value) => value ?? "recent")
-      .pipe(questionSortBySchema),
-    cursor: z
-      .string()
-      .optional()
-      .transform((value, ctx) => {
-        if (value === undefined) {
-          return undefined;
-        }
-
-        const cursor = decodeQuestionsPageCursor(value);
-        if (!cursor) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: "cursor must be a valid pagination cursor",
-          });
-          return z.NEVER;
-        }
-
-        return cursor;
-      }),
-  })
-  .superRefine((value, ctx) => {
-    if (value.cursor && value.cursor.sortBy !== value.sortBy) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "cursor sort does not match sortBy",
-        path: ["cursor"],
-      });
-    }
-  })
-  .transform((value) => ({
-    categoryId: value.categoryId,
-    tagId: value.tagId,
-    title: value.title,
-    limit: value.limit,
-    sortBy: value.sortBy,
-    cursor: value.cursor,
-  }))
-  .openapi("GetQuestionsQuery");
 
 export type GetQuestionsQuery = z.infer<typeof getQuestionsQuerySchema>;
 

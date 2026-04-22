@@ -25,6 +25,12 @@ const envSchema = z.object({
     .int()
     .positive()
     .default(10),
+  FORUM_TRENDING_WINDOW_HOURS: z.coerce.number().int().positive().default(48),
+  FORUM_MIN_TRENDING_ENGAGEMENT_SCORE: z.coerce
+    .number()
+    .int()
+    .nonnegative()
+    .default(1),
   DEFAULT_BASE_URL: z.preprocess(
     emptyStringToUndefined,
     z.string().url().optional(),
