@@ -29,7 +29,7 @@ const envSchema = z.object({
   FORUM_MIN_TRENDING_ENGAGEMENT_SCORE: z.coerce
     .number()
     .int()
-    .nonnegative()
+    .min(1)
     .default(1),
   DEFAULT_BASE_URL: z.preprocess(
     emptyStringToUndefined,

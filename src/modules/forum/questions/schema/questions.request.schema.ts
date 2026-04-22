@@ -213,6 +213,7 @@ const trendingQuestionsPageCursorSchema = z.object({
   sortBy: z.literal("trending"),
   trendingScore: z.number(),
   engagementScore: z.number().int().nonnegative(),
+  rankingTimestamp: cursorCreatedAtSchema,
   lastActivityAt: cursorLastActivityAtSchema,
   createdAt: cursorCreatedAtSchema,
   id: z.string().trim().regex(FORUM_UUID_RE, "cursor.id must be a valid UUID"),
@@ -262,10 +263,20 @@ export function encodeQuestionsPageCursor(cursor: QuestionsPageCursor): string {
     cursor.sortBy === "trending"
       ? normalizeQuestionsCursorTimestamp(cursor.lastActivityAt)
       : null;
+  const normalizedRankingTimestamp =
+    cursor.sortBy === "trending"
+      ? normalizeQuestionsCursorTimestamp(cursor.rankingTimestamp)
+      : null;
 
   if (cursor.sortBy === "trending" && !normalizedLastActivityAt) {
     throw new Error(
       "Cannot encode question page cursor with invalid lastActivityAt",
+    );
+  }
+
+  if (cursor.sortBy === "trending" && !normalizedRankingTimestamp) {
+    throw new Error(
+      "Cannot encode question page cursor with invalid rankingTimestamp",
     );
   }
 
@@ -276,6 +287,7 @@ export function encodeQuestionsPageCursor(cursor: QuestionsPageCursor): string {
             sortBy: cursor.sortBy,
             trendingScore: cursor.trendingScore,
             engagementScore: cursor.engagementScore,
+            rankingTimestamp: normalizedRankingTimestamp,
             lastActivityAt: normalizedLastActivityAt,
             createdAt: normalizedTimestamp,
             id: cursor.id,

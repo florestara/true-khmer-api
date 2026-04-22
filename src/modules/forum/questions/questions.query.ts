@@ -59,6 +59,7 @@ type BaseQuestionHydrationRow = {
   voteCount: number;
   trendingScore: number;
   trendingEngagementScore: number;
+  trendingRankingTimestamp: string | null;
   trendingLastActivityAt: string | null;
 };
 type QuestionListRow = BaseQuestionHydrationRow;
@@ -132,6 +133,10 @@ const forumAnswerAuthorProfileSearch = aliasedTable(
 
 function normalizeTagName(value: string): string {
   return value.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function escapeLikePattern(value: string): string {
+  return value.replace(/[\\%_]/g, "\\$&");
 }
 
 function normalizeQuestionTags(tags: string[]): NormalizedQuestionTag[] {
@@ -212,7 +217,7 @@ function buildQuestionRelevanceSql(search?: string) {
     return sql<number>`0`;
   }
 
-  const searchPattern = `%${search}%`;
+  const searchPattern = `%${escapeLikePattern(search)}%`;
   const tagMatchExists = buildQuestionTagSearchExists(searchPattern);
   const answerMatchExists = buildQuestionAnswerSearchExists(searchPattern);
 
@@ -233,27 +238,35 @@ function buildQuestionRelevanceSql(search?: string) {
   )`;
 }
 
-function buildTrendingRecentUpvotesSql() {
+function buildTrendingRankingTimestampSql(cursor?: QuestionsPageCursor): SQL {
+  if (cursor?.sortBy === "trending") {
+    return sql`${cursor.rankingTimestamp}::timestamptz`;
+  }
+
+  return sql`statement_timestamp()`;
+}
+
+function buildTrendingRecentUpvotesSql(rankingTimestampSql: SQL) {
   return sql<number>`(
     select count(*)::int
     from ${forumQuestionVote}
     where ${forumQuestionVote.questionId} = ${forumQuestion.id}
       and ${forumQuestionVote.voteType} = 'UPVOTE'
-      and ${forumQuestionVote.createdAt} >= now() - ${TRENDING_WINDOW_SQL}
+      and ${forumQuestionVote.createdAt} >= ${rankingTimestampSql} - ${TRENDING_WINDOW_SQL}
   )`;
 }
 
-function buildTrendingRecentAnswersSql() {
+function buildTrendingRecentAnswersSql(rankingTimestampSql: SQL) {
   return sql<number>`(
     select count(*)::int
     from ${forumAnswer}
     where ${forumAnswer.questionId} = ${forumQuestion.id}
       and ${forumAnswer.status} = 'PUBLISHED'
-      and ${forumAnswer.createdAt} >= now() - ${TRENDING_WINDOW_SQL}
+      and ${forumAnswer.createdAt} >= ${rankingTimestampSql} - ${TRENDING_WINDOW_SQL}
   )`;
 }
 
-function buildTrendingRecentUniqueParticipantsSql() {
+function buildTrendingRecentUniqueParticipantsSql(rankingTimestampSql: SQL) {
   return sql<number>`(
     select count(distinct participant_user_id)::int
     from (
@@ -261,21 +274,22 @@ function buildTrendingRecentUniqueParticipantsSql() {
       from ${forumAnswer}
       where ${forumAnswer.questionId} = ${forumQuestion.id}
         and ${forumAnswer.status} = 'PUBLISHED'
-        and ${forumAnswer.createdAt} >= now() - ${TRENDING_WINDOW_SQL}
+        and ${forumAnswer.createdAt} >= ${rankingTimestampSql} - ${TRENDING_WINDOW_SQL}
       union all
       select ${forumQuestionVote.voterId} as participant_user_id
       from ${forumQuestionVote}
       where ${forumQuestionVote.questionId} = ${forumQuestion.id}
         and ${forumQuestionVote.voteType} = 'UPVOTE'
-        and ${forumQuestionVote.createdAt} >= now() - ${TRENDING_WINDOW_SQL}
+        and ${forumQuestionVote.createdAt} >= ${rankingTimestampSql} - ${TRENDING_WINDOW_SQL}
     ) trending_participants
   )`;
 }
 
-function buildTrendingRecentEngagementScoreSql() {
-  const recentUpvotesSql = buildTrendingRecentUpvotesSql();
-  const recentAnswersSql = buildTrendingRecentAnswersSql();
-  const uniqueParticipantsSql = buildTrendingRecentUniqueParticipantsSql();
+function buildTrendingRecentEngagementScoreSql(rankingTimestampSql: SQL) {
+  const recentUpvotesSql = buildTrendingRecentUpvotesSql(rankingTimestampSql);
+  const recentAnswersSql = buildTrendingRecentAnswersSql(rankingTimestampSql);
+  const uniqueParticipantsSql =
+    buildTrendingRecentUniqueParticipantsSql(rankingTimestampSql);
 
   return sql<number>`(
     (${recentUpvotesSql} * ${TRENDING_UPVOTE_WEIGHT}) +
@@ -284,7 +298,7 @@ function buildTrendingRecentEngagementScoreSql() {
   )`;
 }
 
-function buildTrendingLastActivitySql() {
+function buildTrendingLastActivitySql(rankingTimestampSql: SQL) {
   return sql<string | null>`greatest(
     coalesce(
       (
@@ -292,7 +306,7 @@ function buildTrendingLastActivitySql() {
         from ${forumAnswer}
         where ${forumAnswer.questionId} = ${forumQuestion.id}
           and ${forumAnswer.status} = 'PUBLISHED'
-          and ${forumAnswer.createdAt} >= now() - ${TRENDING_WINDOW_SQL}
+          and ${forumAnswer.createdAt} >= ${rankingTimestampSql} - ${TRENDING_WINDOW_SQL}
       ),
       '-infinity'::timestamptz
     ),
@@ -302,16 +316,17 @@ function buildTrendingLastActivitySql() {
         from ${forumQuestionVote}
         where ${forumQuestionVote.questionId} = ${forumQuestion.id}
           and ${forumQuestionVote.voteType} = 'UPVOTE'
-          and ${forumQuestionVote.createdAt} >= now() - ${TRENDING_WINDOW_SQL}
+          and ${forumQuestionVote.createdAt} >= ${rankingTimestampSql} - ${TRENDING_WINDOW_SQL}
       ),
       '-infinity'::timestamptz
     )
   )::text`;
 }
 
-function buildTrendingScoreSql() {
-  const engagementScoreSql = buildTrendingRecentEngagementScoreSql();
-  const lastActivitySql = buildTrendingLastActivitySql();
+function buildTrendingScoreSql(rankingTimestampSql: SQL) {
+  const engagementScoreSql =
+    buildTrendingRecentEngagementScoreSql(rankingTimestampSql);
+  const lastActivitySql = buildTrendingLastActivitySql(rankingTimestampSql);
 
   return sql<number>`case
     when ${engagementScoreSql} <= 0
@@ -321,7 +336,7 @@ function buildTrendingScoreSql() {
       ${engagementScoreSql}::double precision /
       power(
         (
-          extract(epoch from (now() - (${lastActivitySql})::timestamptz)) /
+          extract(epoch from (${rankingTimestampSql} - (${lastActivitySql})::timestamptz)) /
           3600.0
         ) + ${TRENDING_DECAY_OFFSET_HOURS},
         ${TRENDING_DECAY_EXPONENT}
@@ -336,7 +351,11 @@ function buildNextQuestionsCursor(
   isTrending = false,
 ): string {
   if (isTrending) {
-    if (!row.trendingLastActivityAt || row.trendingLastActivityAt === "-infinity") {
+    if (
+      !row.trendingRankingTimestamp ||
+      !row.trendingLastActivityAt ||
+      row.trendingLastActivityAt === "-infinity"
+    ) {
       throw new Error("Cannot build trending cursor without last activity");
     }
 
@@ -344,6 +363,7 @@ function buildNextQuestionsCursor(
       sortBy: "trending",
       trendingScore: row.trendingScore,
       engagementScore: row.trendingEngagementScore,
+      rankingTimestamp: row.trendingRankingTimestamp,
       lastActivityAt: row.trendingLastActivityAt,
       createdAt: row.question.createdAt,
       id: row.question.id,
@@ -429,11 +449,17 @@ function hydratePublicQuestion(
   );
 }
 
-function buildQuestionsBaseQuery(viewerId: string, search?: string) {
+function buildQuestionsBaseQuery(
+  viewerId: string,
+  search?: string,
+  trendingRankingTimestampSql: SQL = sql`statement_timestamp()`,
+) {
   const relevanceScore = buildQuestionRelevanceSql(search);
-  const trendingScore = buildTrendingScoreSql();
-  const trendingEngagementScore = buildTrendingRecentEngagementScoreSql();
-  const trendingLastActivityAt = buildTrendingLastActivitySql();
+  const trendingScore = buildTrendingScoreSql(trendingRankingTimestampSql);
+  const trendingEngagementScore =
+    buildTrendingRecentEngagementScoreSql(trendingRankingTimestampSql);
+  const trendingLastActivityAt =
+    buildTrendingLastActivitySql(trendingRankingTimestampSql);
   return db
     .select({
       question: forumQuestion,
@@ -446,6 +472,7 @@ function buildQuestionsBaseQuery(viewerId: string, search?: string) {
       voteCount: QUESTION_VOTE_COUNT_SQL.mapWith(toInteger),
       trendingScore: trendingScore.mapWith(Number),
       trendingEngagementScore: trendingEngagementScore.mapWith(toInteger),
+      trendingRankingTimestamp: sql<string>`${trendingRankingTimestampSql}::text`.mapWith(String),
       trendingLastActivityAt: trendingLastActivityAt.mapWith(String),
     })
     .from(forumQuestion)
@@ -465,6 +492,7 @@ function buildQuestionsCursorFilter(
   sortBy: QuestionSortBy,
   search: string | undefined,
   isTrending: boolean,
+  trendingRankingTimestampSql: SQL,
   cursor?: QuestionsPageCursor,
 ): SQL<unknown> | undefined {
   if (!cursor) {
@@ -472,9 +500,11 @@ function buildQuestionsCursorFilter(
   }
 
   if (isTrending && cursor.sortBy === "trending") {
-    const trendingScoreSql = buildTrendingScoreSql();
-    const engagementScoreSql = buildTrendingRecentEngagementScoreSql();
-    const lastActivitySql = buildTrendingLastActivitySql();
+    const trendingScoreSql = buildTrendingScoreSql(trendingRankingTimestampSql);
+    const engagementScoreSql =
+      buildTrendingRecentEngagementScoreSql(trendingRankingTimestampSql);
+    const lastActivitySql =
+      buildTrendingLastActivitySql(trendingRankingTimestampSql);
 
     return or(
       sql`${trendingScoreSql} < ${cursor.trendingScore}`,
@@ -585,11 +615,16 @@ function buildQuestionsCursorFilter(
   return undefined;
 }
 
-function buildPublicQuestionsBaseQuery(search?: string) {
+function buildPublicQuestionsBaseQuery(
+  search?: string,
+  trendingRankingTimestampSql: SQL = sql`statement_timestamp()`,
+) {
   const relevanceScore = buildQuestionRelevanceSql(search);
-  const trendingScore = buildTrendingScoreSql();
-  const trendingEngagementScore = buildTrendingRecentEngagementScoreSql();
-  const trendingLastActivityAt = buildTrendingLastActivitySql();
+  const trendingScore = buildTrendingScoreSql(trendingRankingTimestampSql);
+  const trendingEngagementScore =
+    buildTrendingRecentEngagementScoreSql(trendingRankingTimestampSql);
+  const trendingLastActivityAt =
+    buildTrendingLastActivitySql(trendingRankingTimestampSql);
   return db
     .select({
       question: forumQuestion,
@@ -602,6 +637,7 @@ function buildPublicQuestionsBaseQuery(search?: string) {
       voteCount: QUESTION_VOTE_COUNT_SQL.mapWith(toInteger),
       trendingScore: trendingScore.mapWith(Number),
       trendingEngagementScore: trendingEngagementScore.mapWith(toInteger),
+      trendingRankingTimestamp: sql<string>`${trendingRankingTimestampSql}::text`.mapWith(String),
       trendingLastActivityAt: trendingLastActivityAt.mapWith(String),
     })
     .from(forumQuestion)
@@ -616,6 +652,7 @@ function buildQuestionsWhereClause(
   search?: string,
   isUnanswered = false,
   isTrending = false,
+  trendingRankingTimestampSql: SQL = sql`statement_timestamp()`,
   sortBy: QuestionSortBy = "newest",
   cursor?: QuestionsPageCursor,
 ) {
@@ -637,7 +674,7 @@ function buildQuestionsWhereClause(
   }
 
   if (search) {
-    const searchPattern = `%${search}%`;
+    const searchPattern = `%${escapeLikePattern(search)}%`;
     const tagMatchExists = buildQuestionTagSearchExists(searchPattern);
     const answerMatchExists = buildQuestionAnswerSearchExists(searchPattern);
     const searchFilter = or(
@@ -667,7 +704,7 @@ function buildQuestionsWhereClause(
 
   if (isTrending) {
     filters.push(
-      sql`${buildTrendingRecentEngagementScoreSql()} >= ${MIN_TRENDING_ENGAGEMENT_SCORE}`,
+      sql`${buildTrendingRecentEngagementScoreSql(trendingRankingTimestampSql)} >= ${MIN_TRENDING_ENGAGEMENT_SCORE}`,
     );
   }
 
@@ -675,6 +712,7 @@ function buildQuestionsWhereClause(
     sortBy,
     search,
     isTrending,
+    trendingRankingTimestampSql,
     cursor,
   );
   if (cursorFilter) {
@@ -688,11 +726,14 @@ function buildQuestionsOrderBy(
   sortBy: QuestionSortBy,
   search?: string,
   isTrending = false,
+  trendingRankingTimestampSql: SQL = sql`statement_timestamp()`,
 ) {
   if (isTrending) {
-    const trendingScore = buildTrendingScoreSql();
-    const engagementScore = buildTrendingRecentEngagementScoreSql();
-    const lastActivityAt = buildTrendingLastActivitySql();
+    const trendingScore = buildTrendingScoreSql(trendingRankingTimestampSql);
+    const engagementScore =
+      buildTrendingRecentEngagementScoreSql(trendingRankingTimestampSql);
+    const lastActivityAt =
+      buildTrendingLastActivitySql(trendingRankingTimestampSql);
 
     return [
       desc(trendingScore),
@@ -843,6 +884,7 @@ export async function findQuestionById(
     ),
     trendingScore: 0,
     trendingEngagementScore: 0,
+    trendingRankingTimestamp: null,
     trendingLastActivityAt: null,
   };
   const tags = Array.from(
@@ -904,6 +946,7 @@ export async function findQuestionByIdPublic(
     ),
     trendingScore: 0,
     trendingEngagementScore: 0,
+    trendingRankingTimestamp: null,
     trendingLastActivityAt: null,
   };
   const tags = Array.from(
@@ -933,18 +976,32 @@ export async function findQuestions(
   }: GetQuestionsQuery,
   viewerId: string,
 ): Promise<QuestionsListResult> {
+  const trendingRankingTimestampSql =
+    buildTrendingRankingTimestampSql(cursor);
   const whereClause = buildQuestionsWhereClause(
     categoryId,
     tagId,
     search,
     isUnanswered,
     isTrending,
+    trendingRankingTimestampSql,
     sortBy,
     cursor,
   );
-  const baseQuery = buildQuestionsBaseQuery(viewerId, search)
+  const baseQuery = buildQuestionsBaseQuery(
+    viewerId,
+    search,
+    trendingRankingTimestampSql,
+  )
     .where(whereClause)
-    .orderBy(...buildQuestionsOrderBy(sortBy, search, isTrending));
+    .orderBy(
+      ...buildQuestionsOrderBy(
+        sortBy,
+        search,
+        isTrending,
+        trendingRankingTimestampSql,
+      ),
+    );
 
   const rows = await baseQuery.limit(limit + 1);
   const hasMore = rows.length > limit;
@@ -992,18 +1049,31 @@ export async function findQuestionsPublic({
   sortBy,
   cursor,
 }: GetQuestionsQuery): Promise<QuestionsListResult> {
+  const trendingRankingTimestampSql =
+    buildTrendingRankingTimestampSql(cursor);
   const whereClause = buildQuestionsWhereClause(
     categoryId,
     tagId,
     search,
     isUnanswered,
     isTrending,
+    trendingRankingTimestampSql,
     sortBy,
     cursor,
   );
-  const baseQuery = buildPublicQuestionsBaseQuery(search)
+  const baseQuery = buildPublicQuestionsBaseQuery(
+    search,
+    trendingRankingTimestampSql,
+  )
     .where(whereClause)
-    .orderBy(...buildQuestionsOrderBy(sortBy, search, isTrending));
+    .orderBy(
+      ...buildQuestionsOrderBy(
+        sortBy,
+        search,
+        isTrending,
+        trendingRankingTimestampSql,
+      ),
+    );
 
   const rows = await baseQuery.limit(limit + 1);
   const hasMore = rows.length > limit;
