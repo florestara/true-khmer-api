@@ -6,3 +6,5 @@ export * from "./volunteer/volunteer-categories";
 export * from "./volunteer/volunteer-opportunities";
 export * from "./point_system/point-systems";
 export * from "./launchpad/categories/categories";
+export * from "./launchpad/roles/roles";
+export * from "./launchpad/launchpad";
