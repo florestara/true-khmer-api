@@ -4,6 +4,9 @@ import { getAuthUserId } from "../auth/utils/get-auth";
 import type { PresignAvatarUploadPayload } from "./uploads.schema";
 import type {
   PresignAvatarUploadResponse,
+  PresignLaunchpadCoverUploadResponse,
+  PresignLaunchpadDocumentUploadResponse,
+  PresignLaunchpadLogoUploadResponse,
   PresignVolunteerApplicationDocumentUploadResponse,
   PresignVolunteerCoverUploadResponse,
 } from "./types";
@@ -47,10 +50,22 @@ function buildAvatarKey(userId: string, fileName: string) {
 }
 
 function buildVolunteerCoverKey(userId: string, fileName: string) {
-  return buildNestedImageObjectKey(
-    "volunteer-covers",
+  return buildNestedImageObjectKey("volunteer-covers", userId, fileName);
+}
+
+function buildLaunchpadLogoKey(userId: string, contentType: string) {
+  return buildNestedImageObjectKeyFromContentType(
+    "launchpad-logos",
     userId,
-    fileName,
+    contentType,
+  );
+}
+
+function buildLaunchpadCoverKey(userId: string, contentType: string) {
+  return buildNestedImageObjectKeyFromContentType(
+    "launchpad-covers",
+    userId,
+    contentType,
   );
 }
 
@@ -63,6 +78,14 @@ function buildVolunteerApplicationDocumentKey(
     "supporting-docs",
     opportunityId,
     applicantId,
+    buildVolunteerApplicationDocumentFileName(),
+  ].join("/");
+}
+
+function buildLaunchpadDocumentKey(userId: string) {
+  return [
+    "launchpad-document",
+    userId,
     buildVolunteerApplicationDocumentFileName(),
   ].join("/");
 }
@@ -81,12 +104,34 @@ function buildVolunteerApplicationDocumentFileName() {
   return `${randomUUID()}.pdf`;
 }
 
+function getImageExtensionFromContentType(contentType: string) {
+  switch (contentType) {
+    case "image/jpeg":
+      return "jpg";
+    case "image/png":
+      return "png";
+    case "image/webp":
+      return "webp";
+    default:
+      return "bin";
+  }
+}
+
 function buildNestedImageObjectKey(
   folder: string,
   resourceId: string,
   fileName: string,
 ) {
   return `${folder}/${resourceId}/${buildImageObjectFileName(fileName)}`;
+}
+
+function buildNestedImageObjectKeyFromContentType(
+  folder: string,
+  resourceId: string,
+  contentType: string,
+) {
+  const extension = getImageExtensionFromContentType(contentType);
+  return `${folder}/${resourceId}/${Date.now()}-${randomUUID()}.${extension}`;
 }
 
 function resolvePublicUrl(objectKey: string) {
@@ -264,4 +309,82 @@ export async function handlePresignAvatarUpload(
     console.error("Failed to generate avatar upload URL", error);
     return c.json({ ok: false, error: "Failed to generate upload URL" }, 500);
   }
+}
+
+export function presignLaunchpadLogoUpload(options: {
+  userId: string;
+  contentType: string;
+  fileSize: number;
+}) {
+  const logoImageKey = buildLaunchpadLogoKey(
+    options.userId,
+    options.contentType,
+  );
+  const presigned = buildPresignedPutUrl(
+    logoImageKey,
+    options.contentType,
+    options.fileSize,
+  );
+
+  const response: PresignLaunchpadLogoUploadResponse = {
+    uploadUrl: presigned.uploadUrl,
+    method: "PUT",
+    requiredHeaders: presigned.requiredHeaders,
+    logoImageKey,
+    publicUrl: resolvePublicUrl(logoImageKey),
+    expiresInSeconds: presigned.expiresInSeconds,
+  };
+
+  return response;
+}
+
+export function presignLaunchpadCoverUpload(options: {
+  userId: string;
+  contentType: string;
+  fileSize: number;
+}) {
+  const coverImageKey = buildLaunchpadCoverKey(
+    options.userId,
+    options.contentType,
+  );
+  const presigned = buildPresignedPutUrl(
+    coverImageKey,
+    options.contentType,
+    options.fileSize,
+  );
+
+  const response: PresignLaunchpadCoverUploadResponse = {
+    uploadUrl: presigned.uploadUrl,
+    method: "PUT",
+    requiredHeaders: presigned.requiredHeaders,
+    coverImageKey,
+    publicUrl: resolvePublicUrl(coverImageKey),
+    expiresInSeconds: presigned.expiresInSeconds,
+  };
+
+  return response;
+}
+
+export function presignLaunchpadDocumentUpload(options: {
+  userId: string;
+  contentType: string;
+  fileSize: number;
+}) {
+  const documentKey = buildLaunchpadDocumentKey(options.userId);
+  const presigned = buildPresignedPutUrl(
+    documentKey,
+    options.contentType,
+    options.fileSize,
+  );
+
+  const response: PresignLaunchpadDocumentUploadResponse = {
+    uploadUrl: presigned.uploadUrl,
+    method: "PUT",
+    requiredHeaders: presigned.requiredHeaders,
+    documentKey,
+    publicUrl: resolvePublicUrl(documentKey),
+    expiresInSeconds: presigned.expiresInSeconds,
+  };
+
+  return response;
 }

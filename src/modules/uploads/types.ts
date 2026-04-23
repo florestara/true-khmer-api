@@ -32,3 +32,39 @@ export type PresignVolunteerApplicationDocumentUploadResponse = {
   supportingDocumentKey: string;
   expiresInSeconds: number;
 };
+
+export type PresignLaunchpadLogoUploadResponse = {
+  uploadUrl: string;
+  method: "PUT";
+  requiredHeaders: {
+    "Content-Length": string;
+    "Content-Type": string;
+  };
+  logoImageKey: string;
+  publicUrl: string | null;
+  expiresInSeconds: number;
+};
+
+export type PresignLaunchpadCoverUploadResponse = {
+  uploadUrl: string;
+  method: "PUT";
+  requiredHeaders: {
+    "Content-Length": string;
+    "Content-Type": string;
+  };
+  coverImageKey: string;
+  publicUrl: string | null;
+  expiresInSeconds: number;
+};
+
+export type PresignLaunchpadDocumentUploadResponse = {
+  uploadUrl: string;
+  method: "PUT";
+  requiredHeaders: {
+    "Content-Length": string;
+    "Content-Type": string;
+  };
+  documentKey: string;
+  publicUrl: string | null;
+  expiresInSeconds: number;
+};
