@@ -14,6 +14,7 @@ import { publicAnswersRouter } from "../modules/forum/answers/public.answers.rou
 import { reportingTypeRouter } from "../modules/forum/reportingType/reportingType.router";
 import { reportingRouter } from "../modules/forum/reporting/reporting.router";
 import { launchpadCategoriesRouter } from "../modules/launchpad/categories/categories.router";
+import { launchpadRouter } from "../modules/launchpad/launchpad.router";
 
 const routes = new OpenAPIHono<AppBindings>();
 
@@ -30,6 +31,7 @@ routes.route("/forum/public/category", publicCategoriesRouter);
 routes.route("/forum/public/answer", publicAnswersRouter);
 routes.route("/forum/public/reporting-type", reportingTypeRouter);
 routes.route("/forum/reporting", reportingRouter);
-routes.route("/launchpad/category", launchpadCategoriesRouter);
+routes.route("/launchpad/public/category", launchpadCategoriesRouter);
+routes.route("/launchpad", launchpadRouter);
 
 export default routes;
