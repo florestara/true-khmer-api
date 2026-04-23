@@ -122,6 +122,8 @@ export type VolunteerOpportunityListItem = {
   durationLabel: string;
   commitmentLabel: string;
   applicationDeadline: string;
+  applicationCount: number;
+  capacity: number;
   coverImageUrl: string | null;
   category: VolunteerReference;
   location: VolunteerReference;
@@ -136,6 +138,8 @@ export type VolunteerOpportunityDetail = {
   durationLabel: string;
   commitmentLabel: string;
   applicationDeadline: string;
+  applicationCount: number;
+  capacity: number;
   coverImageKey: string;
   coverImageUrl: string | null;
   benefits: string[];
@@ -398,6 +402,8 @@ type VolunteerOpportunityListRow = {
   opportunity: VolunteerOpportunityRow;
   category: VolunteerReference;
   location: VolunteerReference;
+  applicationCount: number;
+  capacity: number;
 };
 
 function hydrateVolunteerOpportunityListItem(
@@ -410,6 +416,8 @@ function hydrateVolunteerOpportunityListItem(
     durationLabel: row.opportunity.durationLabel,
     commitmentLabel: row.opportunity.commitmentLabel,
     applicationDeadline: row.opportunity.applicationDeadline,
+    applicationCount: toInteger(row.applicationCount),
+    capacity: toInteger(row.capacity),
     coverImageUrl: row.opportunity.coverImageUrl,
     category: row.category,
     location: row.location,
@@ -464,7 +472,13 @@ function hydrateVolunteerOpportunityDetail(
   organizer: VolunteerOrganizerBase,
   roles: HydratedVolunteerRole[],
   requirementsByRoleId: Map<string, HydratedVolunteerRequirement[]>,
+  applicationCount: number,
 ): VolunteerOpportunityDetail {
+  const capacity = roles.reduce(
+    (total, role) => total + toInteger(role.capacity),
+    0,
+  );
+
   return {
     id: opportunity.id,
     category,
@@ -475,6 +489,8 @@ function hydrateVolunteerOpportunityDetail(
     durationLabel: opportunity.durationLabel,
     commitmentLabel: opportunity.commitmentLabel,
     applicationDeadline: opportunity.applicationDeadline,
+    applicationCount,
+    capacity,
     coverImageKey: opportunity.coverImageKey,
     coverImageUrl: opportunity.coverImageUrl,
     benefits: opportunity.benefits as string[],
@@ -635,6 +651,36 @@ function buildNextVolunteerOpportunitiesCursor(
   });
 }
 
+async function getActiveApplicationCountsByOpportunityIds(
+  opportunityIds: string[],
+): Promise<Map<string, number>> {
+  const uniqueOpportunityIds = [...new Set(opportunityIds)];
+  if (uniqueOpportunityIds.length === 0) {
+    return new Map();
+  }
+
+  const rows = await db
+    .select({
+      opportunityId: volunteerApplication.opportunityId,
+      applicationCount: sql<number>`count(*)::int`.as("application_count"),
+    })
+    .from(volunteerApplication)
+    .where(
+      and(
+        inArray(volunteerApplication.opportunityId, uniqueOpportunityIds),
+        inArray(
+          volunteerApplication.status,
+          ACTIVE_VOLUNTEER_APPLICATION_STATUSES,
+        ),
+      ),
+    )
+    .groupBy(volunteerApplication.opportunityId);
+
+  return new Map(
+    rows.map((row) => [row.opportunityId, toInteger(row.applicationCount)]),
+  );
+}
+
 async function hydrateVolunteerOpportunityDetails(
   rows: VolunteerOpportunityListRow[],
 ): Promise<VolunteerOpportunityDetail[]> {
@@ -691,6 +737,8 @@ async function hydrateVolunteerOpportunityDetails(
 
   const organizerIds = [...new Set(rows.map((row) => row.opportunity.createdBy))];
   const organizerById = await getVolunteerOrganizersByUserIds(db, organizerIds);
+  const applicationCountByOpportunityId =
+    await getActiveApplicationCountsByOpportunityIds(opportunityIds);
 
   return rows.map((row) => {
     const organizer = organizerById.get(row.opportunity.createdBy);
@@ -708,6 +756,7 @@ async function hydrateVolunteerOpportunityDetails(
       organizer,
       rolesByOpportunityId.get(row.opportunity.id) ?? [],
       requirementsByRoleId,
+      applicationCountByOpportunityId.get(row.opportunity.id) ?? 0,
     );
   });
 }
@@ -779,6 +828,32 @@ export async function getVolunteerOpportunities({
   limit,
   cursor,
 }: GetVolunteerOpportunitiesQuery): Promise<VolunteerOpportunitiesListResult> {
+  const applicationCounts = db
+    .select({
+      opportunityId: volunteerApplication.opportunityId,
+      applicationCount: sql<number>`count(*)::int`.as("application_count"),
+    })
+    .from(volunteerApplication)
+    .where(
+      inArray(
+        volunteerApplication.status,
+        ACTIVE_VOLUNTEER_APPLICATION_STATUSES,
+      ),
+    )
+    .groupBy(volunteerApplication.opportunityId)
+    .as("volunteer_application_counts");
+
+  const opportunityCapacities = db
+    .select({
+      opportunityId: volunteerRole.opportunityId,
+      capacity: sql<number>`coalesce(sum(${volunteerRole.capacity}), 0)::int`.as(
+        "capacity",
+      ),
+    })
+    .from(volunteerRole)
+    .groupBy(volunteerRole.opportunityId)
+    .as("volunteer_opportunity_capacities");
+
   const rows = await db
     .select({
       opportunity: volunteerOpportunity,
@@ -790,6 +865,14 @@ export async function getVolunteerOpportunities({
         id: city.id,
         name: city.name,
       },
+      applicationCount:
+        sql<number>`coalesce(${applicationCounts.applicationCount}, 0)::int`.as(
+          "applicationCount",
+        ),
+      capacity:
+        sql<number>`coalesce(${opportunityCapacities.capacity}, 0)::int`.as(
+          "capacity",
+        ),
     })
     .from(volunteerOpportunity)
     .innerJoin(
@@ -797,6 +880,14 @@ export async function getVolunteerOpportunities({
       eq(volunteerCategory.id, volunteerOpportunity.categoryId),
     )
     .innerJoin(city, eq(city.id, volunteerOpportunity.cityId))
+    .leftJoin(
+      applicationCounts,
+      eq(applicationCounts.opportunityId, volunteerOpportunity.id),
+    )
+    .leftJoin(
+      opportunityCapacities,
+      eq(opportunityCapacities.opportunityId, volunteerOpportunity.id),
+    )
     .where(
       buildVolunteerOpportunitiesWhereClause({
         categoryId,
@@ -850,6 +941,8 @@ export async function getVolunteerOpportunityById(opportunityId: string) {
         id: city.id,
         name: city.name,
       },
+      applicationCount: sql<number>`0`.as("applicationCount"),
+      capacity: sql<number>`0`.as("capacity"),
     })
     .from(volunteerOpportunity)
     .innerJoin(
@@ -978,6 +1071,7 @@ export async function createVolunteerOpportunity(
           })),
         ]),
       ),
+      0,
     );
   });
 }
