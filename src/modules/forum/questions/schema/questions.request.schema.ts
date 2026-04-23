@@ -12,6 +12,7 @@ const MAX_QUESTIONS_PAGE_SIZE = 50;
 const DEFAULT_QUESTIONS_PAGE_SIZE = 10;
 const questionSortBySchema = z
   .enum([
+    "mostRelevant",
     "newest",
     "oldest",
     "mostVoted",
@@ -19,7 +20,7 @@ const questionSortBySchema = z
   ])
   .openapi({
     description:
-      "Question ordering. Allowed values: newest, oldest, mostVoted, mostAnswered.",
+      "Question ordering. Allowed values: mostRelevant, newest, oldest, mostVoted, mostAnswered.",
     example: "newest",
   });
 export type QuestionSortBy = z.infer<typeof questionSortBySchema>;
@@ -225,6 +226,14 @@ const mostVotedQuestionsPageCursorSchema = z.object({
   id: z.string().trim().regex(FORUM_UUID_RE, "cursor.id must be a valid UUID"),
 });
 
+const mostRelevantQuestionsPageCursorSchema = z.object({
+  sortBy: z.literal("mostRelevant"),
+  score: z.number().int(),
+  answerCount: z.number().int().nonnegative(),
+  createdAt: cursorCreatedAtSchema,
+  id: z.string().trim().regex(FORUM_UUID_RE, "cursor.id must be a valid UUID"),
+});
+
 const mostAnsweredQuestionsPageCursorSchema = z.object({
   sortBy: z.literal("mostAnswered"),
   answerCount: z.number().int().nonnegative(),
@@ -236,6 +245,7 @@ const questionsPageCursorSchema = z.discriminatedUnion("sortBy", [
   trendingQuestionsPageCursorSchema,
   newestQuestionsPageCursorSchema,
   oldestQuestionsPageCursorSchema,
+  mostRelevantQuestionsPageCursorSchema,
   mostVotedQuestionsPageCursorSchema,
   mostAnsweredQuestionsPageCursorSchema,
 ]);
@@ -281,6 +291,14 @@ export function encodeQuestionsPageCursor(cursor: QuestionsPageCursor): string {
             createdAt: normalizedTimestamp,
             id: cursor.id,
           }
+        : cursor.sortBy === "mostRelevant"
+          ? {
+              sortBy: cursor.sortBy,
+              score: cursor.score,
+              answerCount: cursor.answerCount,
+              createdAt: normalizedTimestamp,
+              id: cursor.id,
+            }
         : cursor.sortBy === "mostVoted"
           ? {
               sortBy: cursor.sortBy,

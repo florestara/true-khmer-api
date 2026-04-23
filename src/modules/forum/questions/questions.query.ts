@@ -352,6 +352,16 @@ function buildNextQuestionsCursor(
     });
   }
 
+  if (sortBy === "mostRelevant") {
+    return encodeQuestionsPageCursor({
+      sortBy: "mostRelevant",
+      score: row.question.upvoteCount - row.question.downvoteCount,
+      answerCount: row.question.answerCount,
+      createdAt: row.question.createdAt,
+      id: row.question.id,
+    });
+  }
+
   if (sortBy === "mostAnswered") {
     return encodeQuestionsPageCursor({
       sortBy: "mostAnswered",
@@ -491,15 +501,47 @@ function buildQuestionsCursorFilter(
     );
   }
 
-  if (sortBy === "mostVoted" && cursor.sortBy === "mostVoted") {
-    return or(
-      sql`${QUESTION_VOTE_COUNT_SQL} < ${cursor.voteCount}`,
+  const voteCountCursorFilter = (
+    voteCount: number,
+    createdAt: string,
+    id: string,
+  ) =>
+    or(
+      lt(QUESTION_VOTE_COUNT_SQL, voteCount),
       and(
-        sql`${QUESTION_VOTE_COUNT_SQL} = ${cursor.voteCount}`,
+        eq(QUESTION_VOTE_COUNT_SQL, voteCount),
+        lt(forumQuestion.createdAt, createdAt),
+      ),
+      and(
+        eq(QUESTION_VOTE_COUNT_SQL, voteCount),
+        eq(forumQuestion.createdAt, createdAt),
+        lt(forumQuestion.id, id),
+      ),
+    );
+
+  if (sortBy === "mostVoted" && cursor.sortBy === "mostVoted") {
+    return voteCountCursorFilter(
+      cursor.voteCount,
+      cursor.createdAt,
+      cursor.id,
+    );
+  }
+
+  if (sortBy === "mostRelevant" && cursor.sortBy === "mostRelevant") {
+    return or(
+      lt(QUESTION_SCORE_SQL, cursor.score),
+      and(
+        eq(QUESTION_SCORE_SQL, cursor.score),
+        lt(forumQuestion.answerCount, cursor.answerCount),
+      ),
+      and(
+        eq(QUESTION_SCORE_SQL, cursor.score),
+        eq(forumQuestion.answerCount, cursor.answerCount),
         lt(forumQuestion.createdAt, cursor.createdAt),
       ),
       and(
-        sql`${QUESTION_VOTE_COUNT_SQL} = ${cursor.voteCount}`,
+        eq(QUESTION_SCORE_SQL, cursor.score),
+        eq(forumQuestion.answerCount, cursor.answerCount),
         eq(forumQuestion.createdAt, cursor.createdAt),
         lt(forumQuestion.id, cursor.id),
       ),
@@ -678,6 +720,15 @@ function buildQuestionsOrderBy(
   if (sortBy === "mostVoted") {
     return [
       desc(QUESTION_VOTE_COUNT_SQL),
+      desc(forumQuestion.createdAt),
+      desc(forumQuestion.id),
+    ] as const;
+  }
+
+  if (sortBy === "mostRelevant") {
+    return [
+      desc(QUESTION_SCORE_SQL),
+      desc(forumQuestion.answerCount),
       desc(forumQuestion.createdAt),
       desc(forumQuestion.id),
     ] as const;
