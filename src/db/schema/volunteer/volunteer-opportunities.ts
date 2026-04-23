@@ -201,6 +201,11 @@ export const volunteerApplication = pgTable(
       "btree",
       table.opportunityId,
     ),
+    index("volunteer_application_opportunity_status_idx").using(
+      "btree",
+      table.opportunityId,
+      table.status,
+    ),
     index("volunteer_application_role_idx").using("btree", table.roleId),
     index("volunteer_application_applicant_idx").using(
       "btree",

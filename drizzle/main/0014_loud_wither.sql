@@ -1,0 +1,1 @@
+CREATE INDEX "volunteer_application_opportunity_status_idx" ON "volunteer_application" USING btree ("opportunity_id","status");
