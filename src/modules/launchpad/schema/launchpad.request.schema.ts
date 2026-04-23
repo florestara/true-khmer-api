@@ -7,18 +7,11 @@ const LAUNCHPAD_LOGO_ALLOWED_CONTENT_TYPES = [
 ] as const;
 
 const LAUNCHPAD_DOCUMENT_ALLOWED_CONTENT_TYPE = "application/pdf";
-const SAFE_UPLOAD_FILE_NAME = /^[A-Za-z0-9._-]+$/;
 export const LAUNCHPAD_LOGO_MAX_BYTES = 5 * 1024 * 1024;
 export const LAUNCHPAD_DOCUMENT_MAX_BYTES = 10 * 1024 * 1024;
 
-export const presignLaunchpadLogoUploadSchema = z
+export const presignLaunchpadImageUploadSchema = z
   .object({
-    fileName: z
-      .string()
-      .trim()
-      .min(1, "fileName is required")
-      .max(120, "fileName must be <= 120 characters")
-      .regex(SAFE_UPLOAD_FILE_NAME, "fileName contains invalid characters"),
     contentType: z
       .string()
       .trim()
@@ -39,7 +32,7 @@ export const presignLaunchpadLogoUploadSchema = z
         `fileSize must be <= ${LAUNCHPAD_LOGO_MAX_BYTES / (1024 * 1024)} MB`,
       ),
   })
-  .openapi("PresignLaunchpadLogoUploadRequest");
+  .openapi("PresignLaunchpadImageUploadRequest");
 
 export const presignLaunchpadDocumentUploadSchema = z
   .object({
@@ -62,8 +55,8 @@ export const presignLaunchpadDocumentUploadSchema = z
   })
   .openapi("PresignLaunchpadDocumentUploadRequest");
 
-export type PresignLaunchpadLogoUploadPayload = z.infer<
-  typeof presignLaunchpadLogoUploadSchema
+export type PresignLaunchpadImageUploadPayload = z.infer<
+  typeof presignLaunchpadImageUploadSchema
 >;
 
 export type PresignLaunchpadDocumentUploadPayload = z.infer<

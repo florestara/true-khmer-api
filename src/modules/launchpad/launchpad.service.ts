@@ -2,7 +2,7 @@ import { Context } from "hono";
 import { getAuthUserId } from "../auth/utils/get-auth";
 import {
   PresignLaunchpadDocumentUploadPayload,
-  PresignLaunchpadLogoUploadPayload,
+  PresignLaunchpadImageUploadPayload,
 } from "./schema/launchpad.request.schema";
 import {
   presignLaunchpadCoverUpload,
@@ -12,7 +12,7 @@ import {
 
 export async function handlePresignLaunchpadLogoUpload(
   c: Context,
-  payload: PresignLaunchpadLogoUploadPayload,
+  payload: PresignLaunchpadImageUploadPayload,
 ) {
   const authResult = getAuthUserId(c);
   if (!authResult.ok) {
@@ -22,7 +22,6 @@ export async function handlePresignLaunchpadLogoUpload(
   try {
     const upload = presignLaunchpadLogoUpload({
       userId: authResult.userId,
-      fileName: payload.fileName,
       contentType: payload.contentType,
       fileSize: payload.fileSize,
     });
@@ -42,7 +41,7 @@ export async function handlePresignLaunchpadLogoUpload(
 
 export async function handlePresignLaunchpadCoverUpload(
   c: Context,
-  payload: PresignLaunchpadLogoUploadPayload,
+  payload: PresignLaunchpadImageUploadPayload,
 ) {
   const authResult = getAuthUserId(c);
   if (!authResult.ok) {
@@ -52,7 +51,6 @@ export async function handlePresignLaunchpadCoverUpload(
   try {
     const upload = presignLaunchpadCoverUpload({
       userId: authResult.userId,
-      fileName: payload.fileName,
       contentType: payload.contentType,
       fileSize: payload.fileSize,
     });

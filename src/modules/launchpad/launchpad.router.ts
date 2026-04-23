@@ -3,7 +3,7 @@ import { AppBindings } from "../../lib/types";
 import { requireAccessToken } from "../../middlewares/auth.middleware";
 import {
   presignLaunchpadDocumentUploadSchema,
-  presignLaunchpadLogoUploadSchema,
+  presignLaunchpadImageUploadSchema,
 } from "./schema/launchpad.request.schema";
 import {
   launchpadOperationErrorResponseSchema,
@@ -31,7 +31,7 @@ const presignlaunchpadLogoUploadRoute = createRoute({
     body: {
       content: {
         "application/json": {
-          schema: presignLaunchpadLogoUploadSchema,
+          schema: presignLaunchpadImageUploadSchema,
         },
       },
     },
@@ -90,7 +90,7 @@ const presignlaunchpadCoverUploadRoute = createRoute({
     body: {
       content: {
         "application/json": {
-          schema: presignLaunchpadLogoUploadSchema,
+          schema: presignLaunchpadImageUploadSchema,
         },
       },
     },
