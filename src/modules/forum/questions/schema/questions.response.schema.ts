@@ -18,6 +18,7 @@ export const questionResponseSchema = z
     answerCount: z.number().int().nonnegative(),
     score: z.number().int(),
     viewerVote: z.enum(["UPVOTE", "DOWNVOTE"]).nullable(),
+    viewerSave: z.boolean(),
     category: z.object({
       id: z.string(),
       name: z.string(),

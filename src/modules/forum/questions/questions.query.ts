@@ -20,6 +20,7 @@ import {
   forumAnswer,
   forumCategory,
   forumQuestion,
+  forumQuestionSave,
   forumQuestionTag,
   forumQuestionVote,
   forumTag,
@@ -41,6 +42,7 @@ import {
 
 type ForumQuestionRow = typeof forumQuestion.$inferSelect;
 type ForumQuestionInsert = typeof forumQuestion.$inferInsert;
+type ForumQuestionSaveInsert = typeof forumQuestionSave.$inferInsert;
 type ForumQuestionTagInsert = typeof forumQuestionTag.$inferInsert;
 type ForumQuestionVoteInsert = typeof forumQuestionVote.$inferInsert;
 type ForumTagInsert = typeof forumTag.$inferInsert;
@@ -55,6 +57,7 @@ type BaseQuestionHydrationRow = {
   authorFullName: string;
   authorAvatarKey: string | null;
   viewerVoteType: string | null;
+  viewerSavedQuestionId: string | null;
   voteCount: number;
   trendingScore: number;
   trendingEngagementScore: number;
@@ -73,6 +76,7 @@ type ForumQuestionWithTags = Omit<
 > & {
   score: number;
   viewerVote: QuestionVoteType | null;
+  viewerSave: boolean;
   category: {
     id: string;
     name: string;
@@ -395,6 +399,7 @@ function hydrateQuestion(
     viewerVote: row.viewerVoteType
       ? (row.viewerVoteType as QuestionVoteType)
       : null,
+    viewerSave: row.viewerSavedQuestionId !== null,
     category: {
       id: categoryId,
       name: row.categoryName,
@@ -416,6 +421,7 @@ function hydratePublicQuestion(
     {
       ...row,
       viewerVoteType: null,
+      viewerSavedQuestionId: null,
     },
     tags,
   );
@@ -438,6 +444,7 @@ function buildQuestionsBaseQuery(
       authorFullName: user.name,
       authorAvatarKey: userProfile.avatarKey,
       viewerVoteType: forumQuestionVote.voteType,
+      viewerSavedQuestionId: forumQuestionSave.questionId,
       voteCount: QUESTION_VOTE_COUNT_SQL.mapWith(toInteger),
       trendingScore: trendingScore.mapWith(Number),
       trendingEngagementScore: trendingEngagementScore.mapWith(toInteger),
@@ -453,6 +460,13 @@ function buildQuestionsBaseQuery(
       and(
         eq(forumQuestionVote.questionId, forumQuestion.id),
         eq(forumQuestionVote.voterId, viewerId),
+      ),
+    )
+    .leftJoin(
+      forumQuestionSave,
+      and(
+        eq(forumQuestionSave.questionId, forumQuestion.id),
+        eq(forumQuestionSave.saverId, viewerId),
       ),
     );
 }
@@ -602,6 +616,7 @@ function buildPublicQuestionsBaseQuery(
       authorFullName: user.name,
       authorAvatarKey: userProfile.avatarKey,
       viewerVoteType: sql<string | null>`null`,
+      viewerSavedQuestionId: sql<string | null>`null`,
       voteCount: QUESTION_VOTE_COUNT_SQL.mapWith(toInteger),
       trendingScore: trendingScore.mapWith(Number),
       trendingEngagementScore: trendingEngagementScore.mapWith(toInteger),
@@ -805,6 +820,7 @@ export async function findQuestionById(
       authorFullName: user.name,
       authorAvatarKey: userProfile.avatarKey,
       viewerVoteType: forumQuestionVote.voteType,
+      viewerSavedQuestionId: forumQuestionSave.questionId,
       tagId: forumTag.id,
       tagName: forumTag.name,
     })
@@ -817,6 +833,13 @@ export async function findQuestionById(
       and(
         eq(forumQuestionVote.questionId, forumQuestion.id),
         eq(forumQuestionVote.voterId, viewerId),
+      ),
+    )
+    .leftJoin(
+      forumQuestionSave,
+      and(
+        eq(forumQuestionSave.questionId, forumQuestion.id),
+        eq(forumQuestionSave.saverId, viewerId),
       ),
     )
     .leftJoin(
@@ -842,6 +865,7 @@ export async function findQuestionById(
     authorFullName: rows[0].authorFullName,
     authorAvatarKey: rows[0].authorAvatarKey,
     viewerVoteType: rows[0].viewerVoteType,
+    viewerSavedQuestionId: rows[0].viewerSavedQuestionId,
     voteCount: toInteger(
       rows[0].question.upvoteCount + rows[0].question.downvoteCount,
     ),
@@ -874,6 +898,7 @@ export async function findQuestionByIdPublic(
       authorDisplayName: userProfile.displayName,
       authorFullName: user.name,
       authorAvatarKey: userProfile.avatarKey,
+      viewerSavedQuestionId: sql<string | null>`null`,
       tagId: forumTag.id,
       tagName: forumTag.name,
     })
@@ -903,6 +928,7 @@ export async function findQuestionByIdPublic(
     authorDisplayName: rows[0].authorDisplayName,
     authorFullName: rows[0].authorFullName,
     authorAvatarKey: rows[0].authorAvatarKey,
+    viewerSavedQuestionId: rows[0].viewerSavedQuestionId,
     voteCount: toInteger(
       rows[0].question.upvoteCount + rows[0].question.downvoteCount,
     ),
@@ -995,6 +1021,21 @@ export async function findQuestionsByAuthorId(
       ),
     )
     .orderBy(desc(forumQuestion.createdAt), desc(forumQuestion.id));
+
+  return attachTagsToQuestions(rows);
+}
+
+export async function findSavedQuestionsByUserId(
+  userId: string,
+): Promise<ForumQuestionWithTags[]> {
+  const rows = await buildQuestionsBaseQuery(userId)
+    .where(
+      and(
+        eq(forumQuestionSave.saverId, userId),
+        inArray(forumQuestion.status, VISIBLE_QUESTION_STATUSES),
+      ),
+    )
+    .orderBy(desc(forumQuestionSave.createdAt), desc(forumQuestion.id));
 
   return attachTagsToQuestions(rows);
 }
@@ -1411,4 +1452,93 @@ export async function setQuestionVote(
   }
 
   return votedQuestion;
+}
+
+export async function saveQuestionForUser(
+  questionId: string,
+  userId: string,
+): Promise<ForumQuestionWithTags | null> {
+  const savedQuestionId = await db.transaction(async (tx) => {
+    const [question] = await tx
+      .select({ id: forumQuestion.id })
+      .from(forumQuestion)
+      .where(
+        and(
+          eq(forumQuestion.id, questionId),
+          inArray(forumQuestion.status, VISIBLE_QUESTION_STATUSES),
+        ),
+      );
+
+    if (!question) {
+      return null;
+    }
+
+    const saveInsertData: ForumQuestionSaveInsert = {
+      questionId,
+      saverId: userId,
+    };
+
+    await tx
+      .insert(forumQuestionSave)
+      .values(saveInsertData)
+      .onConflictDoNothing({
+        target: [forumQuestionSave.questionId, forumQuestionSave.saverId],
+      });
+
+    return question.id;
+  });
+
+  if (!savedQuestionId) {
+    return null;
+  }
+
+  const savedQuestion = await findQuestionById(savedQuestionId, userId);
+  if (!savedQuestion) {
+    throw new Error("Saved question could not be loaded");
+  }
+
+  return savedQuestion;
+}
+
+export async function unsaveQuestionForUser(
+  questionId: string,
+  userId: string,
+): Promise<ForumQuestionWithTags | null> {
+  const savedQuestionId = await db.transaction(async (tx) => {
+    const [question] = await tx
+      .select({ id: forumQuestion.id })
+      .from(forumQuestion)
+      .where(
+        and(
+          eq(forumQuestion.id, questionId),
+          inArray(forumQuestion.status, VISIBLE_QUESTION_STATUSES),
+        ),
+      );
+
+    if (!question) {
+      return null;
+    }
+
+    await tx
+      .delete(forumQuestionSave)
+      .where(
+        and(
+          eq(forumQuestionSave.questionId, questionId),
+          eq(forumQuestionSave.saverId, userId),
+        ),
+      );
+
+    return question.id;
+  });
+
+  if (!savedQuestionId) {
+    return null;
+  }
+
+  const unsavedQuestion = await findQuestionById(savedQuestionId, userId);
+  if (!unsavedQuestion) {
+    throw new Error("Unsaved question could not be loaded");
+  }
+
+  return unsavedQuestion;
 }
