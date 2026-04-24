@@ -505,6 +505,88 @@ function normalizeQuestionsCursorTimestamp(value: string): string | null {
 
 export type GetQuestionsQuery = z.infer<typeof getQuestionsQuerySchema>;
 
+const savedQuestionsPageCursorSchema = z.object({
+  savedAt: cursorCreatedAtSchema,
+  questionId: z
+    .string()
+    .trim()
+    .regex(FORUM_UUID_RE, "cursor.questionId must be a valid UUID"),
+});
+
+export type SavedQuestionsPageCursor = z.infer<
+  typeof savedQuestionsPageCursorSchema
+>;
+
+export function encodeSavedQuestionsPageCursor(
+  cursor: SavedQuestionsPageCursor,
+): string {
+  const normalizedSavedAt = normalizeQuestionsCursorTimestamp(cursor.savedAt);
+  if (!normalizedSavedAt) {
+    throw new Error("Cannot encode saved question page cursor with invalid savedAt");
+  }
+
+  return Buffer.from(
+    JSON.stringify({
+      savedAt: normalizedSavedAt,
+      questionId: cursor.questionId,
+    }),
+    "utf8",
+  ).toString("base64url");
+}
+
+function decodeSavedQuestionsPageCursor(
+  raw: string,
+): SavedQuestionsPageCursor | null {
+  try {
+    const parsed = JSON.parse(Buffer.from(raw, "base64url").toString("utf8"));
+    const cursor = savedQuestionsPageCursorSchema.safeParse(parsed);
+    return cursor.success ? cursor.data : null;
+  } catch {
+    return null;
+  }
+}
+
+export const getSavedQuestionsQuerySchema = z
+  .object({
+    limit: z.coerce
+      .number()
+      .int()
+      .min(1, "limit must be between 1 and 50")
+      .max(MAX_QUESTIONS_PAGE_SIZE, "limit must be between 1 and 50")
+      .default(DEFAULT_QUESTIONS_PAGE_SIZE),
+    cursor: z
+      .string()
+      .optional()
+      .openapi({
+        description:
+          "Opaque pagination cursor returned by a previous saved questions response.",
+      }),
+  })
+  .superRefine((value, ctx) => {
+    const decodedCursor = value.cursor
+      ? decodeSavedQuestionsPageCursor(value.cursor)
+      : undefined;
+
+    if (value.cursor && !decodedCursor) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "cursor must be a valid pagination cursor",
+        path: ["cursor"],
+      });
+    }
+  })
+  .transform((value) => ({
+    limit: value.limit,
+    cursor: value.cursor
+      ? (decodeSavedQuestionsPageCursor(value.cursor) as SavedQuestionsPageCursor)
+      : undefined,
+  }))
+  .openapi("GetSavedQuestionsQuery");
+
+export type GetSavedQuestionsQuery = z.infer<
+  typeof getSavedQuestionsQuerySchema
+>;
+
 export const getTrendingTagsQuerySchema = z
   .object({
     categoryId: z

@@ -2,6 +2,7 @@ import type { Context } from "hono";
 import {
   type CreateQuestionInput,
   type EditQuestionInput,
+  type GetSavedQuestionsQuery,
   type GetTrendingTagsQuery,
   type GetQuestionsQuery,
   type QuestionIdParams,
@@ -112,15 +113,18 @@ export async function handleGetMyQuestions(c: Context) {
   }
 }
 
-export async function handleGetSavedQuestions(c: Context) {
+export async function handleGetSavedQuestions(
+  c: Context,
+  query: GetSavedQuestionsQuery,
+) {
   const authResult = getAuthUserId(c);
   if (!authResult.ok) {
     return authResult.response;
   }
 
   try {
-    const questions = await findSavedQuestionsByUserId(authResult.userId);
-    return c.json({ ok: true, questions }, 200);
+    const result = await findSavedQuestionsByUserId(authResult.userId, query);
+    return c.json({ ok: true, ...result }, 200);
   } catch (err) {
     console.error("Failed to get saved questions", err);
     return c.json({ ok: false, error: "Internal server error" }, 500);

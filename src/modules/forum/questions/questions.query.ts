@@ -29,13 +29,16 @@ import {
 } from "../../../db/schema";
 import { FORUM_ADVISORY_LOCK_NAMESPACE } from "../lib/constants";
 import {
+  encodeSavedQuestionsPageCursor,
   encodeQuestionsPageCursor,
   type CreateQuestionInput,
   type EditQuestionInput,
+  type GetSavedQuestionsQuery,
   type GetTrendingTagsQuery,
   type GetQuestionsQuery,
   type QuestionSortBy,
   type QuestionVoteType,
+  type SavedQuestionsPageCursor,
   type QuestionsPageCursor,
   type VoteIntent,
 } from "./questions.schema";
@@ -103,6 +106,9 @@ type TrendingTagResult = {
   name: string;
   count: number;
 };
+type SavedQuestionListRow = BaseQuestionHydrationRow & {
+  savedAt: string;
+};
 type NormalizedQuestionTag = {
   normalizedName: string;
   name: string;
@@ -125,6 +131,10 @@ const TRENDING_DECAY_EXPONENT = 1.2;
 const forumQuestionTagSearch = aliasedTable(
   forumQuestionTag,
   "forum_question_tag_search",
+);
+const forumQuestionSaveList = aliasedTable(
+  forumQuestionSave,
+  "forum_question_save_list",
 );
 const forumTagSearch = aliasedTable(forumTag, "forum_tag_search");
 const forumAnswerSearch = aliasedTable(forumAnswer, "forum_answer_search");
@@ -382,6 +392,13 @@ function buildNextQuestionsCursor(
   });
 }
 
+function buildNextSavedQuestionsCursor(row: SavedQuestionListRow): string {
+  return encodeSavedQuestionsPageCursor({
+    savedAt: row.savedAt,
+    questionId: row.question.id,
+  });
+}
+
 function hydrateQuestion(
   row: BaseQuestionHydrationRow,
   tags: QuestionTag[],
@@ -469,6 +486,53 @@ function buildQuestionsBaseQuery(
         eq(forumQuestionSave.saverId, viewerId),
       ),
     );
+}
+
+function buildSavedQuestionsBaseQuery(viewerId: string) {
+  return db
+    .select({
+      question: forumQuestion,
+      categoryName: forumCategory.name,
+      authorDisplayName: userProfile.displayName,
+      authorFullName: user.name,
+      authorAvatarKey: userProfile.avatarKey,
+      viewerVoteType: forumQuestionVote.voteType,
+      viewerSavedQuestionId: forumQuestionSaveList.questionId,
+      voteCount: QUESTION_VOTE_COUNT_SQL.mapWith(toInteger),
+      trendingScore: sql<number>`0`.mapWith(Number),
+      trendingEngagementScore: sql<number>`0`.mapWith(toInteger),
+      trendingRankingTimestamp: sql<string | null>`null`,
+      trendingLastActivityAt: sql<string | null>`null`,
+      savedAt: forumQuestionSaveList.createdAt,
+    })
+    .from(forumQuestionSaveList)
+    .innerJoin(forumQuestion, eq(forumQuestion.id, forumQuestionSaveList.questionId))
+    .innerJoin(forumCategory, eq(forumCategory.id, forumQuestion.categoryId))
+    .innerJoin(user, eq(user.id, forumQuestion.authorId))
+    .leftJoin(userProfile, eq(userProfile.userId, user.id))
+    .leftJoin(
+      forumQuestionVote,
+      and(
+        eq(forumQuestionVote.questionId, forumQuestion.id),
+        eq(forumQuestionVote.voterId, viewerId),
+      ),
+    );
+}
+
+function buildSavedQuestionsCursorFilter(
+  cursor?: SavedQuestionsPageCursor,
+): SQL<unknown> | undefined {
+  if (!cursor) {
+    return undefined;
+  }
+
+  return or(
+    lt(forumQuestionSaveList.createdAt, cursor.savedAt),
+    and(
+      eq(forumQuestionSaveList.createdAt, cursor.savedAt),
+      lt(forumQuestion.id, cursor.questionId),
+    ),
+  );
 }
 
 function buildQuestionsCursorFilter(
@@ -1027,17 +1091,41 @@ export async function findQuestionsByAuthorId(
 
 export async function findSavedQuestionsByUserId(
   userId: string,
-): Promise<ForumQuestionWithTags[]> {
-  const rows = await buildQuestionsBaseQuery(userId)
-    .where(
-      and(
-        eq(forumQuestionSave.saverId, userId),
-        inArray(forumQuestion.status, VISIBLE_QUESTION_STATUSES),
-      ),
-    )
-    .orderBy(desc(forumQuestionSave.createdAt), desc(forumQuestion.id));
+  { limit, cursor }: GetSavedQuestionsQuery,
+): Promise<QuestionsListResult> {
+  const cursorFilter = buildSavedQuestionsCursorFilter(cursor);
+  const filters = [
+    eq(forumQuestionSaveList.saverId, userId),
+    inArray(forumQuestion.status, VISIBLE_QUESTION_STATUSES),
+  ];
 
-  return attachTagsToQuestions(rows);
+  if (cursorFilter) {
+    filters.push(cursorFilter);
+  }
+
+  const rows = await buildSavedQuestionsBaseQuery(userId)
+    .where(and(...filters))
+    .orderBy(desc(forumQuestionSaveList.createdAt), desc(forumQuestion.id))
+    .limit(limit + 1);
+
+  const hasMore = rows.length > limit;
+  const questionRows: SavedQuestionListRow[] = hasMore ? rows.slice(0, limit) : rows;
+  const questions = await attachTagsToQuestions(questionRows);
+  const lastQuestionRow =
+    questionRows.length > 0 ? questionRows[questionRows.length - 1] : null;
+  const nextCursor =
+    hasMore && lastQuestionRow
+      ? buildNextSavedQuestionsCursor(lastQuestionRow)
+      : null;
+
+  return {
+    questions,
+    pagination: {
+      limit,
+      hasMore,
+      nextCursor,
+    },
+  };
 }
 
 export async function findQuestionsPublic({
@@ -1493,11 +1581,7 @@ export async function saveQuestionForUser(
   }
 
   const savedQuestion = await findQuestionById(savedQuestionId, userId);
-  if (!savedQuestion) {
-    throw new Error("Saved question could not be loaded");
-  }
-
-  return savedQuestion;
+  return savedQuestion ?? null;
 }
 
 export async function unsaveQuestionForUser(
@@ -1536,9 +1620,5 @@ export async function unsaveQuestionForUser(
   }
 
   const unsavedQuestion = await findQuestionById(savedQuestionId, userId);
-  if (!unsavedQuestion) {
-    throw new Error("Unsaved question could not be loaded");
-  }
-
-  return unsavedQuestion;
+  return unsavedQuestion ?? null;
 }

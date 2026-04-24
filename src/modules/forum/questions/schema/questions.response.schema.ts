@@ -53,6 +53,18 @@ export const getMyQuestionsResponseSchema = z
   })
   .openapi("GetMyQuestionsResponse");
 
+export const getSavedQuestionsResponseSchema = z
+  .object({
+    ok: z.boolean(),
+    questions: z.array(questionResponseSchema),
+    pagination: z.object({
+      limit: z.number(),
+      hasMore: z.boolean(),
+      nextCursor: z.string().nullable(),
+    }),
+  })
+  .openapi("GetSavedQuestionsResponse");
+
 export const getQuestionResponseSchema = z
   .object({
     ok: z.boolean(),

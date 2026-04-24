@@ -17,6 +17,8 @@ import {
 import {
   createQuestionResponseSchema,
   createQuestionSchema,
+  getSavedQuestionsQuerySchema,
+  getSavedQuestionsResponseSchema,
   getTrendingTagsQuerySchema,
   getTrendingTagsResponseSchema,
   editQuestionSchema,
@@ -97,12 +99,15 @@ const getSavedQuestionsRoute = createRoute({
   tags: ["Forum Question"],
   middleware: [requireAccessToken],
   security: [{ BearerAuth: [] }],
+  request: {
+    query: getSavedQuestionsQuerySchema,
+  },
   responses: {
     200: {
       description: "List of questions saved by the authenticated user",
       content: {
         "application/json": {
-          schema: getMyQuestionsResponseSchema,
+          schema: getSavedQuestionsResponseSchema,
         },
       },
     },
@@ -287,7 +292,8 @@ questionsRouter.openapi(getMyQuestionsRoute, async (c) => {
 });
 
 questionsRouter.openapi(getSavedQuestionsRoute, async (c) => {
-  return handleGetSavedQuestions(c) as any;
+  const query = c.req.valid("query");
+  return handleGetSavedQuestions(c, query) as any;
 });
 
 questionsRouter.openapi(getRoute, async (c) => {
