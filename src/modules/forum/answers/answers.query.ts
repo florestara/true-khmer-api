@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../../../db/index";
 import {
   forumAnswer,
@@ -27,8 +27,16 @@ export class ReplyTargetUnavailableError extends Error {
   }
 }
 
+export class BestAnswerSelectionForbiddenError extends Error {
+  constructor() {
+    super("Only the question author can mark the best answer");
+    this.name = "BestAnswerSelectionForbiddenError";
+  }
+}
+
 type AnswerHydrationRow = {
   answer: ForumAnswerRow;
+  questionBestAnswerId: string | null;
   authorDisplayName: string | null;
   authorFullName: string;
   authorAvatarKey: string | null;
@@ -40,6 +48,7 @@ type RepliedAnswerWithViewerVote = Omit<
   "authorId" | "deletedAt"
 > & {
   score: number;
+  isBestAnswer: boolean;
   viewerVote: AnswerVoteType | null;
   author: {
     id: string;
@@ -91,6 +100,11 @@ function buildAnswersBaseQuery(
   return executor
     .select({
       answer: forumAnswer,
+      questionBestAnswerId: sql<string | null>`(
+        select ${forumQuestion.bestAnswerId}
+        from ${forumQuestion}
+        where ${forumQuestion.id} = ${forumAnswer.questionId}
+      )`,
       authorDisplayName: userProfile.displayName,
       authorFullName: user.name,
       authorAvatarKey: userProfile.avatarKey,
@@ -112,6 +126,11 @@ function buildPublicAnswersBaseQuery(executor: Pick<typeof db, "select">) {
   return executor
     .select({
       answer: forumAnswer,
+      questionBestAnswerId: sql<string | null>`(
+        select ${forumQuestion.bestAnswerId}
+        from ${forumQuestion}
+        where ${forumQuestion.id} = ${forumAnswer.questionId}
+      )`,
       authorDisplayName: userProfile.displayName,
       authorFullName: user.name,
       authorAvatarKey: userProfile.avatarKey,
@@ -128,6 +147,7 @@ function hydrateAnswer(row: AnswerHydrationRow): ForumAnswerWithViewerVote {
   return {
     ...answer,
     score: answer.upvoteCount - answer.downvoteCount,
+    isBestAnswer: answer.id === row.questionBestAnswerId,
     viewerVote: row.viewerVoteType
       ? (row.viewerVoteType as AnswerVoteType)
       : null,
@@ -404,6 +424,7 @@ export async function softDeleteAnswer(
     }
 
     let totalDeletedCount = 1;
+    const deletedAnswerIds = [deletedAnswer.id];
 
     if (deletedAnswer.replyTo) {
       await tx
@@ -437,6 +458,7 @@ export async function softDeleteAnswer(
         .returning({ id: forumAnswer.id });
 
       totalDeletedCount += deletedReplies.length;
+      deletedAnswerIds.push(...deletedReplies.map((answer) => answer.id));
     }
 
     await tx
@@ -447,7 +469,89 @@ export async function softDeleteAnswer(
       })
       .where(eq(forumQuestion.id, deletedAnswer.questionId));
 
+    await tx
+      .update(forumQuestion)
+      .set({
+        bestAnswerId: null,
+        bestAnswerSelectedAt: null,
+        updatedAt: sql`now()`,
+      })
+      .where(
+        and(
+          eq(forumQuestion.id, deletedAnswer.questionId),
+          inArray(forumQuestion.bestAnswerId, deletedAnswerIds),
+        ),
+      );
+
     return deletedAnswer;
+  });
+}
+
+export async function markBestAnswer(
+  answerId: string,
+  questionAuthorId: string,
+): Promise<ForumAnswerWithViewerVote | null> {
+  return db.transaction(async (tx) => {
+    const [answer] = await tx
+      .select()
+      .from(forumAnswer)
+      .where(
+        and(eq(forumAnswer.id, answerId), eq(forumAnswer.status, "PUBLISHED")),
+      )
+      .limit(1);
+
+    if (!answer) {
+      return null;
+    }
+
+    // Serialize best-answer assignment per question.
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(${FORUM_ADVISORY_LOCK_NAMESPACE}, hashtext(${answer.questionId}))`,
+    );
+
+    const [question] = await tx
+      .select()
+      .from(forumQuestion)
+      .where(
+        and(
+          eq(forumQuestion.id, answer.questionId),
+          inArray(forumQuestion.status, ["PUBLISHED", "CLOSED"]),
+        ),
+      )
+      .limit(1);
+
+    if (!question) {
+      return null;
+    }
+
+    if (question.authorId !== questionAuthorId) {
+      throw new BestAnswerSelectionForbiddenError();
+    }
+
+    const [updatedQuestion] = await tx
+      .update(forumQuestion)
+      .set({
+        bestAnswerId: answer.id,
+        bestAnswerSelectedAt: sql`now()`,
+        updatedAt: sql`now()`,
+      })
+      .where(eq(forumQuestion.id, question.id))
+      .returning({ id: forumQuestion.id });
+
+    if (!updatedQuestion) {
+      return null;
+    }
+
+    const markedRows = await buildAnswersBaseQuery(tx, questionAuthorId)
+      .where(
+        and(
+          eq(forumAnswer.id, answer.id),
+          eq(forumAnswer.status, "PUBLISHED"),
+        ),
+      )
+      .limit(1);
+
+    return markedRows[0] ? hydrateAnswer(markedRows[0]) : null;
   });
 }
 

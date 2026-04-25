@@ -7,12 +7,14 @@ import type {
   VoteAnswerInput,
 } from "./answers.schema";
 import {
+  BestAnswerSelectionForbiddenError,
   createAnswer,
   findAnswerById,
   findAnswersByAuthorId,
   findAnswersByQuestionId,
   findAnswersByQuestionIdPublic,
   findQuestionById,
+  markBestAnswer,
   ReplyTargetUnavailableError,
   setAnswerVote,
   softDeleteAnswer,
@@ -238,6 +240,36 @@ export async function handleDeleteAnswer(c: Context, params: AnswerIdParams) {
     return c.json({ ok: true }, 200);
   } catch (err) {
     console.error("Failed to delete answer", err);
+    return c.json({ ok: false, error: "Internal server error" }, 500);
+  }
+}
+
+export async function handleMarkBestAnswer(
+  c: Context,
+  params: AnswerIdParams,
+) {
+  const authResult = getAuthUserId(c);
+  if (!authResult.ok) {
+    return authResult.response;
+  }
+
+  try {
+    const markedAnswer = await markBestAnswer(
+      params.answerId,
+      authResult.userId,
+    );
+
+    if (!markedAnswer) {
+      return c.json({ ok: false, error: "Answer not found" }, 404);
+    }
+
+    return c.json({ ok: true, answer: markedAnswer }, 200);
+  } catch (err) {
+    if (err instanceof BestAnswerSelectionForbiddenError) {
+      return c.json({ ok: false, error: err.message }, 403);
+    }
+
+    console.error("Failed to mark best answer", err);
     return c.json({ ok: false, error: "Internal server error" }, 500);
   }
 }

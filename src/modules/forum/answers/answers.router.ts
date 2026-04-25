@@ -7,6 +7,7 @@ import {
   handleEditAnswer,
   handleGetAnswers,
   handleGetMyAnswers,
+  handleMarkBestAnswer,
   handleVoteAnswer,
 } from "./answers.service";
 import {
@@ -17,6 +18,7 @@ import {
   deleteAnswerResponseSchema,
   editAnswerResponseSchema,
   getAnswersResponseSchema,
+  markBestAnswerResponseSchema,
   questionIdParamsSchema,
   updateAnswerSchema,
   voteAnswerResponseSchema,
@@ -172,6 +174,35 @@ const voteAnswerRoute = createRoute({
   },
 });
 
+const markBestAnswerRoute = createRoute({
+  method: "post",
+  path: "/mark-best-answer/{answerId}",
+  tags: ["Forum Answer"],
+  middleware: [requireAccessToken],
+  security: [{ BearerAuth: [] }],
+  request: {
+    params: answerIdParamsSchema,
+  },
+  responses: {
+    200: {
+      description: "Best answer marked",
+      content: {
+        "application/json": {
+          schema: markBestAnswerResponseSchema,
+        },
+      },
+    },
+    403: {
+      description: "Not authorized",
+      content: {
+        "application/json": {
+          schema: answerErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
 answersRouter.openapi(getAnswersRoute, async (c) => {
   const params = c.req.valid("param");
   return handleGetAnswers(c, params) as any;
@@ -201,4 +232,9 @@ answersRouter.openapi(voteAnswerRoute, async (c) => {
   const params = c.req.valid("param");
   const data = c.req.valid("json");
   return handleVoteAnswer(c, params, data) as any;
+});
+
+answersRouter.openapi(markBestAnswerRoute, async (c) => {
+  const params = c.req.valid("param");
+  return handleMarkBestAnswer(c, params) as any;
 });

@@ -91,6 +91,14 @@ export const forumQuestion = pgTable(
     answerCount: integer("answer_count").default(0).notNull(),
     upvoteCount: integer("upvote_count").default(0).notNull(),
     downvoteCount: integer("downvote_count").default(0).notNull(),
+    bestAnswerId: uuid("best_answer_id").references(
+      (): AnyPgColumn => forumAnswer.id,
+      { onDelete: "set null" },
+    ),
+    bestAnswerSelectedAt: timestamp("best_answer_selected_at", {
+      withTimezone: true,
+      mode: "string",
+    }),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
       .defaultNow()
       .notNull(),
@@ -279,6 +287,10 @@ export const forumQuestionRelations = relations(
     author: one(user, {
       fields: [forumQuestion.authorId],
       references: [user.id],
+    }),
+    bestAnswer: one(forumAnswer, {
+      fields: [forumQuestion.bestAnswerId],
+      references: [forumAnswer.id],
     }),
     answers: many(forumAnswer),
     votes: many(forumQuestionVote),
