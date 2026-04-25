@@ -2,10 +2,12 @@ import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
 import { AppBindings } from "../../lib/types";
 import { requireAccessToken } from "../../middlewares/auth.middleware";
 import {
+  createLaunchpadRequestSchema,
   presignLaunchpadDocumentUploadSchema,
   presignLaunchpadImageUploadSchema,
 } from "./schema/launchpad.request.schema";
 import {
+  createLaunchpadResponseSchema,
   launchpadOperationErrorResponseSchema,
   launchpadValidationErrorResponseSchema,
   presignLaunchpadCoverUploadResponseSchema,
@@ -14,6 +16,7 @@ import {
 } from "./schema/launchpad.response.schema";
 import { authProtectedErrorResponseSchema } from "../auth/auth.schema";
 import {
+  handleCreateLaunchpad,
   handlePresignLaunchpadCoverUpload,
   handlePresignLaunchpadDocumentUpload,
   handlePresignLaunchpadLogoUpload,
@@ -198,6 +201,65 @@ const presignlaunchpadDocumentUploadRoute = createRoute({
   },
 });
 
+const createLaunchpadRoute = createRoute({
+  method: "post",
+  path: "/create",
+  tags: ["Launchpad"],
+  middleware: [requireAccessToken],
+  security: [{ BearerAuth: [] }],
+  request: {
+    body: {
+      content: {
+        "application/json": {
+          schema: createLaunchpadRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "Launchpad created successfully",
+      content: {
+        "application/json": {
+          schema: createLaunchpadResponseSchema,
+        },
+      },
+    },
+    400: {
+      description: "Validation failed",
+      content: {
+        "application/json": {
+          schema: launchpadValidationErrorResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: "Unauthorized",
+      content: {
+        "application/json": {
+          schema: authProtectedErrorResponseSchema,
+        },
+      },
+    },
+    403: {
+      description: "Forbidden",
+      content: {
+        "application/json": {
+          schema: authProtectedErrorResponseSchema,
+        },
+      },
+    },
+    500: {
+      description: "Internal server error",
+      content: {
+        "application/json": {
+          schema: launchpadOperationErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
 launchpadRouter.openapi(presignlaunchpadLogoUploadRoute, async (c) => {
   const data = c.req.valid("json");
   return handlePresignLaunchpadLogoUpload(c, data) as any;
@@ -211,4 +273,9 @@ launchpadRouter.openapi(presignlaunchpadCoverUploadRoute, async (c) => {
 launchpadRouter.openapi(presignlaunchpadDocumentUploadRoute, async (c) => {
   const data = c.req.valid("json");
   return handlePresignLaunchpadDocumentUpload(c, data) as any;
+});
+
+launchpadRouter.openapi(createLaunchpadRoute, async (c) => {
+  const data = c.req.valid("json");
+  return handleCreateLaunchpad(c, data) as any;
 });

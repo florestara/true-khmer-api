@@ -1,0 +1,132 @@
+import { sql, eq } from "drizzle-orm";
+import { db } from "../../db";
+import {
+  VOLUNTEER_ADVISORY_LOCK_NAMESPACE,
+  VOLUNTEER_CATEGORY_DISPLAY_ORDER_LOCK_KEY,
+} from "../volunteer/lib/constants";
+import { CreateLaunchpadRequestInput } from "./schema/launchpad.request.schema";
+import { launchpad, launchpadCategory, launchpadRole } from "../../db/schema";
+import type { PostgresJsTransaction } from "drizzle-orm/postgres-js";
+
+type launchpadInsert = typeof launchpad.$inferInsert;
+type launchpadRoleInsert = typeof launchpadRole.$inferInsert;
+
+export type LaunchpadRole = {
+  id: string;
+  title: string;
+  description: string | null;
+  capacity: number;
+};
+
+export type LaunchpadDetail = {
+  id: string;
+  name: string;
+  categoryId: string;
+  cityId: string;
+  description: string | null;
+  deadline: Date | null;
+  logoKey: string | null;
+  coverKey: string | null;
+  documentKeys: string[] | null;
+  phoneNumber: string | null;
+  email: string | null;
+  telegramUsername: string | null;
+  createdBy: string;
+  createdAt: Date;
+  roles: LaunchpadRole[];
+};
+
+async function updateCategoryTotalRolesCount(
+  tx: PostgresJsTransaction<any, any>,
+  categoryId: string,
+): Promise<void> {
+  const [result] = await tx
+    .select({
+      totalRoles: sql<number>`count(*)::int`.as("total_roles"),
+    })
+    .from(launchpadRole)
+    .innerJoin(launchpad, eq(launchpadRole.launchpadId, launchpad.id))
+    .where(eq(launchpad.categoryId, categoryId));
+
+  const totalRoles = result?.totalRoles ?? 0;
+
+  await tx
+    .update(launchpadCategory)
+    .set({ totalRoles })
+    .where(eq(launchpadCategory.id, categoryId));
+}
+
+export async function createLaunchpad(
+  data: CreateLaunchpadRequestInput,
+  userId: string,
+): Promise<LaunchpadDetail> {
+  return db.transaction(async (tx) => {
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(${VOLUNTEER_ADVISORY_LOCK_NAMESPACE}, ${VOLUNTEER_CATEGORY_DISPLAY_ORDER_LOCK_KEY})`,
+    );
+
+    const fieldToInsert: launchpadInsert = {
+      categoryId: data.categoryId,
+      cityId: data.cityId,
+      name: data.name,
+      description: data.description,
+      deadline: data.deadline,
+      logoKey: data.logoKey,
+      coverKey: data.coverKey,
+      documentKeys: data.materialDocumentKey,
+      phoneNumber: data.phoneNumber,
+      email: data.email,
+      telegramUsername: data.telegramUsername,
+      createdBy: userId,
+    };
+
+    const [created] = await tx
+      .insert(launchpad)
+      .values(fieldToInsert)
+      .returning();
+
+    if (!created.categoryId || !created.cityId) {
+      throw new Error("Launchpad must have valid categoryId and cityId");
+    }
+
+    const roleData: launchpadRoleInsert[] = data.role.map((role) => ({
+      title: role.name,
+      launchpadId: created.id,
+      description: role.description,
+      capacity: role.capacity,
+      createdBy: userId,
+    }));
+
+    const insertedRoles = await tx
+      .insert(launchpadRole)
+      .values(roleData)
+      .returning();
+
+    await updateCategoryTotalRolesCount(tx, data.categoryId);
+
+    return {
+      id: created.id,
+      name: created.name,
+      categoryId: created.categoryId,
+      cityId: created.cityId,
+      description: created.description,
+      deadline: created.deadline ? new Date(created.deadline) : null,
+      logoKey: created.logoKey,
+      coverKey: created.coverKey,
+      documentKeys: Array.isArray(created.documentKeys)
+        ? created.documentKeys
+        : null,
+      phoneNumber: created.phoneNumber,
+      email: created.email,
+      telegramUsername: created.telegramUsername,
+      createdBy: created.createdBy,
+      createdAt: new Date(created.createdAt),
+      roles: insertedRoles.map((role) => ({
+        id: role.id,
+        title: role.title,
+        description: role.description,
+        capacity: role.capacity,
+      })),
+    };
+  });
+}

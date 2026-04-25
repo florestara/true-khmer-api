@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { LaunchpadRole } from "../launchpad.query";
 
 const presignedUploadHeadersSchema = z.object({
   "Content-Length": z.string(),
@@ -81,3 +82,33 @@ export const launchpadOperationErrorResponseSchema = z
     error: z.string(),
   })
   .openapi("LaunchpadOperationErrorResponse");
+
+export const createLaunchpadRoleSchema: z.ZodType<LaunchpadRole> = z.object({
+  id: z.string(),
+  title: z.string(),
+  description: z.string().nullable(),
+  capacity: z.number(),
+});
+
+export const createLaunchpadResponseSchema = z
+  .object({
+    ok: z.literal(true),
+    launchpad: z.object({
+      id: z.string(),
+      name: z.string(),
+      categoryId: z.string(),
+      cityId: z.string(),
+      description: z.string().nullable(),
+      deadline: z.date().nullable(),
+      logoKey: z.string().nullable(),
+      coverKey: z.string().nullable(),
+      documentKeys: z.array(z.string()).nullable(),
+      phoneNumber: z.string().nullable(),
+      email: z.string().nullable(),
+      telegramUsername: z.string().nullable(),
+      createdBy: z.string(),
+      createdAt: z.date(),
+      roles: z.array(createLaunchpadRoleSchema),
+    }),
+  })
+  .openapi("CreateLaunchpadResponse");
