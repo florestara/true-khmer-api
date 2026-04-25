@@ -18,6 +18,7 @@ export const questionResponseSchema = z
     answerCount: z.number().int().nonnegative(),
     score: z.number().int(),
     viewerVote: z.enum(["UPVOTE", "DOWNVOTE"]).nullable(),
+    viewerSave: z.boolean(),
     category: z.object({
       id: z.string(),
       name: z.string(),
@@ -51,6 +52,18 @@ export const getMyQuestionsResponseSchema = z
     questions: z.array(questionResponseSchema),
   })
   .openapi("GetMyQuestionsResponse");
+
+export const getSavedQuestionsResponseSchema = z
+  .object({
+    ok: z.boolean(),
+    questions: z.array(questionResponseSchema),
+    pagination: z.object({
+      limit: z.number(),
+      hasMore: z.boolean(),
+      nextCursor: z.string().nullable(),
+    }),
+  })
+  .openapi("GetSavedQuestionsResponse");
 
 export const getQuestionResponseSchema = z
   .object({

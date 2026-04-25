@@ -106,6 +106,13 @@
       "when": 1776918037889,
       "tag": "0014_loud_wither",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1776950813444,
+      "tag": "0015_elite_quentin_quire",
+      "breakpoints": true
     }
   ]
 }
