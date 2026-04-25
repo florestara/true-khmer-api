@@ -121,24 +121,27 @@ export async function handleCreateLaunchpad(
     });
 
     // Handle specific database errors
-    if (error instanceof Error) {
-      const errorMessage = error.message;
+    const pgErr = error as { code?: string; constraint_name?: string };
 
-      // PostgreSQL unique constraint violation (23505)
-      if (errorMessage.includes("23505") || errorMessage.includes("duplicate key")) {
-        return c.json(
-          { ok: false, error: "Launchpad with this name already exists" },
-          409,
-        );
-      }
+    if (pgErr?.code === "23505") {
+      const isRoleDup = pgErr.constraint_name === "launchpad_role_title_unique_idx";
+      return c.json(
+        {
+          ok: false,
+          error: isRoleDup
+            ? "Duplicate role title within the launchpad"
+            : "Launchpad with this name already exists",
+        },
+        409,
+      );
+    }
 
-      // PostgreSQL foreign key violation (23503)
-      if (errorMessage.includes("23503") || errorMessage.includes("foreign key")) {
-        return c.json(
-          { ok: false, error: "Invalid category or city reference" },
-          400,
-        );
-      }
+    // PostgreSQL foreign key violation (23503)
+    if (pgErr?.code === "23503") {
+      return c.json(
+        { ok: false, error: "Invalid category or city reference" },
+        400,
+      );
     }
 
     return c.json({ ok: false, error: "Failed to create launchpad" }, 500);

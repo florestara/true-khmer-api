@@ -110,7 +110,7 @@ export const createLaunchpadRequestSchema = z
             .trim()
             .min(1, "role name is required")
             .max(100, "role name must be <= 100 characters"),
-          description: z.string().trim().nullable(),
+          description: z.string().trim().nullish(),
           capacity: z
             .number()
             .int("capacity must be an integer")
@@ -126,7 +126,7 @@ export const createLaunchpadRequestSchema = z
           .string()
           .trim()
           .min(1, "materialDocumentKey is required")
-          .max(600, "materialDocumentKey must be <= 600 characters"),
+          .max(255, "materialDocumentKey must be <= 255 characters"),
       )
       .min(1, "At least one materialDocumentKey is required")
       .max(5, "materialDocumentKey can have at most 5 documents"),
@@ -135,7 +135,7 @@ export const createLaunchpadRequestSchema = z
       .transform((value) => normalizeText(value))
       .refine(
         (value) => /^(?=.*\d)[0-9+()\-.\s]{7,20}$/.test(value),
-        "phone must be 7..20 characters, contain at least one number, and use only spaces or +()-.",
+        "phoneNumber must be 7..20 characters, contain at least one number, and use only spaces or +()-.",
       ),
     email: z
       .string()

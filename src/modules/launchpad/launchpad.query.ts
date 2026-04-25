@@ -2,7 +2,7 @@ import { sql, eq } from "drizzle-orm";
 import { db } from "../../db";
 import {
   LAUNCHPAD_ADVISORY_LOCK_NAMESPACE,
-  LAUNCHPAD_CATEGORY_DISPLAY_ORDER_LOCK_KEY,
+  LAUNCHPAD_CATEGORY_TOTAL_ROLES_LOCK_KEY,
 } from "./lib/constants";
 import { CreateLaunchpadRequestInput } from "./schema/launchpad.request.schema";
 import { launchpad, launchpadCategory, launchpadRole } from "../../db/schema";
@@ -38,20 +38,13 @@ export type LaunchpadDetail = {
 async function updateCategoryTotalRolesCount(
   txOrDb: Parameters<Parameters<typeof db.transaction>[0]>[0] | typeof db,
   categoryId: string,
+  roleCount: number,
 ): Promise<void> {
-  const [result] = await txOrDb
-    .select({
-      totalRoles: sql<number>`count(*)::int`.as("total_roles"),
-    })
-    .from(launchpadRole)
-    .innerJoin(launchpad, eq(launchpadRole.launchpadId, launchpad.id))
-    .where(eq(launchpad.categoryId, categoryId));
-
-  const totalRoles = result?.totalRoles ?? 0;
-
   await txOrDb
     .update(launchpadCategory)
-    .set({ totalRoles })
+    .set({
+      totalRoles: sql`${launchpadCategory.totalRoles} + ${roleCount}`,
+    })
     .where(eq(launchpadCategory.id, categoryId));
 }
 
@@ -61,7 +54,7 @@ export async function createLaunchpad(
 ): Promise<LaunchpadDetail> {
   return db.transaction(async (tx) => {
     await tx.execute(
-      sql`select pg_advisory_xact_lock(${LAUNCHPAD_ADVISORY_LOCK_NAMESPACE}, ${LAUNCHPAD_CATEGORY_DISPLAY_ORDER_LOCK_KEY})`,
+      sql`select pg_advisory_xact_lock(${LAUNCHPAD_ADVISORY_LOCK_NAMESPACE}, ${LAUNCHPAD_CATEGORY_TOTAL_ROLES_LOCK_KEY})`,
     );
 
     const fieldToInsert: launchpadInsert = {
@@ -101,7 +94,7 @@ export async function createLaunchpad(
       .values(roleData)
       .returning();
 
-    await updateCategoryTotalRolesCount(tx, data.categoryId);
+    await updateCategoryTotalRolesCount(tx, data.categoryId, data.role.length);
 
     return {
       id: created.id,
