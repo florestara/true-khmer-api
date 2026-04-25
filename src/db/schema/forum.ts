@@ -291,8 +291,9 @@ export const forumQuestionRelations = relations(
     bestAnswer: one(forumAnswer, {
       fields: [forumQuestion.bestAnswerId],
       references: [forumAnswer.id],
+      relationName: "question_bestAnswer",
     }),
-    answers: many(forumAnswer),
+    answers: many(forumAnswer, { relationName: "question_answers" }),
     votes: many(forumQuestionVote),
     saves: many(forumQuestionSave),
   }),
@@ -330,6 +331,10 @@ export const forumAnswerRelations = relations(forumAnswer, ({ one, many }) => ({
   question: one(forumQuestion, {
     fields: [forumAnswer.questionId],
     references: [forumQuestion.id],
+    relationName: "question_answers",
+  }),
+  bestAnswerForQuestions: many(forumQuestion, {
+    relationName: "question_bestAnswer",
   }),
   author: one(user, {
     fields: [forumAnswer.authorId],

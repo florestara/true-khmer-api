@@ -141,6 +141,15 @@ function buildPublicAnswersBaseQuery(executor: Pick<typeof db, "select">) {
     .leftJoin(userProfile, eq(userProfile.userId, user.id));
 }
 
+async function lockForumQuestionAnswerSelection(
+  executor: Pick<typeof db, "execute">,
+  questionId: string,
+) {
+  await executor.execute(
+    sql`select pg_advisory_xact_lock(${FORUM_ADVISORY_LOCK_NAMESPACE}, hashtext(${questionId}))`,
+  );
+}
+
 function hydrateAnswer(row: AnswerHydrationRow): ForumAnswerWithViewerVote {
   const { authorId, deletedAt: _deletedAt, ...answer } = row.answer;
 
@@ -403,6 +412,24 @@ export async function softDeleteAnswer(
   authorId: string,
 ): Promise<ForumAnswerRow | null> {
   return db.transaction(async (tx) => {
+    const [answerTarget] = await tx
+      .select({ questionId: forumAnswer.questionId })
+      .from(forumAnswer)
+      .where(
+        and(
+          eq(forumAnswer.id, answerId),
+          eq(forumAnswer.authorId, authorId),
+          eq(forumAnswer.status, "PUBLISHED"),
+        ),
+      )
+      .limit(1);
+
+    if (!answerTarget) {
+      return null;
+    }
+
+    await lockForumQuestionAnswerSelection(tx, answerTarget.questionId);
+
     const [deletedAnswer] = await tx
       .update(forumAnswer)
       .set({
@@ -492,6 +519,18 @@ export async function markBestAnswer(
   questionAuthorId: string,
 ): Promise<ForumAnswerWithViewerVote | null> {
   return db.transaction(async (tx) => {
+    const [answerTarget] = await tx
+      .select({ questionId: forumAnswer.questionId })
+      .from(forumAnswer)
+      .where(eq(forumAnswer.id, answerId))
+      .limit(1);
+
+    if (!answerTarget) {
+      return null;
+    }
+
+    await lockForumQuestionAnswerSelection(tx, answerTarget.questionId);
+
     const [answer] = await tx
       .select()
       .from(forumAnswer)
@@ -503,11 +542,6 @@ export async function markBestAnswer(
     if (!answer) {
       return null;
     }
-
-    // Serialize best-answer assignment per question.
-    await tx.execute(
-      sql`select pg_advisory_xact_lock(${FORUM_ADVISORY_LOCK_NAMESPACE}, hashtext(${answer.questionId}))`,
-    );
 
     const [question] = await tx
       .select()
