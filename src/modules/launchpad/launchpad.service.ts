@@ -119,6 +119,28 @@ export async function handleCreateLaunchpad(
       cityId: payload.cityId,
       launchpadName: payload.name,
     });
+
+    // Handle specific database errors
+    if (error instanceof Error) {
+      const errorMessage = error.message;
+
+      // PostgreSQL unique constraint violation (23505)
+      if (errorMessage.includes("23505") || errorMessage.includes("duplicate key")) {
+        return c.json(
+          { ok: false, error: "Launchpad with this name already exists" },
+          409,
+        );
+      }
+
+      // PostgreSQL foreign key violation (23503)
+      if (errorMessage.includes("23503") || errorMessage.includes("foreign key")) {
+        return c.json(
+          { ok: false, error: "Invalid category or city reference" },
+          400,
+        );
+      }
+    }
+
     return c.json({ ok: false, error: "Failed to create launchpad" }, 500);
   }
 }

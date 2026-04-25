@@ -102,7 +102,7 @@ export const createLaunchpadResponseSchema = z
       deadline: z.date().nullable(),
       logoKey: z.string().nullable(),
       coverKey: z.string().nullable(),
-      documentKeys: z.array(z.string()).nullable(),
+      documentKeys: z.array(z.string()),
       phoneNumber: z.string().nullable(),
       email: z.string().nullable(),
       telegramUsername: z.string().nullable(),

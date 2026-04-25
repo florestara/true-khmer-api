@@ -1,12 +1,11 @@
 import { sql, eq } from "drizzle-orm";
 import { db } from "../../db";
 import {
-  VOLUNTEER_ADVISORY_LOCK_NAMESPACE,
-  VOLUNTEER_CATEGORY_DISPLAY_ORDER_LOCK_KEY,
-} from "../volunteer/lib/constants";
+  LAUNCHPAD_ADVISORY_LOCK_NAMESPACE,
+  LAUNCHPAD_CATEGORY_DISPLAY_ORDER_LOCK_KEY,
+} from "./lib/constants";
 import { CreateLaunchpadRequestInput } from "./schema/launchpad.request.schema";
 import { launchpad, launchpadCategory, launchpadRole } from "../../db/schema";
-import type { PostgresJsTransaction } from "drizzle-orm/postgres-js";
 
 type launchpadInsert = typeof launchpad.$inferInsert;
 type launchpadRoleInsert = typeof launchpadRole.$inferInsert;
@@ -27,7 +26,7 @@ export type LaunchpadDetail = {
   deadline: Date | null;
   logoKey: string | null;
   coverKey: string | null;
-  documentKeys: string[] | null;
+  documentKeys: string[];
   phoneNumber: string | null;
   email: string | null;
   telegramUsername: string | null;
@@ -37,10 +36,10 @@ export type LaunchpadDetail = {
 };
 
 async function updateCategoryTotalRolesCount(
-  tx: PostgresJsTransaction<any, any>,
+  txOrDb: Parameters<Parameters<typeof db.transaction>[0]>[0] | typeof db,
   categoryId: string,
 ): Promise<void> {
-  const [result] = await tx
+  const [result] = await txOrDb
     .select({
       totalRoles: sql<number>`count(*)::int`.as("total_roles"),
     })
@@ -50,7 +49,7 @@ async function updateCategoryTotalRolesCount(
 
   const totalRoles = result?.totalRoles ?? 0;
 
-  await tx
+  await txOrDb
     .update(launchpadCategory)
     .set({ totalRoles })
     .where(eq(launchpadCategory.id, categoryId));
@@ -62,7 +61,7 @@ export async function createLaunchpad(
 ): Promise<LaunchpadDetail> {
   return db.transaction(async (tx) => {
     await tx.execute(
-      sql`select pg_advisory_xact_lock(${VOLUNTEER_ADVISORY_LOCK_NAMESPACE}, ${VOLUNTEER_CATEGORY_DISPLAY_ORDER_LOCK_KEY})`,
+      sql`select pg_advisory_xact_lock(${LAUNCHPAD_ADVISORY_LOCK_NAMESPACE}, ${LAUNCHPAD_CATEGORY_DISPLAY_ORDER_LOCK_KEY})`,
     );
 
     const fieldToInsert: launchpadInsert = {
@@ -113,9 +112,7 @@ export async function createLaunchpad(
       deadline: created.deadline ? new Date(created.deadline) : null,
       logoKey: created.logoKey,
       coverKey: created.coverKey,
-      documentKeys: Array.isArray(created.documentKeys)
-        ? created.documentKeys
-        : null,
+      documentKeys: created.documentKeys as string[],
       phoneNumber: created.phoneNumber,
       email: created.email,
       telegramUsername: created.telegramUsername,

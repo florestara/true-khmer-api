@@ -76,7 +76,7 @@ export const createLaunchpadRequestSchema = z
       .trim()
       .min(1, "name is required")
       .max(120, "name must be at most 120 characters"),
-    description: z.string().trim().nullable(),
+    description: z.string().trim().nullish(),
     categoryId: z
       .string()
       .trim()
@@ -87,41 +87,39 @@ export const createLaunchpadRequestSchema = z
       .regex(FORUM_UUID_RE, "cityId is required and must be a valid UUID"),
     deadline: z
       .string()
-      .datetime("applicationDeadline must be a valid ISO datetime")
-      .refine(
-        (value) => Number.isFinite(Date.parse(value)),
-        "applicationDeadline must be a valid ISO datetime",
-      )
+      .datetime("deadline must be a valid ISO datetime")
       .refine(
         (value) => Date.parse(value) > Date.now(),
-        "applicationDeadline must be in the future",
+        "deadline must be in the future",
       ),
     logoKey: z
       .string()
       .trim()
       .min(1, "logoKey is required")
-      .max(600, "logoKey must be <= 600 characters"),
+      .max(255, "logoKey must be <= 255 characters"),
     coverKey: z
       .string()
       .trim()
       .min(1, "coverKey is required")
-      .max(600, "coverKey must be <= 600 characters"),
-    role: z.array(
-      z.object({
-        name: z
-          .string()
-          .trim()
-          .min(1, "role name is required")
-          .max(100, "role name must be <= 100 characters"),
-        description: z.string().trim().nullable(),
-        capacity: z
-          .number()
-          .int("capacity must be an integer")
-          .positive("capacity must be positive")
-          .max(1000, "capacity must be <= 1000")
-          .default(1),
-      }),
-    ),
+      .max(255, "coverKey must be <= 255 characters"),
+    role: z
+      .array(
+        z.object({
+          name: z
+            .string()
+            .trim()
+            .min(1, "role name is required")
+            .max(100, "role name must be <= 100 characters"),
+          description: z.string().trim().nullable(),
+          capacity: z
+            .number()
+            .int("capacity must be an integer")
+            .positive("capacity must be positive")
+            .max(1000, "capacity must be <= 1000")
+            .default(1),
+        }),
+      )
+      .min(1, "At least one role is required"),
     materialDocumentKey: z
       .array(
         z
@@ -136,15 +134,14 @@ export const createLaunchpadRequestSchema = z
       .string()
       .transform((value) => normalizeText(value))
       .refine(
-        (value) =>
-          value === null || /^(?=.*\d)[0-9+()\-.\s]{7,40}$/.test(value),
-        "contact.phone must be 7..40 characters, contain at least one number, and use only spaces or +()-.",
+        (value) => /^(?=.*\d)[0-9+()\-.\s]{7,20}$/.test(value),
+        "phone must be 7..20 characters, contain at least one number, and use only spaces or +()-.",
       ),
     email: z
       .string()
       .trim()
       .email("email must be a valid email address")
-      .max(320, "email must be <= 320 characters"),
+      .max(255, "email must be <= 255 characters"),
     telegramUsername: z
       .string()
       .nullish()

@@ -203,7 +203,7 @@ const presignlaunchpadDocumentUploadRoute = createRoute({
 
 const createLaunchpadRoute = createRoute({
   method: "post",
-  path: "/create",
+  path: "/",
   tags: ["Launchpad"],
   middleware: [requireAccessToken],
   security: [{ BearerAuth: [] }],
@@ -246,6 +246,14 @@ const createLaunchpadRoute = createRoute({
       content: {
         "application/json": {
           schema: authProtectedErrorResponseSchema,
+        },
+      },
+    },
+    409: {
+      description: "Launchpad with this name already exists",
+      content: {
+        "application/json": {
+          schema: launchpadOperationErrorResponseSchema,
         },
       },
     },
