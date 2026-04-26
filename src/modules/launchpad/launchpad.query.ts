@@ -155,10 +155,6 @@ export async function createLaunchpad(
       .values(fieldToInsert)
       .returning();
 
-    if (!created.categoryId || !created.cityId) {
-      throw new Error("Launchpad must have valid categoryId and cityId");
-    }
-
     const roleData: launchpadRoleInsert[] = data.role.map((role) => ({
       title: role.name,
       launchpadId: created.id,
