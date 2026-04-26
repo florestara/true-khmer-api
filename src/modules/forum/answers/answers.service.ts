@@ -47,10 +47,10 @@ export async function handleGetAnswers(
       return c.json({ ok: false, error: "Question not found" }, 404);
     }
 
-    const answers = isPublic
+    const result = isPublic
       ? await findAnswersByQuestionIdPublic(params.questionId)
       : await findAnswersByQuestionId(params.questionId, userId as string);
-    return c.json({ ok: true, answers }, 200);
+    return c.json({ ok: true, ...result }, 200);
   } catch (err) {
     console.error("Failed to get answers", err);
     return c.json({ ok: false, error: "Internal server error" }, 500);

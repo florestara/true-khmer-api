@@ -18,6 +18,7 @@ import {
   deleteAnswerResponseSchema,
   editAnswerResponseSchema,
   getAnswersResponseSchema,
+  getMyAnswersResponseSchema,
   markBestAnswerResponseSchema,
   questionIdParamsSchema,
   updateAnswerSchema,
@@ -59,7 +60,7 @@ const getMyAnswersRoute = createRoute({
       description: "List of answers created by the authenticated user",
       content: {
         "application/json": {
-          schema: getAnswersResponseSchema,
+          schema: getMyAnswersResponseSchema,
         },
       },
     },

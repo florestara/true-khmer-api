@@ -15,7 +15,6 @@ const repliedAnswerSchema = z
     downvoteCount: z.number(),
     replyCount: z.number(),
     score: z.number(),
-    isBestAnswer: z.boolean(),
     viewerVote: z.enum(["UPVOTE", "DOWNVOTE"]).nullable(),
     createdAt: z.string(),
     updatedAt: z.string(),
@@ -34,7 +33,6 @@ export const answerResponseSchema = z
     downvoteCount: z.number(),
     replyCount: z.number(),
     score: z.number(),
-    isBestAnswer: z.boolean(),
     viewerVote: z.enum(["UPVOTE", "DOWNVOTE"]).nullable(),
     createdAt: z.string(),
     updatedAt: z.string(),
@@ -48,9 +46,17 @@ export const answerResponseSchema = z
 export const getAnswersResponseSchema = z
   .object({
     ok: z.boolean(),
+    bestAnswer: z.array(answerResponseSchema),
     answers: z.array(answerResponseSchema),
   })
   .openapi("GetAnswersResponse");
+
+export const getMyAnswersResponseSchema = z
+  .object({
+    ok: z.boolean(),
+    answers: z.array(answerResponseSchema),
+  })
+  .openapi("GetMyAnswersResponse");
 
 export const createAnswerResponseSchema = z
   .object({
