@@ -11,6 +11,9 @@ const LAUNCHPAD_DOCUMENT_ALLOWED_CONTENT_TYPE = "application/pdf";
 export const LAUNCHPAD_LOGO_MAX_BYTES = 5 * 1024 * 1024;
 export const LAUNCHPAD_DOCUMENT_MAX_BYTES = 10 * 1024 * 1024;
 
+const MAX_LAUNCHPADS_PAGE_SIZE = 50;
+const DEFAULT_LAUNCHPADS_PAGE_SIZE = 20;
+
 function normalizeText(value: string) {
   return value.trim().replace(/\s+/g, " ");
 }
@@ -135,7 +138,7 @@ export const createLaunchpadRequestSchema = z
       .transform((value) => normalizeText(value))
       .refine(
         (value) => /^(?=.*\d)[0-9+()\-.\s]{7,20}$/.test(value),
-        "phoneNumber must be 7..20 characters, contain at least one number, and use only spaces or +()-.",
+        "phoneNumber must be 7..20 characters, contain at least one digit, and use only digits, spaces, or + ( ) - .",
       ),
     email: z
       .string()
@@ -159,6 +162,161 @@ export const createLaunchpadRequestSchema = z
       ),
   })
   .openapi("CreateLaunchpadRequest");
+
+export const getLaunchpadQuerySchema = z.object({
+  launchpadId: z
+    .string()
+    .trim()
+    .regex(FORUM_UUID_RE, "launchpadId is required and must be a valid UUID"),
+});
+
+const launchpadSortBySchema = z
+  .enum(["newest", "oldest"])
+  .openapi({
+    description: "Launchpad ordering. Allowed values: newest, oldest.",
+    example: "newest",
+  });
+
+export type LaunchpadSortBy = z.infer<typeof launchpadSortBySchema>;
+
+const cursorCreatedAtSchema = z
+  .string()
+  .trim()
+  .transform((value, ctx) => {
+    const normalized = normalizeLaunchpadCursorTimestamp(value);
+    if (!normalized) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "cursor.createdAt must be a valid ISO datetime",
+      });
+      return z.NEVER;
+    }
+    return normalized;
+  });
+
+function buildChronologicalLaunchpadPageCursorSchema<
+  TSortBy extends "newest" | "oldest",
+>(sortBy: TSortBy) {
+  return z.object({
+    sortBy: z.literal(sortBy),
+    createdAt: cursorCreatedAtSchema,
+    id: z
+      .string()
+      .trim()
+      .regex(FORUM_UUID_RE, "cursor.id must be a valid UUID"),
+  });
+}
+
+const newestLaunchpadPageCursorSchema =
+  buildChronologicalLaunchpadPageCursorSchema("newest");
+const oldestLaunchpadPageCursorSchema =
+  buildChronologicalLaunchpadPageCursorSchema("oldest");
+
+const launchpadPageCursorSchema = z.discriminatedUnion("sortBy", [
+  newestLaunchpadPageCursorSchema,
+  oldestLaunchpadPageCursorSchema,
+]);
+
+export type LaunchpadPageCursor = z.infer<typeof launchpadPageCursorSchema>;
+
+export function encodeLaunchpadPageCursor(cursor: LaunchpadPageCursor): string {
+  const normalizedTimestamp = normalizeLaunchpadCursorTimestamp(cursor.createdAt);
+  if (!normalizedTimestamp) {
+    throw new Error("Cannot encode launchpad page cursor with invalid createdAt");
+  }
+
+  return Buffer.from(
+    JSON.stringify({
+      sortBy: cursor.sortBy,
+      createdAt: normalizedTimestamp,
+      id: cursor.id,
+    }),
+    "utf8",
+  ).toString("base64url");
+}
+
+function decodeLaunchpadPageCursor(raw: string): LaunchpadPageCursor | null {
+  try {
+    const parsed = JSON.parse(Buffer.from(raw, "base64url").toString("utf8"));
+    const cursor = launchpadPageCursorSchema.safeParse(parsed);
+    return cursor.success ? cursor.data : null;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeLaunchpadCursorTimestamp(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const normalized = trimmed
+    .replace(" ", "T")
+    .replace(/\.(\d{3})\d+(?=[+-Z])/, ".$1")
+    .replace(/([+-]\d{2})$/, "$1:00");
+  const parsed = new Date(normalized);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return parsed.toISOString();
+}
+
+export const getLaunchpadQueryListSchema = z
+  .object({
+    limit: z.coerce
+      .number()
+      .int()
+      .min(1, "limit must be between 1 and 50")
+      .max(MAX_LAUNCHPADS_PAGE_SIZE, "limit must be between 1 and 50")
+      .default(DEFAULT_LAUNCHPADS_PAGE_SIZE),
+    sortBy: launchpadSortBySchema.default("newest"),
+    cursor: z
+      .string()
+      .optional()
+      .openapi({
+        description:
+          "Opaque pagination cursor returned by a previous launchpads list response.",
+      }),
+  })
+  .superRefine((value, ctx) => {
+    const decodedCursor = value.cursor
+      ? decodeLaunchpadPageCursor(value.cursor)
+      : undefined;
+
+    if (value.cursor && !decodedCursor) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "cursor must be a valid pagination cursor",
+        path: ["cursor"],
+      });
+      return;
+    }
+
+    if (decodedCursor && decodedCursor.sortBy !== value.sortBy) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "cursor sort does not match sortBy",
+        path: ["cursor"],
+      });
+    }
+  })
+  .transform((value) => ({
+    limit: value.limit,
+    sortBy: value.sortBy,
+    cursor: value.cursor
+      ? (decodeLaunchpadPageCursor(value.cursor) as LaunchpadPageCursor)
+      : undefined,
+  }))
+  .openapi("GetLaunchpadQueryList");
+
+export type GetLaunchpadQueryInput = z.infer<typeof getLaunchpadQuerySchema>;
+
+export type GetLaunchpadQueryListInput = z.infer<
+  typeof getLaunchpadQueryListSchema
+>;
 
 export type CreateLaunchpadRequestInput = z.infer<
   typeof createLaunchpadRequestSchema

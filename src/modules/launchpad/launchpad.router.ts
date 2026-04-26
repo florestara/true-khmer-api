@@ -3,11 +3,15 @@ import { AppBindings } from "../../lib/types";
 import { requireAccessToken } from "../../middlewares/auth.middleware";
 import {
   createLaunchpadRequestSchema,
+  getLaunchpadQueryListSchema,
+  getLaunchpadQuerySchema,
   presignLaunchpadDocumentUploadSchema,
   presignLaunchpadImageUploadSchema,
 } from "./schema/launchpad.request.schema";
 import {
   createLaunchpadResponseSchema,
+  getLaunchpadByIdResponseSchema,
+  getLaunchpadsResponseSchema,
   launchpadOperationErrorResponseSchema,
   launchpadValidationErrorResponseSchema,
   presignLaunchpadCoverUploadResponseSchema,
@@ -17,6 +21,8 @@ import {
 import { authProtectedErrorResponseSchema } from "../auth/auth.schema";
 import {
   handleCreateLaunchpad,
+  handleFindLaunchpadById,
+  handleFindLaunchpads,
   handlePresignLaunchpadCoverUpload,
   handlePresignLaunchpadDocumentUpload,
   handlePresignLaunchpadLogoUpload,
@@ -268,6 +274,68 @@ const createLaunchpadRoute = createRoute({
   },
 });
 
+const getLaunchpadByIdRoute = createRoute({
+  method: "get",
+  path: "/{launchpadId}",
+  tags: ["Launchpad"],
+  request: {
+    params: getLaunchpadQuerySchema,
+  },
+  responses: {
+    200: {
+      description: "Launchpad found",
+      content: {
+        "application/json": {
+          schema: getLaunchpadByIdResponseSchema,
+        },
+      },
+    },
+    404: {
+      description: "Launchpad not found",
+      content: {
+        "application/json": {
+          schema: launchpadOperationErrorResponseSchema,
+        },
+      },
+    },
+    500: {
+      description: "Internal server error",
+      content: {
+        "application/json": {
+          schema: launchpadOperationErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+const getLaunchpadsRoute = createRoute({
+  method: "get",
+  path: "/",
+  tags: ["Launchpad"],
+  request: {
+    query: getLaunchpadQueryListSchema,
+  },
+  responses: {
+    200: {
+      description: "Launchpads found",
+      content: {
+        "application/json": {
+          schema: getLaunchpadsResponseSchema,
+        },
+      },
+    },
+    500: {
+      description: "Internal server error",
+      content: {
+        "application/json": {
+          schema: launchpadOperationErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
 launchpadRouter.openapi(presignlaunchpadLogoUploadRoute, async (c) => {
   const data = c.req.valid("json");
   return handlePresignLaunchpadLogoUpload(c, data) as any;
@@ -286,4 +354,14 @@ launchpadRouter.openapi(presignlaunchpadDocumentUploadRoute, async (c) => {
 launchpadRouter.openapi(createLaunchpadRoute, async (c) => {
   const data = c.req.valid("json");
   return handleCreateLaunchpad(c, data) as any;
+});
+
+launchpadRouter.openapi(getLaunchpadByIdRoute, async (c) => {
+  const { launchpadId } = c.req.valid("param");
+  return handleFindLaunchpadById(c, { launchpadId }) as any;
+});
+
+launchpadRouter.openapi(getLaunchpadsRoute, async (c) => {
+  const query = c.req.valid("query");
+  return handleFindLaunchpads(c, query) as any;
 });

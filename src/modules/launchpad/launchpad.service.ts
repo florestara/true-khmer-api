@@ -2,6 +2,8 @@ import { Context } from "hono";
 import { getAuthUserId } from "../auth/utils/get-auth";
 import {
   CreateLaunchpadRequestInput,
+  GetLaunchpadQueryInput,
+  GetLaunchpadQueryListInput,
   PresignLaunchpadDocumentUploadPayload,
   PresignLaunchpadImageUploadPayload,
 } from "./schema/launchpad.request.schema";
@@ -10,7 +12,11 @@ import {
   presignLaunchpadDocumentUpload,
   presignLaunchpadLogoUpload,
 } from "../uploads/uploads.service";
-import { createLaunchpad } from "./launchpad.query";
+import {
+  createLaunchpad,
+  findLaunchpadById,
+  findLaunchpads,
+} from "./launchpad.query";
 
 export async function handlePresignLaunchpadLogoUpload(
   c: Context,
@@ -124,7 +130,8 @@ export async function handleCreateLaunchpad(
     const pgErr = error as { code?: string; constraint_name?: string };
 
     if (pgErr?.code === "23505") {
-      const isRoleDup = pgErr.constraint_name === "launchpad_role_title_unique_idx";
+      const isRoleDup =
+        pgErr.constraint_name === "launchpad_role_title_unique_idx";
       return c.json(
         {
           ok: false,
@@ -145,5 +152,39 @@ export async function handleCreateLaunchpad(
     }
 
     return c.json({ ok: false, error: "Failed to create launchpad" }, 500);
+  }
+}
+
+export async function handleFindLaunchpadById(
+  c: Context,
+  payload: GetLaunchpadQueryInput,
+) {
+  try {
+    const launchpad = await findLaunchpadById(payload.launchpadId);
+
+    if (!launchpad) {
+      return c.json({ ok: false, error: "Launchpad not found" }, 404);
+    }
+
+    return c.json({ ok: true, launchpad }, 200);
+  } catch (error) {
+    console.error("Failed to find launchpad", {
+      error,
+      launchpadId: payload.launchpadId,
+    });
+    return c.json({ ok: false, error: "Failed to find launchpad" }, 500);
+  }
+}
+
+export async function handleFindLaunchpads(
+  c: Context,
+  query: GetLaunchpadQueryListInput,
+) {
+  try {
+    const result = await findLaunchpads(query);
+    return c.json({ ok: true, ...result }, 200);
+  } catch (error) {
+    console.error("Failed to find launchpads", { error });
+    return c.json({ ok: false, error: "Failed to find launchpads" }, 500);
   }
 }

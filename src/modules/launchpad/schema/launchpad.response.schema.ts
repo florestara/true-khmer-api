@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { LaunchpadRole } from "../launchpad.query";
+import { LaunchpadRole, LaunchpadListItem } from "../launchpad.query";
 
 const presignedUploadHeadersSchema = z.object({
   "Content-Length": z.string(),
@@ -112,3 +112,72 @@ export const createLaunchpadResponseSchema = z
     }),
   })
   .openapi("CreateLaunchpadResponse");
+
+export const getLaunchpadByIdResponseSchema = z
+  .object({
+    ok: z.literal(true),
+    launchpad: z.object({
+      id: z.string(),
+      name: z.string(),
+      description: z.string().nullable(),
+      deadline: z.date().nullable(),
+      logoKey: z.string().nullable(),
+      coverKey: z.string().nullable(),
+      documentKeys: z.array(z.string()),
+      phoneNumber: z.string().nullable(),
+      email: z.string().nullable(),
+      telegramUsername: z.string().nullable(),
+      createdBy: z.string(),
+      createdAt: z.date(),
+      category: z
+        .object({
+          id: z.string(),
+          name: z.string(),
+        })
+        .optional(),
+      city: z
+        .object({
+          id: z.string(),
+          name: z.string(),
+        })
+        .optional(),
+      roles: z.array(createLaunchpadRoleSchema),
+    }),
+  })
+  .openapi("GetLaunchpadByIdResponse");
+
+export const launchpadListItemSchema: z.ZodType<LaunchpadListItem> = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string().nullable(),
+  deadline: z.date().nullable(),
+  logoKey: z.string().nullable(),
+  coverKey: z.string().nullable(),
+  documentKeys: z.array(z.string()),
+  phoneNumber: z.string().nullable(),
+  email: z.string().nullable(),
+  telegramUsername: z.string().nullable(),
+  createdBy: z.string(),
+  createdAt: z.date(),
+  category: z
+    .object({
+      id: z.string(),
+      name: z.string(),
+    })
+    .optional(),
+  city: z
+    .object({
+      id: z.string(),
+      name: z.string(),
+    })
+    .optional(),
+  totalRoles: z.number(),
+});
+
+export const getLaunchpadsResponseSchema = z
+  .object({
+    ok: z.literal(true),
+    launchpads: z.array(launchpadListItemSchema),
+    nextCursor: z.string().nullable(),
+  })
+  .openapi("GetLaunchpadsResponse");
