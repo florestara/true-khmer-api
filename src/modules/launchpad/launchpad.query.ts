@@ -80,7 +80,7 @@ function buildLaunchpadBaseQuery() {
       launchpad: launchpad,
       category: launchpadCategory,
       city: city,
-      totalRoles: sql<number>`count(${launchpadRole.id})`,
+      totalRoles: sql<number>`cast(count(${launchpadRole.id}) as int)`,
     })
     .from(launchpad)
     .leftJoin(launchpadCategory, eq(launchpad.categoryId, launchpadCategory.id))
