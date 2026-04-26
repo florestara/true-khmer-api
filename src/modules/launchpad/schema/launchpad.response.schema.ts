@@ -96,8 +96,6 @@ export const createLaunchpadResponseSchema = z
     launchpad: z.object({
       id: z.string(),
       name: z.string(),
-      categoryId: z.string(),
-      cityId: z.string(),
       description: z.string().nullable(),
       deadline: z.date().nullable(),
       logoKey: z.string().nullable(),
@@ -108,6 +106,18 @@ export const createLaunchpadResponseSchema = z
       telegramUsername: z.string().nullable(),
       createdBy: z.string(),
       createdAt: z.date(),
+      category: z
+        .object({
+          id: z.string(),
+          name: z.string(),
+        })
+        .optional(),
+      city: z
+        .object({
+          id: z.string(),
+          name: z.string(),
+        })
+        .optional(),
       roles: z.array(createLaunchpadRoleSchema),
     }),
   })

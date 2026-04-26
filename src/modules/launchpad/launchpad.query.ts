@@ -231,12 +231,11 @@ export async function findLaunchpadById(
       city: city,
     })
     .from(launchpad)
-    .innerJoin(
+    .leftJoin(
       launchpadCategory,
       eq(launchpad.categoryId, launchpadCategory.id),
     )
-    .innerJoin(launchpadRole, eq(launchpad.id, launchpadRole.launchpadId))
-    .innerJoin(city, eq(launchpad.cityId, city.id))
+    .leftJoin(city, eq(launchpad.cityId, city.id))
     .where(eq(launchpad.id, launchpadId))
     .limit(1);
 
@@ -252,14 +251,18 @@ export async function findLaunchpadById(
   return {
     id: row.launchpad.id,
     name: row.launchpad.name,
-    category: {
-      id: row.category.id,
-      name: row.category.name,
-    },
-    city: {
-      id: row.city.id,
-      name: row.city.name,
-    },
+    category: row.category
+      ? {
+          id: row.category.id,
+          name: row.category.name,
+        }
+      : undefined,
+    city: row.city
+      ? {
+          id: row.city.id,
+          name: row.city.name,
+        }
+      : undefined,
     description: row.launchpad.description,
     deadline: row.launchpad.deadline ? new Date(row.launchpad.deadline) : null,
     logoKey: row.launchpad.logoKey,
