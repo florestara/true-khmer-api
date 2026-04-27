@@ -88,7 +88,7 @@ export const volunteerOpportunityListItemResponseSchema = z
     applicationDeadline: z.string(),
     applicationCount: z.number(),
     capacity: z.number(),
-    coverImageUrl: z.string().nullable(),
+    coverImageKey: z.string(),
     category: volunteerOpportunityReferenceSchema,
     location: volunteerOpportunityReferenceSchema,
   })
@@ -108,7 +108,6 @@ export const volunteerOpportunityResponseSchema = z
     applicationCount: z.number(),
     capacity: z.number(),
     coverImageKey: z.string(),
-    coverImageUrl: z.string().nullable(),
     benefits: z.array(z.string()),
     status: z.enum(["DRAFT", "PUBLISHED", "ARCHIVED", "CLOSED"]),
     publishedAt: z.string().nullable(),
@@ -123,7 +122,6 @@ export const volunteerOpportunityResponseSchema = z
 export const publicVolunteerOpportunityResponseSchema =
   volunteerOpportunityResponseSchema
     .omit({
-      coverImageKey: true,
       createdBy: true,
     })
     .openapi("PublicVolunteerOpportunityResponse");

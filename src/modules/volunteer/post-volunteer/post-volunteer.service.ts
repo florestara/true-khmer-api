@@ -3,7 +3,6 @@ import { POSTGRES_UNIQUE_VIOLATION } from "../../../db/constants";
 import {
   presignVolunteerApplicationDocumentUpload,
   presignVolunteerCoverUpload,
-  resolveR2PublicUrl,
 } from "../../uploads/uploads.service";
 import { getAuthUserId } from "../../auth/utils/get-auth";
 import {
@@ -39,15 +38,10 @@ const VOLUNTEER_APPLICATION_APPLICANT_OPPORTUNITY_UNIQUE_INDEX =
 
 function sanitizePublicVolunteerOpportunity<
   T extends {
-    coverImageKey: string;
     createdBy: string;
   },
 >(opportunity: T) {
-  const {
-    coverImageKey: _coverImageKey,
-    createdBy: _createdBy,
-    ...publicOpportunity
-  } = opportunity;
+  const { createdBy: _createdBy, ...publicOpportunity } = opportunity;
 
   return publicOpportunity;
 }
@@ -480,7 +474,6 @@ export async function handleCreateVolunteerOpportunity(
       location,
       coverImageKey: normalizedCoverImageKey,
       createdBy: authResult.userId,
-      coverImageUrl: resolveR2PublicUrl(normalizedCoverImageKey),
     });
 
     return c.json({ ok: true, opportunity }, 201);
