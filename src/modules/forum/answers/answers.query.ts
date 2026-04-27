@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../../../db/index";
 import {
   forumAnswer,
@@ -28,8 +28,23 @@ export class ReplyTargetUnavailableError extends Error {
   }
 }
 
+export class BestAnswerSelectionForbiddenError extends Error {
+  constructor() {
+    super("Only the question author can mark the best answer");
+    this.name = "BestAnswerSelectionForbiddenError";
+  }
+}
+
+export class BestAnswerSelectionInvalidTargetError extends Error {
+  constructor() {
+    super("Best answer can only be a top-level answer");
+    this.name = "BestAnswerSelectionInvalidTargetError";
+  }
+}
+
 type AnswerHydrationRow = {
   answer: ForumAnswerRow;
+  questionBestAnswerId: string | null;
   authorDisplayName: string | null;
   authorFullName: string;
   authorAvatarKey: string | null;
@@ -52,6 +67,21 @@ type ForumAnswerWithViewerVote = RepliedAnswerWithViewerVote & {
   repliedAnswers: RepliedAnswerWithViewerVote[] | null;
 };
 const ANSWER_SCORE_SQL = sql<number>`${forumAnswer.upvoteCount} - ${forumAnswer.downvoteCount}`;
+type HydratedRepliedAnswerWithViewerVote = RepliedAnswerWithViewerVote & {
+  isBestAnswer: boolean;
+};
+type HydratedForumAnswerWithViewerVote = HydratedRepliedAnswerWithViewerVote & {
+  repliedAnswers: HydratedRepliedAnswerWithViewerVote[] | null;
+};
+type AnswersByQuestionResult = {
+  bestAnswer: ForumAnswerWithViewerVote[];
+  answers: ForumAnswerWithViewerVote[];
+};
+export type MarkBestAnswerResult =
+  | { kind: "Marked"; answer: ForumAnswerWithViewerVote }
+  | { kind: "NotFound" }
+  | { kind: "AnswerNotPublished" }
+  | { kind: "QuestionInvalid" };
 
 function toInteger(value: unknown, fallback = 0): number {
   const parsed = Number(value);
@@ -109,6 +139,11 @@ function buildAnswersBaseQuery(
   return executor
     .select({
       answer: forumAnswer,
+      questionBestAnswerId: sql<string | null>`(
+        select ${forumQuestion.bestAnswerId}
+        from ${forumQuestion}
+        where ${forumQuestion.id} = ${forumAnswer.questionId}
+      )`,
       authorDisplayName: userProfile.displayName,
       authorFullName: user.name,
       authorAvatarKey: userProfile.avatarKey,
@@ -130,6 +165,11 @@ function buildPublicAnswersBaseQuery(executor: Pick<typeof db, "select">) {
   return executor
     .select({
       answer: forumAnswer,
+      questionBestAnswerId: sql<string | null>`(
+        select ${forumQuestion.bestAnswerId}
+        from ${forumQuestion}
+        where ${forumQuestion.id} = ${forumAnswer.questionId}
+      )`,
       authorDisplayName: userProfile.displayName,
       authorFullName: user.name,
       authorAvatarKey: userProfile.avatarKey,
@@ -140,12 +180,22 @@ function buildPublicAnswersBaseQuery(executor: Pick<typeof db, "select">) {
     .leftJoin(userProfile, eq(userProfile.userId, user.id));
 }
 
-function hydrateAnswer(row: AnswerHydrationRow): ForumAnswerWithViewerVote {
+async function lockForumQuestionAnswerSelection(
+  executor: Pick<typeof db, "execute">,
+  questionId: string,
+) {
+  await executor.execute(
+    sql`select pg_advisory_xact_lock(${FORUM_ADVISORY_LOCK_NAMESPACE}, hashtext(${questionId}))`,
+  );
+}
+
+function hydrateAnswer(row: AnswerHydrationRow): HydratedForumAnswerWithViewerVote {
   const { authorId, deletedAt: _deletedAt, ...answer } = row.answer;
 
   return {
     ...answer,
     score: answer.upvoteCount - answer.downvoteCount,
+    isBestAnswer: answer.id === row.questionBestAnswerId,
     viewerVote: row.viewerVoteType
       ? (row.viewerVoteType as AnswerVoteType)
       : null,
@@ -160,25 +210,54 @@ function hydrateAnswer(row: AnswerHydrationRow): ForumAnswerWithViewerVote {
 
 function hydratePublicAnswer(
   row: PublicAnswerHydrationRow,
-): ForumAnswerWithViewerVote {
+): HydratedForumAnswerWithViewerVote {
   return hydrateAnswer({
     ...row,
     viewerVoteType: null,
   });
 }
 
+function stripBestAnswerFlagFromReply(
+  answer: HydratedRepliedAnswerWithViewerVote,
+): RepliedAnswerWithViewerVote {
+  const { isBestAnswer: _isBestAnswer, ...publicAnswer } = answer;
+  return publicAnswer;
+}
+
+function stripBestAnswerFlag(
+  answer: HydratedForumAnswerWithViewerVote,
+): ForumAnswerWithViewerVote {
+  const {
+    isBestAnswer: _isBestAnswer,
+    repliedAnswers,
+    ...publicAnswer
+  } = answer;
+
+  return {
+    ...publicAnswer,
+    repliedAnswers: repliedAnswers
+      ? repliedAnswers.map(stripBestAnswerFlagFromReply)
+      : null,
+  };
+}
+
 function groupAnswersWithReplies(
-  answers: ForumAnswerWithViewerVote[],
-): ForumAnswerWithViewerVote[] {
-  const rootAnswers: ForumAnswerWithViewerVote[] = [];
-  const rootAnswerMap = new Map<string, ForumAnswerWithViewerVote>();
-  const replyAnswers: ForumAnswerWithViewerVote[] = [];
+  answers: HydratedForumAnswerWithViewerVote[],
+): AnswersByQuestionResult {
+  const rootAnswers: HydratedForumAnswerWithViewerVote[] = [];
+  const rootAnswerMap = new Map<string, HydratedForumAnswerWithViewerVote>();
+  const replyAnswers: HydratedForumAnswerWithViewerVote[] = [];
+  let bestAnswer: HydratedForumAnswerWithViewerVote | null = null;
 
   for (const answer of answers) {
-    const normalizedAnswer: ForumAnswerWithViewerVote = {
+    const normalizedAnswer: HydratedForumAnswerWithViewerVote = {
       ...answer,
       repliedAnswers: null,
     };
+
+    if (normalizedAnswer.isBestAnswer) {
+      bestAnswer = normalizedAnswer;
+    }
 
     if (normalizedAnswer.replyTo) {
       replyAnswers.push(normalizedAnswer);
@@ -190,6 +269,10 @@ function groupAnswersWithReplies(
   }
 
   for (const answer of replyAnswers) {
+    if (answer.isBestAnswer) {
+      continue;
+    }
+
     const parentAnswer = rootAnswerMap.get(answer.replyTo as string);
     if (!parentAnswer) {
       continue;
@@ -199,7 +282,7 @@ function groupAnswersWithReplies(
       parentAnswer.repliedAnswers = [];
     }
 
-    const { repliedAnswers: omittedRepliedAnswers, ...repliedAnswer } = answer;
+    const { repliedAnswers: _omittedRepliedAnswers, ...repliedAnswer } = answer;
     parentAnswer.repliedAnswers.push(repliedAnswer);
   }
 
@@ -209,7 +292,12 @@ function groupAnswersWithReplies(
     }
   }
 
-  return rootAnswers;
+  return {
+    bestAnswer: bestAnswer ? [stripBestAnswerFlag(bestAnswer)] : [],
+    answers: rootAnswers
+      .filter((answer) => !answer.isBestAnswer)
+      .map(stripBestAnswerFlag),
+  };
 }
 
 export async function findQuestionById(
@@ -240,14 +328,14 @@ export async function findAnswerWithViewerVoteById(
     .where(and(eq(forumAnswer.id, id), eq(forumAnswer.status, "PUBLISHED")))
     .limit(1);
 
-  return rows[0] ? hydrateAnswer(rows[0]) : null;
+  return rows[0] ? stripBestAnswerFlag(hydrateAnswer(rows[0])) : null;
 }
 
 export async function findAnswersByQuestionId(
   questionId: string,
   viewerId: string,
   sortBy: AnswerSortBy = "popular",
-): Promise<ForumAnswerWithViewerVote[]> {
+): Promise<AnswersByQuestionResult> {
   const rows = await buildAnswersBaseQuery(db, viewerId)
     .where(
       and(
@@ -263,7 +351,7 @@ export async function findAnswersByQuestionId(
 export async function findAnswersByQuestionIdPublic(
   questionId: string,
   sortBy: AnswerSortBy = "popular",
-): Promise<ForumAnswerWithViewerVote[]> {
+): Promise<AnswersByQuestionResult> {
   const rows = await buildPublicAnswersBaseQuery(db)
     .where(
       and(
@@ -290,7 +378,7 @@ export async function findAnswersByAuthorId(
     )
     .orderBy(desc(forumAnswer.createdAt), desc(forumAnswer.upvoteCount));
 
-  return rows.map((row) => hydrateAnswer(row));
+  return rows.map((row) => stripBestAnswerFlag(hydrateAnswer(row)));
 }
 
 export async function createAnswer(
@@ -356,7 +444,7 @@ export async function createAnswer(
       throw new Error("Created answer could not be loaded");
     }
 
-    return createdAnswer;
+    return stripBestAnswerFlag(createdAnswer);
   });
 }
 
@@ -394,7 +482,9 @@ export async function updateAnswer(
       )
       .limit(1);
 
-    return updatedRows[0] ? hydrateAnswer(updatedRows[0]) : null;
+    return updatedRows[0]
+      ? stripBestAnswerFlag(hydrateAnswer(updatedRows[0]))
+      : null;
   });
 }
 
@@ -403,6 +493,24 @@ export async function softDeleteAnswer(
   authorId: string,
 ): Promise<ForumAnswerRow | null> {
   return db.transaction(async (tx) => {
+    const [answerTarget] = await tx
+      .select({ questionId: forumAnswer.questionId })
+      .from(forumAnswer)
+      .where(
+        and(
+          eq(forumAnswer.id, answerId),
+          eq(forumAnswer.authorId, authorId),
+          eq(forumAnswer.status, "PUBLISHED"),
+        ),
+      )
+      .limit(1);
+
+    if (!answerTarget) {
+      return null;
+    }
+
+    await lockForumQuestionAnswerSelection(tx, answerTarget.questionId);
+
     const [deletedAnswer] = await tx
       .update(forumAnswer)
       .set({
@@ -424,6 +532,7 @@ export async function softDeleteAnswer(
     }
 
     let totalDeletedCount = 1;
+    const deletedAnswerIds = [deletedAnswer.id];
 
     if (deletedAnswer.replyTo) {
       await tx
@@ -457,6 +566,7 @@ export async function softDeleteAnswer(
         .returning({ id: forumAnswer.id });
 
       totalDeletedCount += deletedReplies.length;
+      deletedAnswerIds.push(...deletedReplies.map((answer) => answer.id));
     }
 
     await tx
@@ -467,7 +577,112 @@ export async function softDeleteAnswer(
       })
       .where(eq(forumQuestion.id, deletedAnswer.questionId));
 
+    await tx
+      .update(forumQuestion)
+      .set({
+        bestAnswerId: null,
+        bestAnswerSelectedAt: null,
+        updatedAt: sql`now()`,
+      })
+      .where(
+        and(
+          eq(forumQuestion.id, deletedAnswer.questionId),
+          inArray(forumQuestion.bestAnswerId, deletedAnswerIds),
+        ),
+      );
+
     return deletedAnswer;
+  });
+}
+
+export async function markBestAnswer(
+  answerId: string,
+  questionAuthorId: string,
+): Promise<MarkBestAnswerResult> {
+  return db.transaction(async (tx) => {
+    const [answerTarget] = await tx
+      .select({ questionId: forumAnswer.questionId })
+      .from(forumAnswer)
+      .where(eq(forumAnswer.id, answerId))
+      .limit(1);
+
+    if (!answerTarget) {
+      return { kind: "NotFound" };
+    }
+
+    await lockForumQuestionAnswerSelection(tx, answerTarget.questionId);
+
+    const [answer] = await tx
+      .select()
+      .from(forumAnswer)
+      .where(
+        and(eq(forumAnswer.id, answerId), eq(forumAnswer.status, "PUBLISHED")),
+      )
+      .limit(1);
+
+    if (!answer) {
+      return { kind: "AnswerNotPublished" };
+    }
+
+    if (answer.replyTo) {
+      throw new BestAnswerSelectionInvalidTargetError();
+    }
+
+    const [question] = await tx
+      .select()
+      .from(forumQuestion)
+      .where(
+        and(
+          eq(forumQuestion.id, answer.questionId),
+          inArray(forumQuestion.status, ["PUBLISHED", "CLOSED"]),
+        ),
+      )
+      .limit(1);
+
+    if (!question) {
+      return { kind: "QuestionInvalid" };
+    }
+
+    if (question.authorId !== questionAuthorId) {
+      throw new BestAnswerSelectionForbiddenError();
+    }
+
+    const [updatedQuestion] = await tx
+      .update(forumQuestion)
+      .set({
+        bestAnswerId: answer.id,
+        bestAnswerSelectedAt: sql`now()`,
+        updatedAt: sql`now()`,
+      })
+      .where(
+        and(
+          eq(forumQuestion.id, question.id),
+          inArray(forumQuestion.status, ["PUBLISHED", "CLOSED"]),
+        ),
+      )
+      .returning({ id: forumQuestion.id });
+
+    if (!updatedQuestion) {
+      return { kind: "QuestionInvalid" };
+    }
+
+    const markedRows = await buildAnswersBaseQuery(tx, questionAuthorId)
+      .where(
+        and(
+          eq(forumAnswer.id, answer.id),
+          eq(forumAnswer.status, "PUBLISHED"),
+        ),
+      )
+      .limit(1);
+
+    if (!markedRows[0]) {
+      throw new Error("Marked answer could not be loaded");
+    }
+
+    return {
+      kind: "Marked",
+      answer: stripBestAnswerFlag(hydrateAnswer(markedRows[0])),
+    };
   });
 }
 
@@ -555,6 +770,8 @@ export async function setAnswerVote(
       )
       .limit(1);
 
-    return votedRows[0] ? hydrateAnswer(votedRows[0]) : null;
+    return votedRows[0]
+      ? stripBestAnswerFlag(hydrateAnswer(votedRows[0]))
+      : null;
   });
 }

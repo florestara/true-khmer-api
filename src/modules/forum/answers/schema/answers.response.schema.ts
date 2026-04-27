@@ -46,9 +46,19 @@ export const answerResponseSchema = z
 export const getAnswersResponseSchema = z
   .object({
     ok: z.boolean(),
-    answers: z.array(answerResponseSchema),
+    answers: z.object({
+      bestAnswer: z.array(answerResponseSchema),
+      answers: z.array(answerResponseSchema),
+    }),
   })
   .openapi("GetAnswersResponse");
+
+export const getMyAnswersResponseSchema = z
+  .object({
+    ok: z.boolean(),
+    answers: z.array(answerResponseSchema),
+  })
+  .openapi("GetMyAnswersResponse");
 
 export const createAnswerResponseSchema = z
   .object({
@@ -63,6 +73,13 @@ export const voteAnswerResponseSchema = z
     answer: answerResponseSchema,
   })
   .openapi("VoteAnswerResponse");
+
+export const markBestAnswerResponseSchema = z
+  .object({
+    ok: z.boolean(),
+    answer: answerResponseSchema,
+  })
+  .openapi("MarkBestAnswerResponse");
 
 export const editAnswerResponseSchema = z
   .object({

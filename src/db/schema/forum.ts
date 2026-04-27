@@ -91,6 +91,14 @@ export const forumQuestion = pgTable(
     answerCount: integer("answer_count").default(0).notNull(),
     upvoteCount: integer("upvote_count").default(0).notNull(),
     downvoteCount: integer("downvote_count").default(0).notNull(),
+    bestAnswerId: uuid("best_answer_id").references(
+      (): AnyPgColumn => forumAnswer.id,
+      { onDelete: "set null" },
+    ),
+    bestAnswerSelectedAt: timestamp("best_answer_selected_at", {
+      withTimezone: true,
+      mode: "string",
+    }),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
       .defaultNow()
       .notNull(),
@@ -134,6 +142,31 @@ export const forumQuestionVote = pgTable(
     index("forum_question_vote_question_idx").using("btree", table.questionId),
     index("forum_question_vote_voter_idx").using("btree", table.voterId),
     index("forum_question_vote_type_idx").using("btree", table.voteType),
+  ],
+);
+
+export const forumQuestionSave = pgTable(
+  "forum_question_save",
+  {
+    id: uuid("id").defaultRandom().primaryKey().notNull(),
+    questionId: uuid("question_id")
+      .notNull()
+      .references(() => forumQuestion.id, { onDelete: "cascade" }),
+    saverId: uuid("saver_id")
+      .notNull()
+      .references(() => user.id),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("forum_question_save_question_saver_unique_idx").using(
+      "btree",
+      table.questionId,
+      table.saverId,
+    ),
+    index("forum_question_save_question_idx").using("btree", table.questionId),
+    index("forum_question_save_saver_idx").using("btree", table.saverId),
   ],
 );
 
@@ -255,8 +288,14 @@ export const forumQuestionRelations = relations(
       fields: [forumQuestion.authorId],
       references: [user.id],
     }),
-    answers: many(forumAnswer),
+    bestAnswer: one(forumAnswer, {
+      fields: [forumQuestion.bestAnswerId],
+      references: [forumAnswer.id],
+      relationName: "question_bestAnswer",
+    }),
+    answers: many(forumAnswer, { relationName: "question_answers" }),
     votes: many(forumQuestionVote),
+    saves: many(forumQuestionSave),
   }),
 );
 
@@ -274,10 +313,28 @@ export const forumQuestionVoteRelations = relations(
   }),
 );
 
+export const forumQuestionSaveRelations = relations(
+  forumQuestionSave,
+  ({ one }) => ({
+    question: one(forumQuestion, {
+      fields: [forumQuestionSave.questionId],
+      references: [forumQuestion.id],
+    }),
+    saver: one(user, {
+      fields: [forumQuestionSave.saverId],
+      references: [user.id],
+    }),
+  }),
+);
+
 export const forumAnswerRelations = relations(forumAnswer, ({ one, many }) => ({
   question: one(forumQuestion, {
     fields: [forumAnswer.questionId],
     references: [forumQuestion.id],
+    relationName: "question_answers",
+  }),
+  bestAnswerForQuestions: many(forumQuestion, {
+    relationName: "question_bestAnswer",
   }),
   author: one(user, {
     fields: [forumAnswer.authorId],

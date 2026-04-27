@@ -1,0 +1,3 @@
+ALTER TABLE "forum_question" ADD COLUMN "best_answer_id" uuid;--> statement-breakpoint
+ALTER TABLE "forum_question" ADD COLUMN "best_answer_selected_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "forum_question" ADD CONSTRAINT "forum_question_best_answer_id_forum_answer_id_fk" FOREIGN KEY ("best_answer_id") REFERENCES "public"."forum_answer"("id") ON DELETE set null ON UPDATE no action;

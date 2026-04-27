@@ -7,13 +7,18 @@ import {
   handleEditQuestion,
   handleGetQuestion,
   handleGetMyQuestions,
+  handleGetSavedQuestions,
   handleGetQuestions,
+  handleSaveQuestion,
   handleGetTrendingTags,
+  handleUnsaveQuestion,
   handleVoteQuestion,
 } from "./questions.service";
 import {
   createQuestionResponseSchema,
   createQuestionSchema,
+  getSavedQuestionsQuerySchema,
+  getSavedQuestionsResponseSchema,
   getTrendingTagsQuerySchema,
   getTrendingTagsResponseSchema,
   editQuestionSchema,
@@ -82,6 +87,27 @@ const getMyQuestionsRoute = createRoute({
       content: {
         "application/json": {
           schema: getMyQuestionsResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+const getSavedQuestionsRoute = createRoute({
+  method: "get",
+  path: "/saved",
+  tags: ["Forum Question"],
+  middleware: [requireAccessToken],
+  security: [{ BearerAuth: [] }],
+  request: {
+    query: getSavedQuestionsQuerySchema,
+  },
+  responses: {
+    200: {
+      description: "List of questions saved by the authenticated user",
+      content: {
+        "application/json": {
+          schema: getSavedQuestionsResponseSchema,
         },
       },
     },
@@ -207,6 +233,50 @@ const voteQuestionRoute = createRoute({
   },
 });
 
+const saveQuestionRoute = createRoute({
+  method: "post",
+  path: "/save-question/{questionId}",
+  tags: ["Forum Question"],
+  middleware: [requireAccessToken],
+  security: [{ BearerAuth: [] }],
+  request: {
+    params: getQuestionParamsSchema,
+  },
+  responses: {
+    200: {
+      description: "Question saved",
+      content: {
+        "application/json": {
+          schema: createQuestionResponseSchema,
+        },
+      },
+    },
+    404: { description: "Question not found" },
+  },
+});
+
+const unsaveQuestionRoute = createRoute({
+  method: "delete",
+  path: "/save-question/{questionId}",
+  tags: ["Forum Question"],
+  middleware: [requireAccessToken],
+  security: [{ BearerAuth: [] }],
+  request: {
+    params: getQuestionParamsSchema,
+  },
+  responses: {
+    200: {
+      description: "Question unsaved",
+      content: {
+        "application/json": {
+          schema: createQuestionResponseSchema,
+        },
+      },
+    },
+    404: { description: "Question not found" },
+  },
+});
+
 questionsRouter.openapi(listRoute, async (c) => {
   const query = c.req.valid("query");
   return handleGetQuestions(c, query) as any;
@@ -219,6 +289,11 @@ questionsRouter.openapi(trendingTagsRoute, async (c) => {
 
 questionsRouter.openapi(getMyQuestionsRoute, async (c) => {
   return handleGetMyQuestions(c) as any;
+});
+
+questionsRouter.openapi(getSavedQuestionsRoute, async (c) => {
+  const query = c.req.valid("query");
+  return handleGetSavedQuestions(c, query) as any;
 });
 
 questionsRouter.openapi(getRoute, async (c) => {
@@ -246,4 +321,14 @@ questionsRouter.openapi(voteQuestionRoute, async (c) => {
   const params = c.req.valid("param");
   const data = c.req.valid("json");
   return handleVoteQuestion(c, params, data) as any;
+});
+
+questionsRouter.openapi(saveQuestionRoute, async (c) => {
+  const params = c.req.valid("param");
+  return handleSaveQuestion(c, params) as any;
+});
+
+questionsRouter.openapi(unsaveQuestionRoute, async (c) => {
+  const params = c.req.valid("param");
+  return handleUnsaveQuestion(c, params) as any;
 });

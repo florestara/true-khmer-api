@@ -2,6 +2,7 @@ import type { Context } from "hono";
 import {
   type CreateQuestionInput,
   type EditQuestionInput,
+  type GetSavedQuestionsQuery,
   type GetTrendingTagsQuery,
   type GetQuestionsQuery,
   type QuestionIdParams,
@@ -12,12 +13,15 @@ import {
   findQuestionById,
   findQuestionByIdPublic,
   findQuestionRowById,
+  findSavedQuestionsByUserId,
   findQuestionsByAuthorId,
   findQuestions,
   findQuestionsPublic,
   getTrendingTags,
+  saveQuestionForUser,
   setQuestionVote,
   softDeleteQuestion,
+  unsaveQuestionForUser,
   updateQuestion,
 } from "./questions.query";
 import { getAuthUserId } from "../../auth/utils/get-auth";
@@ -105,6 +109,24 @@ export async function handleGetMyQuestions(c: Context) {
     return c.json({ ok: true, questions }, 200);
   } catch (err) {
     console.error("Failed to get my questions", err);
+    return c.json({ ok: false, error: "Internal server error" }, 500);
+  }
+}
+
+export async function handleGetSavedQuestions(
+  c: Context,
+  query: GetSavedQuestionsQuery,
+) {
+  const authResult = getAuthUserId(c);
+  if (!authResult.ok) {
+    return authResult.response;
+  }
+
+  try {
+    const result = await findSavedQuestionsByUserId(authResult.userId, query);
+    return c.json({ ok: true, ...result }, 200);
+  } catch (err) {
+    console.error("Failed to get saved questions", err);
     return c.json({ ok: false, error: "Internal server error" }, 500);
   }
 }
@@ -344,6 +366,63 @@ export async function handleVoteQuestion(
     );
   } catch (err) {
     console.error("Failed to vote question", err);
+    return c.json({ ok: false, error: "Internal server error" }, 500);
+  }
+}
+
+export async function handleSaveQuestion(c: Context, params: QuestionIdParams) {
+  const authResult = getAuthUserId(c);
+  if (!authResult.ok) {
+    return authResult.response;
+  }
+
+  try {
+    const existingQuestion = await findQuestionRowById(params.questionId);
+    if (!existingQuestion || existingQuestion.status === "DELETED") {
+      return c.json({ ok: false, error: "Question not found" }, 404);
+    }
+
+    const savedQuestion = await saveQuestionForUser(
+      params.questionId,
+      authResult.userId,
+    );
+    if (!savedQuestion) {
+      return c.json({ ok: false, error: "Question not found" }, 404);
+    }
+
+    return c.json({ ok: true, question: savedQuestion }, 200);
+  } catch (err) {
+    console.error("Failed to save question", err);
+    return c.json({ ok: false, error: "Internal server error" }, 500);
+  }
+}
+
+export async function handleUnsaveQuestion(
+  c: Context,
+  params: QuestionIdParams,
+) {
+  const authResult = getAuthUserId(c);
+  if (!authResult.ok) {
+    return authResult.response;
+  }
+
+  try {
+    const existingQuestion = await findQuestionRowById(params.questionId);
+    if (!existingQuestion || existingQuestion.status === "DELETED") {
+      return c.json({ ok: false, error: "Question not found" }, 404);
+    }
+
+    const unsavedQuestion = await unsaveQuestionForUser(
+      params.questionId,
+      authResult.userId,
+    );
+    if (!unsavedQuestion) {
+      return c.json({ ok: false, error: "Question not found" }, 404);
+    }
+
+    return c.json({ ok: true, question: unsavedQuestion }, 200);
+  } catch (err) {
+    console.error("Failed to unsave question", err);
     return c.json({ ok: false, error: "Internal server error" }, 500);
   }
 }

@@ -7,6 +7,7 @@ import {
   handleEditAnswer,
   handleGetAnswers,
   handleGetMyAnswers,
+  handleMarkBestAnswer,
   handleVoteAnswer,
 } from "./answers.service";
 import {
@@ -18,6 +19,8 @@ import {
   editAnswerResponseSchema,
   getAnswersResponseSchema,
   getAnswersQuerySchema,
+  getMyAnswersResponseSchema,
+  markBestAnswerResponseSchema,
   questionIdParamsSchema,
   updateAnswerSchema,
   voteAnswerResponseSchema,
@@ -59,7 +62,7 @@ const getMyAnswersRoute = createRoute({
       description: "List of answers created by the authenticated user",
       content: {
         "application/json": {
-          schema: getAnswersResponseSchema,
+          schema: getMyAnswersResponseSchema,
         },
       },
     },
@@ -174,6 +177,51 @@ const voteAnswerRoute = createRoute({
   },
 });
 
+const markBestAnswerRoute = createRoute({
+  method: "post",
+  path: "/mark-best-answer/{answerId}",
+  tags: ["Forum Answer"],
+  middleware: [requireAccessToken],
+  security: [{ BearerAuth: [] }],
+  request: {
+    params: answerIdParamsSchema,
+  },
+  responses: {
+    200: {
+      description: "Best answer marked",
+      content: {
+        "application/json": {
+          schema: markBestAnswerResponseSchema,
+        },
+      },
+    },
+    403: {
+      description: "Not authorized",
+      content: {
+        "application/json": {
+          schema: answerErrorResponseSchema,
+        },
+      },
+    },
+    404: {
+      description: "Answer not found",
+      content: {
+        "application/json": {
+          schema: answerErrorResponseSchema,
+        },
+      },
+    },
+    409: {
+      description: "Answer cannot be marked as best answer",
+      content: {
+        "application/json": {
+          schema: answerErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
 answersRouter.openapi(getAnswersRoute, async (c) => {
   const params = c.req.valid("param");
   const query = c.req.valid("query");
@@ -204,4 +252,9 @@ answersRouter.openapi(voteAnswerRoute, async (c) => {
   const params = c.req.valid("param");
   const data = c.req.valid("json");
   return handleVoteAnswer(c, params, data) as any;
+});
+
+answersRouter.openapi(markBestAnswerRoute, async (c) => {
+  const params = c.req.valid("param");
+  return handleMarkBestAnswer(c, params) as any;
 });
