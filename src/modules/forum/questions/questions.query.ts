@@ -27,6 +27,11 @@ import {
   user,
   userProfile,
 } from "../../../db/schema";
+import {
+  buildCursorPagination,
+  normalizePaginationTotal,
+  type CursorPagination,
+} from "../../../utils/pagination.helper";
 import { FORUM_ADVISORY_LOCK_NAMESPACE } from "../lib/constants";
 import {
   encodeSavedQuestionsPageCursor,
@@ -91,15 +96,9 @@ type ForumQuestionWithTags = Omit<
   };
   tags: QuestionTag[];
 };
-type QuestionsPagination = {
-  limit: number;
-  hasMore: boolean;
-  nextCursor: string | null;
-};
-
 type QuestionsListResult = {
   questions: ForumQuestionWithTags[];
-  pagination: QuestionsPagination;
+  pagination: CursorPagination;
 };
 type TrendingTagResult = {
   id: string;
@@ -768,6 +767,38 @@ function buildQuestionsWhereClause(
   return and(...filters);
 }
 
+async function countQuestions(
+  {
+    categoryId,
+    tagId,
+    search,
+    isUnanswered,
+    isTrending,
+    sortBy,
+  }: Omit<GetQuestionsQuery, "limit" | "cursor">,
+  trendingRankingTimestampSql: SQL,
+) {
+  const [result] = await db
+    .select({ total: sql<number>`count(*)::int` })
+    .from(forumQuestion)
+    .innerJoin(forumCategory, eq(forumCategory.id, forumQuestion.categoryId))
+    .innerJoin(user, eq(user.id, forumQuestion.authorId))
+    .leftJoin(userProfile, eq(userProfile.userId, user.id))
+    .where(
+      buildQuestionsWhereClause(
+        categoryId,
+        tagId,
+        search,
+        isUnanswered,
+        isTrending,
+        trendingRankingTimestampSql,
+        sortBy,
+      ),
+    );
+
+  return normalizePaginationTotal(result?.total);
+}
+
 function buildQuestionsOrderBy(
   sortBy: QuestionSortBy,
   isTrending = false,
@@ -1053,24 +1084,33 @@ export async function findQuestions(
       ),
     );
 
-  const rows = await baseQuery.limit(limit + 1);
-  const hasMore = rows.length > limit;
-  const questionRows: QuestionListRow[] = hasMore ? rows.slice(0, limit) : rows;
+  const [rows, total] = await Promise.all([
+    baseQuery.limit(limit + 1),
+    countQuestions(
+      {
+        categoryId,
+        tagId,
+        search,
+        isUnanswered,
+        isTrending,
+        sortBy,
+      },
+      trendingRankingTimestampSql,
+    ),
+  ]);
+  const { pageRows: questionRows, pagination } =
+    buildCursorPagination<QuestionListRow>({
+      rows,
+      limit,
+      total,
+      getNextCursor: (lastQuestionRow) =>
+        buildNextQuestionsCursor(sortBy, lastQuestionRow, isTrending),
+    });
   const questions = await attachTagsToQuestions(questionRows);
-  const lastQuestionRow =
-    questionRows.length > 0 ? questionRows[questionRows.length - 1] : null;
-  const nextCursor =
-    hasMore && lastQuestionRow
-      ? buildNextQuestionsCursor(sortBy, lastQuestionRow, isTrending)
-      : null;
 
   return {
     questions,
-    pagination: {
-      limit,
-      hasMore,
-      nextCursor,
-    },
+    pagination,
   };
 }
 
@@ -1103,28 +1143,38 @@ export async function findSavedQuestionsByUserId(
     filters.push(cursorFilter);
   }
 
-  const rows = await buildSavedQuestionsBaseQuery(userId)
+  const rowsQuery = buildSavedQuestionsBaseQuery(userId)
     .where(and(...filters))
     .orderBy(desc(forumQuestionSaveList.createdAt), desc(forumQuestion.id))
     .limit(limit + 1);
 
-  const hasMore = rows.length > limit;
-  const questionRows: SavedQuestionListRow[] = hasMore ? rows.slice(0, limit) : rows;
+  const countFilters = [
+    eq(forumQuestionSaveList.saverId, userId),
+    inArray(forumQuestion.status, VISIBLE_QUESTION_STATUSES),
+  ];
+  const countQuery = db
+    .select({ total: sql<number>`count(*)::int` })
+    .from(forumQuestionSaveList)
+    .innerJoin(
+      forumQuestion,
+      eq(forumQuestion.id, forumQuestionSaveList.questionId),
+    )
+    .where(and(...countFilters));
+
+  const [rows, countResult] = await Promise.all([rowsQuery, countQuery]);
+  const total = normalizePaginationTotal(countResult[0]?.total);
+  const { pageRows: questionRows, pagination } =
+    buildCursorPagination<SavedQuestionListRow>({
+      rows,
+      limit,
+      total,
+      getNextCursor: buildNextSavedQuestionsCursor,
+    });
   const questions = await attachTagsToQuestions(questionRows);
-  const lastQuestionRow =
-    questionRows.length > 0 ? questionRows[questionRows.length - 1] : null;
-  const nextCursor =
-    hasMore && lastQuestionRow
-      ? buildNextSavedQuestionsCursor(lastQuestionRow)
-      : null;
 
   return {
     questions,
-    pagination: {
-      limit,
-      hasMore,
-      nextCursor,
-    },
+    pagination,
   };
 }
 
@@ -1162,30 +1212,41 @@ export async function findQuestionsPublic({
       ),
     );
 
-  const rows = await baseQuery.limit(limit + 1);
-  const hasMore = rows.length > limit;
-  const questionRows: PublicQuestionHydrationRow[] = hasMore
-    ? rows.slice(0, limit)
-    : rows;
+  const [rows, total] = await Promise.all([
+    baseQuery.limit(limit + 1),
+    countQuestions(
+      {
+        categoryId,
+        tagId,
+        search,
+        isUnanswered,
+        isTrending,
+        sortBy,
+      },
+      trendingRankingTimestampSql,
+    ),
+  ]);
+  const { pageRows: questionRows, pagination } =
+    buildCursorPagination<PublicQuestionHydrationRow>({
+      rows,
+      limit,
+      total,
+      getNextCursor: (lastQuestionRow) =>
+        buildNextQuestionsCursor(
+          sortBy,
+          {
+            ...lastQuestionRow,
+            viewerVoteType: null,
+          },
+          isTrending,
+        ),
+    });
 
   const questions = await attachPublicTagsToQuestions(questionRows);
-  const lastQuestionRow =
-    questionRows.length > 0 ? questionRows[questionRows.length - 1] : null;
-  const nextCursor =
-    hasMore && lastQuestionRow
-      ? buildNextQuestionsCursor(sortBy, {
-          ...lastQuestionRow,
-          viewerVoteType: null,
-        }, isTrending)
-      : null;
 
   return {
     questions,
-    pagination: {
-      limit,
-      hasMore,
-      nextCursor,
-    },
+    pagination,
   };
 }
 

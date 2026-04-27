@@ -44,6 +44,7 @@ export const getQuestionsResponseSchema = z
       limit: z.number(),
       hasMore: z.boolean(),
       nextCursor: z.string().nullable(),
+      total: z.number().int().nonnegative(),
     }),
   })
   .openapi("GetQuestionsResponse");
@@ -63,6 +64,7 @@ export const getSavedQuestionsResponseSchema = z
       limit: z.number(),
       hasMore: z.boolean(),
       nextCursor: z.string().nullable(),
+      total: z.number().int().nonnegative(),
     }),
   })
   .openapi("GetSavedQuestionsResponse");
