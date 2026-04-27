@@ -129,7 +129,7 @@ export type VolunteerOpportunityListItem = {
   applicationDeadline: string;
   applicationCount: number;
   capacity: number;
-  coverImageUrl: string | null;
+  coverImageKey: string;
   category: VolunteerReference;
   location: VolunteerReference;
 };
@@ -146,7 +146,6 @@ export type VolunteerOpportunityDetail = {
   applicationCount: number;
   capacity: number;
   coverImageKey: string;
-  coverImageUrl: string | null;
   benefits: string[];
   status: VolunteerOpportunityRow["status"];
   publishedAt: string | null;
@@ -392,7 +391,6 @@ export async function hasVolunteerApplicationForOpportunity(
 export type CreateVolunteerOpportunityInput =
   CreateVolunteerOpportunityBodyInput & {
     createdBy: string;
-    coverImageUrl: string | null;
     category: VolunteerReference;
     location: VolunteerReference;
   };
@@ -420,7 +418,7 @@ function hydrateVolunteerOpportunityListItem(
     applicationDeadline: row.opportunity.applicationDeadline,
     applicationCount: toInteger(row.applicationCount),
     capacity: toInteger(row.capacity),
-    coverImageUrl: row.opportunity.coverImageUrl,
+    coverImageKey: row.opportunity.coverImageKey,
     category: row.category,
     location: row.location,
   };
@@ -494,7 +492,6 @@ function hydrateVolunteerOpportunityDetail(
     applicationCount,
     capacity,
     coverImageKey: opportunity.coverImageKey,
-    coverImageUrl: opportunity.coverImageUrl,
     benefits: opportunity.benefits as string[],
     status: opportunity.status,
     publishedAt: opportunity.publishedAt,
@@ -985,7 +982,6 @@ export async function createVolunteerOpportunity(
         commitmentLabel: data.commitmentLabel,
         applicationDeadline: data.applicationDeadline,
         coverImageKey: data.coverImageKey,
-        coverImageUrl: data.coverImageUrl,
         benefits: data.benefits,
         contactEmail: data.contact.email,
         contactTelegramUsername: data.contact.telegramUsername,

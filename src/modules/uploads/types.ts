@@ -18,7 +18,6 @@ export type PresignVolunteerCoverUploadResponse = {
     "Content-Type": string;
   };
   coverImageKey: string;
-  publicUrl: string | null;
   expiresInSeconds: number;
 };
 
