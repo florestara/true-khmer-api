@@ -8,6 +8,7 @@ import type {
 } from "./answers.schema";
 import {
   BestAnswerSelectionForbiddenError,
+  BestAnswerSelectionInvalidTargetError,
   createAnswer,
   findAnswerById,
   findAnswersByAuthorId,
@@ -259,14 +260,29 @@ export async function handleMarkBestAnswer(
       authResult.userId,
     );
 
-    if (!markedAnswer) {
+    if (markedAnswer.kind === "NotFound") {
       return c.json({ ok: false, error: "Answer not found" }, 404);
     }
 
-    return c.json({ ok: true, answer: markedAnswer }, 200);
+    if (markedAnswer.kind === "AnswerNotPublished") {
+      return c.json({ ok: false, error: "Answer not published" }, 409);
+    }
+
+    if (markedAnswer.kind === "QuestionInvalid") {
+      return c.json(
+        { ok: false, error: "Question not found or not in a markable state" },
+        409,
+      );
+    }
+
+    return c.json({ ok: true, answer: markedAnswer.answer }, 200);
   } catch (err) {
     if (err instanceof BestAnswerSelectionForbiddenError) {
       return c.json({ ok: false, error: err.message }, 403);
+    }
+
+    if (err instanceof BestAnswerSelectionInvalidTargetError) {
+      return c.json({ ok: false, error: err.message }, 409);
     }
 
     console.error("Failed to mark best answer", err);

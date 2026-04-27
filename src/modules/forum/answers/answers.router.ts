@@ -201,6 +201,14 @@ const markBestAnswerRoute = createRoute({
         },
       },
     },
+    409: {
+      description: "Answer cannot be marked as best answer",
+      content: {
+        "application/json": {
+          schema: answerErrorResponseSchema,
+        },
+      },
+    },
   },
 });
 

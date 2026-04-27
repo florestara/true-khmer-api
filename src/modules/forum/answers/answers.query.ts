@@ -34,6 +34,13 @@ export class BestAnswerSelectionForbiddenError extends Error {
   }
 }
 
+export class BestAnswerSelectionInvalidTargetError extends Error {
+  constructor() {
+    super("Best answer can only be a top-level answer");
+    this.name = "BestAnswerSelectionInvalidTargetError";
+  }
+}
+
 type AnswerHydrationRow = {
   answer: ForumAnswerRow;
   questionBestAnswerId: string | null;
@@ -68,6 +75,11 @@ type AnswersByQuestionResult = {
   bestAnswer: ForumAnswerWithViewerVote[];
   answers: ForumAnswerWithViewerVote[];
 };
+export type MarkBestAnswerResult =
+  | { kind: "Marked"; answer: ForumAnswerWithViewerVote }
+  | { kind: "NotFound" }
+  | { kind: "AnswerNotPublished" }
+  | { kind: "QuestionInvalid" };
 
 function toInteger(value: unknown, fallback = 0): number {
   const parsed = Number(value);
@@ -566,7 +578,7 @@ export async function softDeleteAnswer(
 export async function markBestAnswer(
   answerId: string,
   questionAuthorId: string,
-): Promise<ForumAnswerWithViewerVote | null> {
+): Promise<MarkBestAnswerResult> {
   return db.transaction(async (tx) => {
     const [answerTarget] = await tx
       .select({ questionId: forumAnswer.questionId })
@@ -575,7 +587,7 @@ export async function markBestAnswer(
       .limit(1);
 
     if (!answerTarget) {
-      return null;
+      return { kind: "NotFound" };
     }
 
     await lockForumQuestionAnswerSelection(tx, answerTarget.questionId);
@@ -589,7 +601,11 @@ export async function markBestAnswer(
       .limit(1);
 
     if (!answer) {
-      return null;
+      return { kind: "AnswerNotPublished" };
+    }
+
+    if (answer.replyTo) {
+      throw new BestAnswerSelectionInvalidTargetError();
     }
 
     const [question] = await tx
@@ -604,7 +620,7 @@ export async function markBestAnswer(
       .limit(1);
 
     if (!question) {
-      return null;
+      return { kind: "QuestionInvalid" };
     }
 
     if (question.authorId !== questionAuthorId) {
@@ -618,11 +634,16 @@ export async function markBestAnswer(
         bestAnswerSelectedAt: sql`now()`,
         updatedAt: sql`now()`,
       })
-      .where(eq(forumQuestion.id, question.id))
+      .where(
+        and(
+          eq(forumQuestion.id, question.id),
+          inArray(forumQuestion.status, ["PUBLISHED", "CLOSED"]),
+        ),
+      )
       .returning({ id: forumQuestion.id });
 
     if (!updatedQuestion) {
-      return null;
+      return { kind: "QuestionInvalid" };
     }
 
     const markedRows = await buildAnswersBaseQuery(tx, questionAuthorId)
@@ -634,9 +655,14 @@ export async function markBestAnswer(
       )
       .limit(1);
 
-    return markedRows[0]
-      ? stripBestAnswerFlag(hydrateAnswer(markedRows[0]))
-      : null;
+    if (!markedRows[0]) {
+      throw new Error("Marked answer could not be loaded");
+    }
+
+    return {
+      kind: "Marked",
+      answer: stripBestAnswerFlag(hydrateAnswer(markedRows[0])),
+    };
   });
 }
 
