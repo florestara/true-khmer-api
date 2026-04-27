@@ -18,6 +18,7 @@ import {
   deleteAnswerResponseSchema,
   editAnswerResponseSchema,
   getAnswersResponseSchema,
+  getAnswersQuerySchema,
   getMyAnswersResponseSchema,
   markBestAnswerResponseSchema,
   questionIdParamsSchema,
@@ -36,6 +37,7 @@ const getAnswersRoute = createRoute({
   security: [{ BearerAuth: [] }],
   request: {
     params: questionIdParamsSchema,
+    query: getAnswersQuerySchema,
   },
   responses: {
     200: {
@@ -222,7 +224,8 @@ const markBestAnswerRoute = createRoute({
 
 answersRouter.openapi(getAnswersRoute, async (c) => {
   const params = c.req.valid("param");
-  return handleGetAnswers(c, params) as any;
+  const query = c.req.valid("query");
+  return handleGetAnswers(c, params, query) as any;
 });
 
 answersRouter.openapi(getMyAnswersRoute, async (c) => {
