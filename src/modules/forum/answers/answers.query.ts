@@ -107,11 +107,15 @@ function resolveAuthorName(row: AnswerHydrationRow): string {
   );
 }
 
+function getCreatedAtTime(value: string | Date): number {
+  return value instanceof Date ? value.getTime() : Date.parse(value);
+}
+
 function compareAnswersByCreatedAt(
-  left: Pick<RepliedAnswerWithViewerVote, "createdAt">,
-  right: Pick<RepliedAnswerWithViewerVote, "createdAt">,
+  left: { createdAt: string | Date },
+  right: { createdAt: string | Date },
 ) {
-  return left.createdAt.localeCompare(right.createdAt);
+  return getCreatedAtTime(left.createdAt) - getCreatedAtTime(right.createdAt);
 }
 
 function buildAnswersBaseQuery(

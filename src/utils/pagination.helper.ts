@@ -37,16 +37,19 @@ export function buildCursorPagination<T>({
 export function normalizePaginationTotal(
   total: number | string | bigint | null | undefined,
 ) {
+  const normalizeNumber = (value: number) =>
+    Number.isFinite(value) && Number.isInteger(value) && value >= 0 ? value : 0;
+
   if (typeof total === "number") {
-    return total;
+    return normalizeNumber(total);
   }
 
   if (typeof total === "bigint") {
-    return Number(total);
+    return normalizeNumber(Number(total));
   }
 
   if (typeof total === "string") {
-    return Number(total);
+    return normalizeNumber(Number(total));
   }
 
   return 0;
