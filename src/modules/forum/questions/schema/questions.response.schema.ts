@@ -16,6 +16,8 @@ export const questionResponseSchema = z
     upvoteCount: z.number().int().nonnegative(),
     downvoteCount: z.number().int().nonnegative(),
     answerCount: z.number().int().nonnegative(),
+    bestAnswerId: z.string().nullable(),
+    bestAnswerSelectedAt: z.iso.datetime({ offset: true }).nullable(),
     score: z.number().int(),
     viewerVote: z.enum(["UPVOTE", "DOWNVOTE"]).nullable(),
     viewerSave: z.boolean(),

@@ -7,12 +7,15 @@ import type {
   VoteAnswerInput,
 } from "./answers.schema";
 import {
+  BestAnswerSelectionForbiddenError,
+  BestAnswerSelectionInvalidTargetError,
   createAnswer,
   findAnswerById,
   findAnswersByAuthorId,
   findAnswersByQuestionId,
   findAnswersByQuestionIdPublic,
   findQuestionById,
+  markBestAnswer,
   ReplyTargetUnavailableError,
   setAnswerVote,
   softDeleteAnswer,
@@ -45,10 +48,10 @@ export async function handleGetAnswers(
       return c.json({ ok: false, error: "Question not found" }, 404);
     }
 
-    const answers = isPublic
+    const result = isPublic
       ? await findAnswersByQuestionIdPublic(params.questionId)
       : await findAnswersByQuestionId(params.questionId, userId as string);
-    return c.json({ ok: true, answers }, 200);
+    return c.json({ ok: true, answers: result }, 200);
   } catch (err) {
     console.error("Failed to get answers", err);
     return c.json({ ok: false, error: "Internal server error" }, 500);
@@ -238,6 +241,51 @@ export async function handleDeleteAnswer(c: Context, params: AnswerIdParams) {
     return c.json({ ok: true }, 200);
   } catch (err) {
     console.error("Failed to delete answer", err);
+    return c.json({ ok: false, error: "Internal server error" }, 500);
+  }
+}
+
+export async function handleMarkBestAnswer(
+  c: Context,
+  params: AnswerIdParams,
+) {
+  const authResult = getAuthUserId(c);
+  if (!authResult.ok) {
+    return authResult.response;
+  }
+
+  try {
+    const markedAnswer = await markBestAnswer(
+      params.answerId,
+      authResult.userId,
+    );
+
+    if (markedAnswer.kind === "NotFound") {
+      return c.json({ ok: false, error: "Answer not found" }, 404);
+    }
+
+    if (markedAnswer.kind === "AnswerNotPublished") {
+      return c.json({ ok: false, error: "Answer not published" }, 409);
+    }
+
+    if (markedAnswer.kind === "QuestionInvalid") {
+      return c.json(
+        { ok: false, error: "Question not found or not in a markable state" },
+        409,
+      );
+    }
+
+    return c.json({ ok: true, answer: markedAnswer.answer }, 200);
+  } catch (err) {
+    if (err instanceof BestAnswerSelectionForbiddenError) {
+      return c.json({ ok: false, error: err.message }, 403);
+    }
+
+    if (err instanceof BestAnswerSelectionInvalidTargetError) {
+      return c.json({ ok: false, error: err.message }, 409);
+    }
+
+    console.error("Failed to mark best answer", err);
     return c.json({ ok: false, error: "Internal server error" }, 500);
   }
 }
