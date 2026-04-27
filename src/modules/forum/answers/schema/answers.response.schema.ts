@@ -46,8 +46,10 @@ export const answerResponseSchema = z
 export const getAnswersResponseSchema = z
   .object({
     ok: z.boolean(),
-    bestAnswer: z.array(answerResponseSchema),
-    answers: z.array(answerResponseSchema),
+    answers: z.object({
+      bestAnswer: z.array(answerResponseSchema),
+      answers: z.array(answerResponseSchema),
+    }),
   })
   .openapi("GetAnswersResponse");
 
