@@ -49,8 +49,12 @@ function buildAvatarKey(userId: string, fileName: string) {
   return buildNestedImageObjectKey("avatars", userId, fileName);
 }
 
-function buildVolunteerCoverKey(userId: string, fileName: string) {
-  return buildNestedImageObjectKey("volunteer-covers", userId, fileName);
+function buildVolunteerCoverKey(userId: string, contentType: string) {
+  return buildNestedImageObjectKeyFromContentType(
+    "volunteer-covers",
+    userId,
+    contentType,
+  );
 }
 
 function buildLaunchpadLogoKey(userId: string, contentType: string) {
@@ -225,13 +229,12 @@ export function resolveR2PublicUrl(objectKey: string) {
 
 export function presignVolunteerCoverUpload(options: {
   userId: string;
-  fileName: string;
   contentType: string;
   fileSize: number;
 }) {
   const coverImageKey = buildVolunteerCoverKey(
     options.userId,
-    options.fileName,
+    options.contentType,
   );
   const presigned = buildPresignedPutUrl(
     coverImageKey,
@@ -244,7 +247,6 @@ export function presignVolunteerCoverUpload(options: {
     method: "PUT",
     requiredHeaders: presigned.requiredHeaders,
     coverImageKey,
-    publicUrl: resolvePublicUrl(coverImageKey),
     expiresInSeconds: presigned.expiresInSeconds,
   };
 

@@ -284,7 +284,6 @@ export async function handlePresignVolunteerOpportunityCoverUpload(
   try {
     const upload = presignVolunteerCoverUpload({
       userId: authResult.userId,
-      fileName: payload.fileName,
       contentType: payload.contentType,
       fileSize: payload.fileSize,
     });

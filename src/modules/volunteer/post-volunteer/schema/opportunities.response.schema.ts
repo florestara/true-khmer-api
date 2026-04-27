@@ -11,7 +11,6 @@ export const presignVolunteerOpportunityCoverUploadResultSchema = z
     method: z.literal("PUT"),
     requiredHeaders: presignedUploadHeadersSchema,
     coverImageKey: z.string(),
-    publicUrl: z.string().nullable(),
     expiresInSeconds: z.number(),
   })
   .openapi("PresignVolunteerOpportunityCoverUploadResult");

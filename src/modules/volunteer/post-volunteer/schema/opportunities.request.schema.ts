@@ -7,7 +7,6 @@ const VOLUNTEER_COVER_IMAGE_ALLOWED_CONTENT_TYPES = [
   "image/webp",
 ] as const;
 const VOLUNTEER_APPLICATION_DOCUMENT_CONTENT_TYPE = "application/pdf";
-const SAFE_UPLOAD_FILE_NAME = /^[A-Za-z0-9._-]+$/;
 const MAX_VOLUNTEER_OPPORTUNITIES_PAGE_SIZE = 50;
 const DEFAULT_VOLUNTEER_OPPORTUNITIES_PAGE_SIZE = 10;
 const MIN_VOLUNTEER_APPLICATION_DOCUMENT_COUNT = 1;
@@ -244,12 +243,6 @@ const volunteerOpportunityRoleSchema = z
 
 export const presignVolunteerOpportunityCoverUploadSchema = z
   .object({
-    fileName: z
-      .string()
-      .trim()
-      .min(1, "fileName is required")
-      .max(120, "fileName must be <= 120 characters")
-      .regex(SAFE_UPLOAD_FILE_NAME, "fileName contains invalid characters"),
     contentType: z
       .string()
       .trim()
