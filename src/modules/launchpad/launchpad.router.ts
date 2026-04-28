@@ -2,10 +2,16 @@ import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
 import { AppBindings } from "../../lib/types";
 import { requireAccessToken } from "../../middlewares/auth.middleware";
 import {
+  createLaunchpadRequestSchema,
+  getLaunchpadQueryListSchema,
+  getLaunchpadQuerySchema,
   presignLaunchpadDocumentUploadSchema,
   presignLaunchpadImageUploadSchema,
 } from "./schema/launchpad.request.schema";
 import {
+  createLaunchpadResponseSchema,
+  getLaunchpadByIdResponseSchema,
+  getLaunchpadsResponseSchema,
   launchpadOperationErrorResponseSchema,
   launchpadValidationErrorResponseSchema,
   presignLaunchpadCoverUploadResponseSchema,
@@ -14,6 +20,9 @@ import {
 } from "./schema/launchpad.response.schema";
 import { authProtectedErrorResponseSchema } from "../auth/auth.schema";
 import {
+  handleCreateLaunchpad,
+  handleFindLaunchpadById,
+  handleFindLaunchpads,
   handlePresignLaunchpadCoverUpload,
   handlePresignLaunchpadDocumentUpload,
   handlePresignLaunchpadLogoUpload,
@@ -198,6 +207,135 @@ const presignlaunchpadDocumentUploadRoute = createRoute({
   },
 });
 
+const createLaunchpadRoute = createRoute({
+  method: "post",
+  path: "/",
+  tags: ["Launchpad"],
+  middleware: [requireAccessToken],
+  security: [{ BearerAuth: [] }],
+  request: {
+    body: {
+      content: {
+        "application/json": {
+          schema: createLaunchpadRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "Launchpad created successfully",
+      content: {
+        "application/json": {
+          schema: createLaunchpadResponseSchema,
+        },
+      },
+    },
+    400: {
+      description: "Validation failed",
+      content: {
+        "application/json": {
+          schema: launchpadValidationErrorResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: "Unauthorized",
+      content: {
+        "application/json": {
+          schema: authProtectedErrorResponseSchema,
+        },
+      },
+    },
+    403: {
+      description: "Forbidden",
+      content: {
+        "application/json": {
+          schema: authProtectedErrorResponseSchema,
+        },
+      },
+    },
+    409: {
+      description: "Launchpad with this name already exists",
+      content: {
+        "application/json": {
+          schema: launchpadOperationErrorResponseSchema,
+        },
+      },
+    },
+    500: {
+      description: "Internal server error",
+      content: {
+        "application/json": {
+          schema: launchpadOperationErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+const getLaunchpadByIdRoute = createRoute({
+  method: "get",
+  path: "/{launchpadId}",
+  tags: ["Launchpad"],
+  request: {
+    params: getLaunchpadQuerySchema,
+  },
+  responses: {
+    200: {
+      description: "Launchpad found",
+      content: {
+        "application/json": {
+          schema: getLaunchpadByIdResponseSchema,
+        },
+      },
+    },
+    404: {
+      description: "Launchpad not found",
+      content: {
+        "application/json": {
+          schema: launchpadOperationErrorResponseSchema,
+        },
+      },
+    },
+    500: {
+      description: "Internal server error",
+      content: {
+        "application/json": {
+          schema: launchpadOperationErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+const getLaunchpadsRoute = createRoute({
+  method: "get",
+  path: "/",
+  tags: ["Launchpad"],
+  request: {
+    query: getLaunchpadQueryListSchema,
+  },
+  responses: {
+    200: {
+      description: "Launchpads found",
+      content: {
+        "application/json": {
+          schema: getLaunchpadsResponseSchema,
+        },
+      },
+    },
+    500: {
+      description: "Internal server error",
+      content: {
+        "application/json": {
+          schema: launchpadOperationErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
 launchpadRouter.openapi(presignlaunchpadLogoUploadRoute, async (c) => {
   const data = c.req.valid("json");
   return handlePresignLaunchpadLogoUpload(c, data) as any;
@@ -211,4 +349,19 @@ launchpadRouter.openapi(presignlaunchpadCoverUploadRoute, async (c) => {
 launchpadRouter.openapi(presignlaunchpadDocumentUploadRoute, async (c) => {
   const data = c.req.valid("json");
   return handlePresignLaunchpadDocumentUpload(c, data) as any;
+});
+
+launchpadRouter.openapi(createLaunchpadRoute, async (c) => {
+  const data = c.req.valid("json");
+  return handleCreateLaunchpad(c, data) as any;
+});
+
+launchpadRouter.openapi(getLaunchpadByIdRoute, async (c) => {
+  const { launchpadId } = c.req.valid("param");
+  return handleFindLaunchpadById(c, { launchpadId }) as any;
+});
+
+launchpadRouter.openapi(getLaunchpadsRoute, async (c) => {
+  const query = c.req.valid("query");
+  return handleFindLaunchpads(c, query) as any;
 });
