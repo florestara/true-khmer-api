@@ -14,6 +14,7 @@ import {
   launchpad,
   launchpadCategory,
   launchpadRole,
+  user,
 } from "../../db/schema";
 
 type launchpadInsert = typeof launchpad.$inferInsert;
@@ -37,7 +38,10 @@ export type LaunchpadDetail = {
   phoneNumber: string | null;
   email: string | null;
   telegramUsername: string | null;
-  createdBy: string;
+  createdBy: {
+    id: string;
+    name: string;
+  };
   createdAt: Date;
   category?: {
     id: string;
@@ -61,7 +65,10 @@ export type LaunchpadListItem = {
   phoneNumber: string | null;
   email: string | null;
   telegramUsername: string | null;
-  createdBy: string;
+  createdBy: {
+    id: string;
+    name: string;
+  };
   createdAt: Date;
   category?: {
     id: string;
@@ -80,13 +87,15 @@ function buildLaunchpadBaseQuery() {
       launchpad: launchpad,
       category: launchpadCategory,
       city: city,
+      createdBy: user,
       totalRoles: sql<number>`cast(count(${launchpadRole.id}) as int)`,
     })
     .from(launchpad)
     .leftJoin(launchpadCategory, eq(launchpad.categoryId, launchpadCategory.id))
     .leftJoin(city, eq(launchpad.cityId, city.id))
+    .leftJoin(user, eq(launchpad.createdBy, user.id))
     .leftJoin(launchpadRole, eq(launchpad.id, launchpadRole.launchpadId))
-    .groupBy(launchpad.id, launchpadCategory.id, city.id);
+    .groupBy(launchpad.id, launchpadCategory.id, city.id, user.id);
 }
 
 function buildLaunchpadWhereClause(
@@ -97,9 +106,9 @@ function buildLaunchpadWhereClause(
   }
 
   if (cursor.sortBy === "newest") {
-    return sql`${launchpad.createdAt} < ${new Date(cursor.createdAt).toISOString()}::timestamp OR (${launchpad.createdAt} = ${new Date(cursor.createdAt).toISOString()}::timestamp AND ${launchpad.id} < ${cursor.id})`;
+    return sql`${launchpad.createdAt} < ${new Date(cursor.createdAt).toISOString()}::timestamptz OR (${launchpad.createdAt} = ${new Date(cursor.createdAt).toISOString()}::timestamptz AND ${launchpad.id} < ${cursor.id})`;
   } else if (cursor.sortBy === "oldest") {
-    return sql`${launchpad.createdAt} > ${new Date(cursor.createdAt).toISOString()}::timestamp OR (${launchpad.createdAt} = ${new Date(cursor.createdAt).toISOString()}::timestamp AND ${launchpad.id} > ${cursor.id})`;
+    return sql`${launchpad.createdAt} > ${new Date(cursor.createdAt).toISOString()}::timestamptz OR (${launchpad.createdAt} = ${new Date(cursor.createdAt).toISOString()}::timestamptz AND ${launchpad.id} > ${cursor.id})`;
   }
 
   return undefined;
@@ -182,6 +191,12 @@ export async function createLaunchpad(
       .where(eq(city.id, data.cityId))
       .limit(1);
 
+    const [createdByUser] = await tx
+      .select()
+      .from(user)
+      .where(eq(user.id, userId))
+      .limit(1);
+
     return {
       id: created.id,
       name: created.name,
@@ -193,7 +208,15 @@ export async function createLaunchpad(
       phoneNumber: created.phoneNumber,
       email: created.email,
       telegramUsername: created.telegramUsername,
-      createdBy: created.createdBy,
+      createdBy: createdByUser
+        ? {
+            id: createdByUser.id,
+            name: createdByUser.name,
+          }
+        : {
+            id: userId,
+            name: "Unknown",
+          },
       createdAt: new Date(created.createdAt),
       category: category
         ? {
@@ -225,13 +248,12 @@ export async function findLaunchpadById(
       launchpad: launchpad,
       category: launchpadCategory,
       city: city,
+      createdBy: user,
     })
     .from(launchpad)
-    .leftJoin(
-      launchpadCategory,
-      eq(launchpad.categoryId, launchpadCategory.id),
-    )
+    .leftJoin(launchpadCategory, eq(launchpad.categoryId, launchpadCategory.id))
     .leftJoin(city, eq(launchpad.cityId, city.id))
+    .leftJoin(user, eq(launchpad.createdBy, user.id))
     .where(eq(launchpad.id, launchpadId))
     .limit(1);
 
@@ -267,7 +289,15 @@ export async function findLaunchpadById(
     phoneNumber: row.launchpad.phoneNumber,
     email: row.launchpad.email,
     telegramUsername: row.launchpad.telegramUsername,
-    createdBy: row.launchpad.createdBy,
+    createdBy: row.createdBy
+      ? {
+          id: row.createdBy.id,
+          name: row.createdBy.name,
+        }
+      : {
+          id: row.launchpad.createdBy,
+          name: "Unknown",
+        },
     createdAt: new Date(row.launchpad.createdAt),
     roles: roles.map((role) => ({
       id: role.id,
@@ -316,7 +346,15 @@ export async function findLaunchpads(
     phoneNumber: row.launchpad.phoneNumber,
     email: row.launchpad.email,
     telegramUsername: row.launchpad.telegramUsername,
-    createdBy: row.launchpad.createdBy,
+    createdBy: row.createdBy
+      ? {
+          id: row.createdBy.id,
+          name: row.createdBy.name,
+        }
+      : {
+          id: row.launchpad.createdBy,
+          name: "Unknown",
+        },
     createdAt: new Date(row.launchpad.createdAt),
     category: row.category
       ? {

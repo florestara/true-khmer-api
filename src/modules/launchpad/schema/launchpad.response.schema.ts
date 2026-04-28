@@ -104,7 +104,10 @@ export const createLaunchpadResponseSchema = z
       phoneNumber: z.string().nullable(),
       email: z.string().nullable(),
       telegramUsername: z.string().nullable(),
-      createdBy: z.string(),
+      createdBy: z.object({
+        id: z.string(),
+        name: z.string(),
+      }),
       createdAt: z.date(),
       category: z
         .object({
@@ -137,7 +140,10 @@ export const getLaunchpadByIdResponseSchema = z
       phoneNumber: z.string().nullable(),
       email: z.string().nullable(),
       telegramUsername: z.string().nullable(),
-      createdBy: z.string(),
+      createdBy: z.object({
+        id: z.string(),
+        name: z.string(),
+      }),
       createdAt: z.date(),
       category: z
         .object({
@@ -167,7 +173,10 @@ export const launchpadListItemSchema: z.ZodType<LaunchpadListItem> = z.object({
   phoneNumber: z.string().nullable(),
   email: z.string().nullable(),
   telegramUsername: z.string().nullable(),
-  createdBy: z.string(),
+  createdBy: z.object({
+    id: z.string(),
+    name: z.string(),
+  }),
   createdAt: z.date(),
   category: z
     .object({
