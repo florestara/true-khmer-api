@@ -120,6 +120,13 @@
       "when": 1777084417776,
       "tag": "0016_flashy_gressill",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1777399997265,
+      "tag": "0017_melted_valkyrie",
+      "breakpoints": true
     }
   ]
 }

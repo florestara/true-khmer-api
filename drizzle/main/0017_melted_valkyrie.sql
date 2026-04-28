@@ -1,0 +1,1 @@
+ALTER TABLE "launchpad" ADD COLUMN "total_view" integer DEFAULT 0 NOT NULL;

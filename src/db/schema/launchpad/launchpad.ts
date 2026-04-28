@@ -1,5 +1,6 @@
 import {
   index,
+  integer,
   jsonb,
   pgTable,
   text,
@@ -37,6 +38,7 @@ export const launchpad = pgTable(
     email: varchar("email", { length: 255 }),
     telegramUsername: varchar("telegram_username", { length: 255 }),
     website: varchar("website", { length: 255 }),
+    totalView: integer("total_view").notNull().default(0),
     createdBy: uuid("created_by")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
