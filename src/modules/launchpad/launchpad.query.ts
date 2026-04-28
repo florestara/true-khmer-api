@@ -39,6 +39,7 @@ export type LaunchpadDetail = {
   phoneNumber: string | null;
   email: string | null;
   telegramUsername: string | null;
+  totalView: number;
   createdBy: {
     id: string;
     name: string;
@@ -68,6 +69,7 @@ export type LaunchpadListItem = {
   phoneNumber: string | null;
   email: string | null;
   telegramUsername: string | null;
+  totalView: number;
   createdBy: {
     id: string;
     name: string;
@@ -260,6 +262,7 @@ export async function createLaunchpad(
       phoneNumber: created.phoneNumber,
       email: created.email,
       telegramUsername: created.telegramUsername,
+      totalView: created.totalView ?? 0,
       createdBy: createdByUser
         ? {
             id: createdByUser.user.id,
@@ -354,6 +357,7 @@ export async function findLaunchpadById(
     phoneNumber: row.launchpad.phoneNumber,
     email: row.launchpad.email,
     telegramUsername: row.launchpad.telegramUsername,
+    totalView: row.launchpad.totalView ?? 0,
     createdBy: row.createdBy
       ? {
           id: row.createdBy.id,
@@ -415,6 +419,7 @@ export async function findLaunchpads(
     phoneNumber: row.launchpad.phoneNumber,
     email: row.launchpad.email,
     telegramUsername: row.launchpad.telegramUsername,
+    totalView: row.launchpad.totalView ?? 0,
     createdBy: row.createdBy
       ? {
           id: row.createdBy.id,

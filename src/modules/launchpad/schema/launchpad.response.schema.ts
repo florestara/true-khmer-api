@@ -162,6 +162,7 @@ export const getLaunchpadByIdResponseSchema = z
         })
         .optional(),
       roles: z.array(createLaunchpadRoleSchema),
+      totalView: z.number(),
     }),
   })
   .openapi("GetLaunchpadByIdResponse");
@@ -197,6 +198,7 @@ export const launchpadListItemSchema: z.ZodType<LaunchpadListItem> = z.object({
     })
     .optional(),
   totalRoles: z.number(),
+  totalView: z.number(),
 });
 
 export const getLaunchpadsResponseSchema = z
