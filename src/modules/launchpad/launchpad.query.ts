@@ -15,6 +15,8 @@ import {
   launchpadCategory,
   launchpadRole,
   user,
+  userProfile,
+  volunteerApplication,
 } from "../../db/schema";
 
 type launchpadInsert = typeof launchpad.$inferInsert;
@@ -41,6 +43,8 @@ export type LaunchpadDetail = {
   createdBy: {
     id: string;
     name: string;
+    avatarKey: string | null;
+    volunteerCount: number;
   };
   createdAt: Date;
   category?: {
@@ -68,6 +72,8 @@ export type LaunchpadListItem = {
   createdBy: {
     id: string;
     name: string;
+    avatarKey: string | null;
+    volunteerCount: number;
   };
   createdAt: Date;
   category?: {
@@ -82,20 +88,34 @@ export type LaunchpadListItem = {
 };
 
 function buildLaunchpadBaseQuery() {
+  const volunteerCountSubquery = db
+    .select({
+      userId: volunteerApplication.applicantId,
+      count: sql<number>`cast(count(${volunteerApplication.id}) as int)`,
+    })
+    .from(volunteerApplication)
+    .where(eq(volunteerApplication.status, "ACCEPTED"))
+    .groupBy(volunteerApplication.applicantId)
+    .as("volunteer_count");
+
   return db
     .select({
       launchpad: launchpad,
       category: launchpadCategory,
       city: city,
       createdBy: user,
+      createdByProfile: userProfile,
+      volunteerCount: sql<number>`coalesce(${volunteerCountSubquery.count}, 0)`,
       totalRoles: sql<number>`cast(count(${launchpadRole.id}) as int)`,
     })
     .from(launchpad)
     .leftJoin(launchpadCategory, eq(launchpad.categoryId, launchpadCategory.id))
     .leftJoin(city, eq(launchpad.cityId, city.id))
     .leftJoin(user, eq(launchpad.createdBy, user.id))
+    .leftJoin(userProfile, eq(user.id, userProfile.userId))
+    .leftJoin(volunteerCountSubquery, eq(user.id, volunteerCountSubquery.userId))
     .leftJoin(launchpadRole, eq(launchpad.id, launchpadRole.launchpadId))
-    .groupBy(launchpad.id, launchpadCategory.id, city.id, user.id);
+    .groupBy(launchpad.id, launchpadCategory.id, city.id, user.id, userProfile.id, volunteerCountSubquery.count);
 }
 
 function buildLaunchpadWhereClause(
@@ -192,10 +212,23 @@ export async function createLaunchpad(
       .limit(1);
 
     const [createdByUser] = await tx
-      .select()
+      .select({
+        user: user,
+        profile: userProfile,
+      })
       .from(user)
+      .leftJoin(userProfile, eq(user.id, userProfile.userId))
       .where(eq(user.id, userId))
       .limit(1);
+
+    const [volunteerCountResult] = await tx
+      .select({
+        count: sql<number>`cast(count(${volunteerApplication.id}) as int)`,
+      })
+      .from(volunteerApplication)
+      .where(
+        sql`${volunteerApplication.applicantId} = ${userId} AND ${volunteerApplication.status} = 'ACCEPTED'`,
+      );
 
     return {
       id: created.id,
@@ -210,12 +243,16 @@ export async function createLaunchpad(
       telegramUsername: created.telegramUsername,
       createdBy: createdByUser
         ? {
-            id: createdByUser.id,
-            name: createdByUser.name,
+            id: createdByUser.user.id,
+            name: createdByUser.user.name,
+            avatarKey: createdByUser.profile?.avatarKey ?? null,
+            volunteerCount: volunteerCountResult?.count ?? 0,
           }
         : {
             id: userId,
             name: "Unknown",
+            avatarKey: null,
+            volunteerCount: 0,
           },
       createdAt: new Date(created.createdAt),
       category: category
@@ -249,11 +286,13 @@ export async function findLaunchpadById(
       category: launchpadCategory,
       city: city,
       createdBy: user,
+      createdByProfile: userProfile,
     })
     .from(launchpad)
     .leftJoin(launchpadCategory, eq(launchpad.categoryId, launchpadCategory.id))
     .leftJoin(city, eq(launchpad.cityId, city.id))
     .leftJoin(user, eq(launchpad.createdBy, user.id))
+    .leftJoin(userProfile, eq(user.id, userProfile.userId))
     .where(eq(launchpad.id, launchpadId))
     .limit(1);
 
@@ -265,6 +304,15 @@ export async function findLaunchpadById(
     .select()
     .from(launchpadRole)
     .where(eq(launchpadRole.launchpadId, launchpadId));
+
+  const [volunteerCountResult] = await db
+    .select({
+      count: sql<number>`cast(count(${volunteerApplication.id}) as int)`,
+    })
+    .from(volunteerApplication)
+    .where(
+      sql`${volunteerApplication.applicantId} = ${row.launchpad.createdBy} AND ${volunteerApplication.status} = 'ACCEPTED'`,
+    );
 
   return {
     id: row.launchpad.id,
@@ -293,10 +341,14 @@ export async function findLaunchpadById(
       ? {
           id: row.createdBy.id,
           name: row.createdBy.name,
+          avatarKey: row.createdByProfile?.avatarKey ?? null,
+          volunteerCount: volunteerCountResult?.count ?? 0,
         }
       : {
           id: row.launchpad.createdBy,
           name: "Unknown",
+          avatarKey: null,
+          volunteerCount: 0,
         },
     createdAt: new Date(row.launchpad.createdAt),
     roles: roles.map((role) => ({
@@ -350,10 +402,14 @@ export async function findLaunchpads(
       ? {
           id: row.createdBy.id,
           name: row.createdBy.name,
+          avatarKey: row.createdByProfile?.avatarKey ?? null,
+          volunteerCount: row.volunteerCount ?? 0,
         }
       : {
           id: row.launchpad.createdBy,
           name: "Unknown",
+          avatarKey: null,
+          volunteerCount: 0,
         },
     createdAt: new Date(row.launchpad.createdAt),
     category: row.category
