@@ -91,7 +91,7 @@ function buildLaunchpadBaseQuery() {
   const volunteerCountSubquery = db
     .select({
       userId: volunteerApplication.applicantId,
-      count: sql<number>`cast(count(${volunteerApplication.id}) as int)`,
+      count: sql<number>`cast(count(${volunteerApplication.id}) as int)`.as('count'),
     })
     .from(volunteerApplication)
     .where(eq(volunteerApplication.status, "ACCEPTED"))
@@ -106,7 +106,7 @@ function buildLaunchpadBaseQuery() {
       createdBy: user,
       createdByProfile: userProfile,
       volunteerCount: sql<number>`coalesce(${volunteerCountSubquery.count}, 0)`,
-      totalRoles: sql<number>`cast(count(${launchpadRole.id}) as int)`,
+      totalRoles: sql<number>`cast(count(${launchpadRole.id}) as int)`.as('totalRoles'),
     })
     .from(launchpad)
     .leftJoin(launchpadCategory, eq(launchpad.categoryId, launchpadCategory.id))
