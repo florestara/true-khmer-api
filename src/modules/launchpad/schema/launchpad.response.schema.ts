@@ -108,7 +108,7 @@ export const createLaunchpadResponseSchema = z
         id: z.string(),
         name: z.string(),
         avatarKey: z.string().nullable(),
-        volunteerCount: z.number(),
+        launchpadCount: z.number(),
       }),
       createdAt: z.date(),
       category: z
@@ -146,7 +146,7 @@ export const getLaunchpadByIdResponseSchema = z
         id: z.string(),
         name: z.string(),
         avatarKey: z.string().nullable(),
-        volunteerCount: z.number(),
+        launchpadCount: z.number(),
       }),
       createdAt: z.date(),
       category: z
@@ -181,7 +181,7 @@ export const launchpadListItemSchema: z.ZodType<LaunchpadListItem> = z.object({
     id: z.string(),
     name: z.string(),
     avatarKey: z.string().nullable(),
-    volunteerCount: z.number(),
+    launchpadCount: z.number(),
   }),
   createdAt: z.date(),
   category: z
