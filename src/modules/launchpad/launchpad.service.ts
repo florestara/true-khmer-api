@@ -167,8 +167,14 @@ export async function handleFindLaunchpadById(
       return c.json({ ok: false, error: "Launchpad not found" }, 404);
     }
 
-    // Increment view count
-    await incrementLaunchpadViewCount(payload.launchpadId);
+    try {
+      await incrementLaunchpadViewCount(payload.launchpadId);
+    } catch (error) {
+      console.warn("Failed to increment launchpad view count", {
+        error,
+        launchpadId: payload.launchpadId,
+      });
+    }
 
     return c.json({ ok: true, launchpad }, 200);
   } catch (error) {
