@@ -153,6 +153,17 @@ async function updateCategoryTotalRolesCount(
     .where(eq(launchpadCategory.id, categoryId));
 }
 
+export async function incrementLaunchpadViewCount(
+  launchpadId: string,
+): Promise<void> {
+  await db
+    .update(launchpad)
+    .set({
+      totalView: sql`${launchpad.totalView} + 1`,
+    })
+    .where(eq(launchpad.id, launchpadId));
+}
+
 export async function createLaunchpad(
   data: CreateLaunchpadRequestInput,
   userId: string,

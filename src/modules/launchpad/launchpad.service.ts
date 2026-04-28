@@ -16,6 +16,7 @@ import {
   createLaunchpad,
   findLaunchpadById,
   findLaunchpads,
+  incrementLaunchpadViewCount,
 } from "./launchpad.query";
 
 export async function handlePresignLaunchpadLogoUpload(
@@ -165,6 +166,9 @@ export async function handleFindLaunchpadById(
     if (!launchpad) {
       return c.json({ ok: false, error: "Launchpad not found" }, 404);
     }
+
+    // Increment view count
+    await incrementLaunchpadViewCount(payload.launchpadId);
 
     return c.json({ ok: true, launchpad }, 200);
   } catch (error) {
