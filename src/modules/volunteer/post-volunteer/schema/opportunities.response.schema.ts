@@ -152,6 +152,7 @@ export const volunteerOpportunitiesPaginationResponseSchema = z
     limit: z.number(),
     hasMore: z.boolean(),
     nextCursor: z.string().nullable(),
+    total: z.number().int().nonnegative(),
   })
   .openapi("VolunteerOpportunitiesPaginationResponse");
 

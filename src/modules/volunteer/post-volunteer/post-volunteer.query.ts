@@ -28,6 +28,11 @@ import {
   volunteerRoleRequirement,
 } from "../../../db/schema";
 import {
+  buildCursorPagination,
+  normalizePaginationTotal,
+  type CursorPagination,
+} from "../../../utils/pagination.helper";
+import {
   VOLUNTEER_ADVISORY_LOCK_NAMESPACE,
   VOLUNTEER_CATEGORY_DISPLAY_ORDER_LOCK_KEY,
 } from "../lib/constants";
@@ -68,11 +73,6 @@ type HydratedVolunteerRequirement = Pick<
   VolunteerRoleRequirementRow,
   "requirementText"
 >;
-type VolunteerOpportunitiesPagination = {
-  limit: number;
-  hasMore: boolean;
-  nextCursor: string | null;
-};
 type VolunteerReference = {
   id: string;
   name: string;
@@ -179,7 +179,7 @@ export type VolunteerApplicationDetail = {
 };
 type VolunteerOpportunitiesListResult = {
   opportunities: VolunteerOpportunityListItem[];
-  pagination: VolunteerOpportunitiesPagination;
+  pagination: CursorPagination;
 };
 
 const CAMBODIA_NORMALIZED_NAME =
@@ -634,6 +634,31 @@ function buildVolunteerOpportunitiesWhereClause({
   return and(...filters);
 }
 
+async function countVolunteerOpportunities({
+  categoryId,
+  locationId,
+  search,
+}: Omit<GetVolunteerOpportunitiesQuery, "limit" | "cursor">) {
+  const [result] = await db
+    .select({ total: sql<number>`count(*)::int` })
+    .from(volunteerOpportunity)
+    .innerJoin(
+      volunteerCategory,
+      eq(volunteerCategory.id, volunteerOpportunity.categoryId),
+    )
+    .innerJoin(city, eq(city.id, volunteerOpportunity.cityId))
+    .where(
+      buildVolunteerOpportunitiesWhereClause({
+        categoryId,
+        locationId,
+        search,
+        cursor: undefined,
+      }),
+    );
+
+  return normalizePaginationTotal(result?.total);
+}
+
 function buildNextVolunteerOpportunitiesCursor(
   row: VolunteerOpportunityBaseRow,
 ): string {
@@ -851,7 +876,7 @@ export async function getVolunteerOpportunities({
   limit,
   cursor,
 }: GetVolunteerOpportunitiesQuery): Promise<VolunteerOpportunitiesListResult> {
-  const rows = await db
+  const rowsQuery = db
     .select({
       opportunity: volunteerOpportunity,
       category: {
@@ -884,10 +909,21 @@ export async function getVolunteerOpportunities({
     )
     .limit(limit + 1);
 
-  const hasMore = rows.length > limit;
-  const paginatedRows: VolunteerOpportunityBaseRow[] = hasMore
-    ? rows.slice(0, limit)
-    : rows;
+  const [rows, total] = await Promise.all([
+    rowsQuery,
+    countVolunteerOpportunities({
+      categoryId,
+      locationId,
+      search,
+    }),
+  ]);
+  const { pageRows: paginatedRows, pagination } =
+    buildCursorPagination<VolunteerOpportunityBaseRow>({
+      rows,
+      limit,
+      total,
+      getNextCursor: buildNextVolunteerOpportunitiesCursor,
+    });
   const opportunityIds = paginatedRows.map((row) => row.opportunity.id);
   const [applicationCountByOpportunityId, capacityByOpportunityId] =
     await Promise.all([
@@ -906,22 +942,10 @@ export async function getVolunteerOpportunities({
   const opportunities = opportunityRows.map((row) =>
     hydrateVolunteerOpportunityListItem(row),
   );
-  const lastOpportunityRow =
-    paginatedRows.length > 0
-      ? paginatedRows[paginatedRows.length - 1]
-      : null;
-  const nextCursor =
-    hasMore && lastOpportunityRow
-      ? buildNextVolunteerOpportunitiesCursor(lastOpportunityRow)
-      : null;
 
   return {
     opportunities,
-    pagination: {
-      limit,
-      hasMore,
-      nextCursor,
-    },
+    pagination,
   };
 }
 

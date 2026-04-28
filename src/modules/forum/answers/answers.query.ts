@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../../../db/index";
 import {
   forumAnswer,
@@ -9,7 +9,6 @@ import {
 } from "../../../db/schema";
 import { FORUM_ADVISORY_LOCK_NAMESPACE } from "../lib/constants";
 import type {
-  AnswerSortBy,
   AnswerVoteType,
   CreateAnswerInput,
   UpdateAnswerInput,
@@ -66,7 +65,6 @@ type RepliedAnswerWithViewerVote = Omit<
 type ForumAnswerWithViewerVote = RepliedAnswerWithViewerVote & {
   repliedAnswers: RepliedAnswerWithViewerVote[] | null;
 };
-const ANSWER_SCORE_SQL = sql<number>`${forumAnswer.upvoteCount} - ${forumAnswer.downvoteCount}`;
 type HydratedRepliedAnswerWithViewerVote = RepliedAnswerWithViewerVote & {
   isBestAnswer: boolean;
 };
@@ -109,27 +107,15 @@ function resolveAuthorName(row: AnswerHydrationRow): string {
   );
 }
 
-function compareRepliesByNewestCreatedAt(
-  left: Pick<RepliedAnswerWithViewerVote, "createdAt">,
-  right: Pick<RepliedAnswerWithViewerVote, "createdAt">,
-) {
-  return right.createdAt.localeCompare(left.createdAt);
+function getCreatedAtTime(value: string | Date): number {
+  return value instanceof Date ? value.getTime() : Date.parse(value);
 }
 
-function buildAnswersOrderBy(sortBy: AnswerSortBy) {
-  if (sortBy === "oldest") {
-    return [asc(forumAnswer.createdAt), asc(forumAnswer.id)] as const;
-  }
-
-  if (sortBy === "newest") {
-    return [desc(forumAnswer.createdAt), desc(forumAnswer.id)] as const;
-  }
-
-  return [
-    desc(ANSWER_SCORE_SQL),
-    desc(forumAnswer.createdAt),
-    desc(forumAnswer.id),
-  ] as const;
+function compareAnswersByCreatedAt(
+  left: { createdAt: string | Date },
+  right: { createdAt: string | Date },
+) {
+  return getCreatedAtTime(left.createdAt) - getCreatedAtTime(right.createdAt);
 }
 
 function buildAnswersBaseQuery(
@@ -288,7 +274,7 @@ function groupAnswersWithReplies(
 
   for (const answer of rootAnswers) {
     if (answer.repliedAnswers) {
-      answer.repliedAnswers.sort(compareRepliesByNewestCreatedAt);
+      answer.repliedAnswers.sort(compareAnswersByCreatedAt);
     }
   }
 
@@ -334,7 +320,6 @@ export async function findAnswerWithViewerVoteById(
 export async function findAnswersByQuestionId(
   questionId: string,
   viewerId: string,
-  sortBy: AnswerSortBy = "popular",
 ): Promise<AnswersByQuestionResult> {
   const rows = await buildAnswersBaseQuery(db, viewerId)
     .where(
@@ -343,14 +328,13 @@ export async function findAnswersByQuestionId(
         eq(forumAnswer.status, "PUBLISHED"),
       ),
     )
-    .orderBy(...buildAnswersOrderBy(sortBy));
+    .orderBy(desc(forumAnswer.upvoteCount), desc(forumAnswer.createdAt));
 
   return groupAnswersWithReplies(rows.map((row) => hydrateAnswer(row)));
 }
 
 export async function findAnswersByQuestionIdPublic(
   questionId: string,
-  sortBy: AnswerSortBy = "popular",
 ): Promise<AnswersByQuestionResult> {
   const rows = await buildPublicAnswersBaseQuery(db)
     .where(
@@ -359,7 +343,7 @@ export async function findAnswersByQuestionIdPublic(
         eq(forumAnswer.status, "PUBLISHED"),
       ),
     )
-    .orderBy(...buildAnswersOrderBy(sortBy));
+    .orderBy(desc(forumAnswer.upvoteCount), desc(forumAnswer.createdAt));
 
   return groupAnswersWithReplies(rows.map((row) => hydratePublicAnswer(row)));
 }
