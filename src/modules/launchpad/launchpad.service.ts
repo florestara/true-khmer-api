@@ -169,6 +169,7 @@ export async function handleFindLaunchpadById(
 
     try {
       await incrementLaunchpadViewCount(payload.launchpadId);
+      launchpad.totalView += 1;
     } catch (error) {
       console.warn("Failed to increment launchpad view count", {
         error,

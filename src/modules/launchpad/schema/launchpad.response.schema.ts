@@ -104,6 +104,7 @@ export const createLaunchpadResponseSchema = z
       phoneNumber: z.string().nullable(),
       email: z.string().nullable(),
       telegramUsername: z.string().nullable(),
+      totalView: z.number(),
       createdBy: z.object({
         id: z.string(),
         name: z.string(),
