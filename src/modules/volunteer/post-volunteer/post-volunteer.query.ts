@@ -124,8 +124,8 @@ export type VolunteerOpportunityListItem = {
   id: string;
   title: string;
   overview: string;
-  durationLabel: string;
-  commitmentLabel: string;
+  durationLabel: string | null;
+  commitmentLabel: string | null;
   applicationDeadline: string;
   applicationCount: number;
   capacity: number;
@@ -141,8 +141,8 @@ export type VolunteerOpportunityDetail = {
   title: string;
   overview: string;
   communityImpact: string | null;
-  durationLabel: string;
-  commitmentLabel: string;
+  durationLabel: string | null;
+  commitmentLabel: string | null;
   applicationDeadline: string;
   applicationCount: number;
   capacity: number;

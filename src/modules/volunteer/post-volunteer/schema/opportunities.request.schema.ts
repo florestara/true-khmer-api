@@ -332,24 +332,19 @@ const createVolunteerOpportunityBaseSchema = z
       ),
     durationLabel: z
       .string()
-      .transform((value) => normalizeText(value))
-      .pipe(
-        z
-          .string()
-          .min(1, "durationLabel is required and must be 1..120 characters")
-          .max(120, "durationLabel is required and must be 1..120 characters"),
+      .nullish()
+      .transform((value) => normalizeOptionalText(value))
+      .refine(
+        (value) => value === null || value.length <= 120,
+        "durationLabel must be <= 120 characters",
       ),
     commitmentLabel: z
       .string()
-      .transform((value) => normalizeText(value))
-      .pipe(
-        z
-          .string()
-          .min(1, "commitmentLabel is required and must be 1..120 characters")
-          .max(
-            120,
-            "commitmentLabel is required and must be 1..120 characters",
-          ),
+      .nullish()
+      .transform((value) => normalizeOptionalText(value))
+      .refine(
+        (value) => value === null || value.length <= 120,
+        "commitmentLabel must be <= 120 characters",
       ),
     applicationDeadline: z
       .string()
