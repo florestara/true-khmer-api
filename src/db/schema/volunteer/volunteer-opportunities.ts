@@ -44,8 +44,8 @@ export const volunteerOpportunity = pgTable(
     title: varchar("title", { length: 255 }).notNull(),
     overview: text("overview").notNull(),
     communityImpact: text("community_impact"),
-    durationLabel: varchar("duration_label", { length: 120 }).notNull(),
-    commitmentLabel: varchar("commitment_label", { length: 120 }).notNull(),
+    durationLabel: varchar("duration_label", { length: 120 }),
+    commitmentLabel: varchar("commitment_label", { length: 120 }),
     applicationDeadline: timestamp("application_deadline", {
       withTimezone: true,
       mode: "string",

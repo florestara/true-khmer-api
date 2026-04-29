@@ -127,6 +127,13 @@
       "when": 1777399997265,
       "tag": "0017_melted_valkyrie",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1777436237470,
+      "tag": "0018_dapper_stone_men",
+      "breakpoints": true
     }
   ]
 }
