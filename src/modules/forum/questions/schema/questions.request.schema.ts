@@ -221,7 +221,7 @@ const trendingQuestionsPageCursorSchema = z.object({
 
 const mostVotedQuestionsPageCursorSchema = z.object({
   sortBy: z.literal("mostVoted"),
-  voteCount: z.number().int().nonnegative(),
+  score: z.number().int(),
   createdAt: cursorCreatedAtSchema,
   id: z.string().trim().regex(FORUM_UUID_RE, "cursor.id must be a valid UUID"),
 });
@@ -302,7 +302,7 @@ export function encodeQuestionsPageCursor(cursor: QuestionsPageCursor): string {
         : cursor.sortBy === "mostVoted"
           ? {
               sortBy: cursor.sortBy,
-              voteCount: cursor.voteCount,
+              score: cursor.score,
               createdAt: normalizedTimestamp,
               id: cursor.id,
             }
