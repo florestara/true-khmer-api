@@ -359,7 +359,7 @@ function buildNextQuestionsCursor(
   if (sortBy === "mostVoted") {
     return encodeQuestionsPageCursor({
       sortBy: "mostVoted",
-      voteCount: row.voteCount,
+      score: row.question.upvoteCount - row.question.downvoteCount,
       createdAt: row.question.createdAt,
       id: row.question.id,
     });
@@ -578,30 +578,26 @@ function buildQuestionsCursorFilter(
     );
   }
 
-  const voteCountCursorFilter = (
-    voteCount: number,
+  const scoreCursorFilter = (
+    score: number,
     createdAt: string,
     id: string,
   ) =>
     or(
-      lt(QUESTION_VOTE_COUNT_SQL, voteCount),
+      lt(QUESTION_SCORE_SQL, score),
       and(
-        eq(QUESTION_VOTE_COUNT_SQL, voteCount),
+        eq(QUESTION_SCORE_SQL, score),
         lt(forumQuestion.createdAt, createdAt),
       ),
       and(
-        eq(QUESTION_VOTE_COUNT_SQL, voteCount),
+        eq(QUESTION_SCORE_SQL, score),
         eq(forumQuestion.createdAt, createdAt),
         lt(forumQuestion.id, id),
       ),
     );
 
   if (sortBy === "mostVoted" && cursor.sortBy === "mostVoted") {
-    return voteCountCursorFilter(
-      cursor.voteCount,
-      cursor.createdAt,
-      cursor.id,
-    );
+    return scoreCursorFilter(cursor.score, cursor.createdAt, cursor.id);
   }
 
   if (sortBy === "mostRelevant" && cursor.sortBy === "mostRelevant") {
@@ -748,6 +744,10 @@ function buildQuestionsWhereClause(
     filters.push(eq(forumQuestion.answerCount, 0));
   }
 
+  if (sortBy === "mostAnswered" && !isUnanswered) {
+    filters.push(gt(forumQuestion.answerCount, 0));
+  }
+
   if (isTrending) {
     filters.push(
       sql`${buildTrendingRecentEngagementScoreSql(trendingRankingTimestampSql)} >= ${MIN_TRENDING_ENGAGEMENT_SCORE}`,
@@ -829,7 +829,7 @@ function buildQuestionsOrderBy(
 
   if (sortBy === "mostVoted") {
     return [
-      desc(QUESTION_VOTE_COUNT_SQL),
+      desc(QUESTION_SCORE_SQL),
       desc(forumQuestion.createdAt),
       desc(forumQuestion.id),
     ] as const;
