@@ -39,6 +39,7 @@ export type LaunchpadDetail = {
   phoneNumber: string | null;
   email: string | null;
   telegramUsername: string | null;
+  totalView: number;
   createdBy: {
     id: string;
     name: string;
@@ -68,6 +69,7 @@ export type LaunchpadListItem = {
   phoneNumber: string | null;
   email: string | null;
   telegramUsername: string | null;
+  totalView: number;
   createdBy: {
     id: string;
     name: string;
@@ -90,7 +92,7 @@ function buildLaunchpadBaseQuery() {
   const launchpadCountSubquery = db
     .select({
       userId: launchpad.createdBy,
-      count: sql<number>`cast(count(${launchpad.id}) as int)`.as('count'),
+      count: sql<number>`cast(count(${launchpad.id}) as int)`.as("count"),
     })
     .from(launchpad)
     .groupBy(launchpad.createdBy)
@@ -104,16 +106,28 @@ function buildLaunchpadBaseQuery() {
       createdBy: user,
       createdByProfile: userProfile,
       launchpadCount: sql<number>`coalesce(${launchpadCountSubquery.count}, 0)`,
-      totalRoles: sql<number>`cast(count(${launchpadRole.id}) as int)`.as('totalRoles'),
+      totalRoles: sql<number>`cast(count(${launchpadRole.id}) as int)`.as(
+        "totalRoles",
+      ),
     })
     .from(launchpad)
     .leftJoin(launchpadCategory, eq(launchpad.categoryId, launchpadCategory.id))
     .leftJoin(city, eq(launchpad.cityId, city.id))
     .leftJoin(user, eq(launchpad.createdBy, user.id))
     .leftJoin(userProfile, eq(user.id, userProfile.userId))
-    .leftJoin(launchpadCountSubquery, eq(user.id, launchpadCountSubquery.userId))
+    .leftJoin(
+      launchpadCountSubquery,
+      eq(user.id, launchpadCountSubquery.userId),
+    )
     .leftJoin(launchpadRole, eq(launchpad.id, launchpadRole.launchpadId))
-    .groupBy(launchpad.id, launchpadCategory.id, city.id, user.id, userProfile.id, launchpadCountSubquery.count);
+    .groupBy(
+      launchpad.id,
+      launchpadCategory.id,
+      city.id,
+      user.id,
+      userProfile.id,
+      launchpadCountSubquery.count,
+    );
 }
 
 function buildLaunchpadWhereClause(
@@ -151,6 +165,17 @@ async function updateCategoryTotalRolesCount(
       totalRoles: sql`${launchpadCategory.totalRoles} + ${roleCount}`,
     })
     .where(eq(launchpadCategory.id, categoryId));
+}
+
+export async function incrementLaunchpadViewCount(
+  launchpadId: string,
+): Promise<void> {
+  await db
+    .update(launchpad)
+    .set({
+      totalView: sql`${launchpad.totalView} + 1`,
+    })
+    .where(eq(launchpad.id, launchpadId));
 }
 
 export async function createLaunchpad(
@@ -224,9 +249,7 @@ export async function createLaunchpad(
         count: sql<number>`cast(count(${launchpad.id}) as int)`,
       })
       .from(launchpad)
-      .where(
-        sql`${launchpad.createdBy} = ${userId}`,
-      );
+      .where(sql`${launchpad.createdBy} = ${userId}`);
 
     return {
       id: created.id,
@@ -239,6 +262,7 @@ export async function createLaunchpad(
       phoneNumber: created.phoneNumber,
       email: created.email,
       telegramUsername: created.telegramUsername,
+      totalView: created.totalView ?? 0,
       createdBy: createdByUser
         ? {
             id: createdByUser.user.id,
@@ -308,9 +332,7 @@ export async function findLaunchpadById(
       count: sql<number>`cast(count(${launchpad.id}) as int)`,
     })
     .from(launchpad)
-    .where(
-      sql`${launchpad.createdBy} = ${row.launchpad.createdBy}`,
-    );
+    .where(sql`${launchpad.createdBy} = ${row.launchpad.createdBy}`);
 
   return {
     id: row.launchpad.id,
@@ -335,6 +357,7 @@ export async function findLaunchpadById(
     phoneNumber: row.launchpad.phoneNumber,
     email: row.launchpad.email,
     telegramUsername: row.launchpad.telegramUsername,
+    totalView: row.launchpad.totalView ?? 0,
     createdBy: row.createdBy
       ? {
           id: row.createdBy.id,
@@ -396,6 +419,7 @@ export async function findLaunchpads(
     phoneNumber: row.launchpad.phoneNumber,
     email: row.launchpad.email,
     telegramUsername: row.launchpad.telegramUsername,
+    totalView: row.launchpad.totalView ?? 0,
     createdBy: row.createdBy
       ? {
           id: row.createdBy.id,
