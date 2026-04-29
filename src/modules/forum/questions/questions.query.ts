@@ -744,7 +744,7 @@ function buildQuestionsWhereClause(
     filters.push(eq(forumQuestion.answerCount, 0));
   }
 
-  if (sortBy === "mostAnswered" && !isUnanswered) {
+  if (sortBy === "mostAnswered" && !isUnanswered && !isTrending) {
     filters.push(gt(forumQuestion.answerCount, 0));
   }
 
