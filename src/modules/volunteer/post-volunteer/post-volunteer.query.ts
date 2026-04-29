@@ -130,6 +130,7 @@ export type VolunteerOpportunityListItem = {
   applicationCount: number;
   capacity: number;
   coverImageKey: string;
+  createdAt: string;
   category: VolunteerReference;
   location: VolunteerReference;
 };
@@ -419,6 +420,7 @@ function hydrateVolunteerOpportunityListItem(
     applicationCount: toInteger(row.applicationCount),
     capacity: toInteger(row.capacity),
     coverImageKey: row.opportunity.coverImageKey,
+    createdAt: row.opportunity.createdAt,
     category: row.category,
     location: row.location,
   };

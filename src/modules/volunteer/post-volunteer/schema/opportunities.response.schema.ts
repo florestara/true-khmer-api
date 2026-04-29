@@ -89,6 +89,7 @@ export const volunteerOpportunityListItemResponseSchema = z
     applicationCount: z.number(),
     capacity: z.number(),
     coverImageKey: z.string(),
+    createdAt: z.string(),
     category: volunteerOpportunityReferenceSchema,
     location: volunteerOpportunityReferenceSchema,
   })
