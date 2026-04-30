@@ -17,7 +17,7 @@ const phoneNumberSchema = z
   .string()
   .trim()
   .refine(
-    (value) => /^(?=.*\d)[0-9+()\-.\s]{7,20}$/.test(value),
+    (value) => /^(?=.*\d)[0-9+()\-. ]{7,20}$/.test(value),
     "phoneNumber must be 7..20 characters, contain at least one digit, and use only digits, spaces, or + ( ) - .",
   );
 
