@@ -1606,7 +1606,7 @@ export async function setQuestionVote(
 export async function saveQuestionForUser(
   questionId: string,
   userId: string,
-): Promise<ForumQuestionWithTags | null> {
+): Promise<boolean> {
   const savedQuestionId = await db.transaction(async (tx) => {
     const [question] = await tx
       .select({ id: forumQuestion.id })
@@ -1637,18 +1637,13 @@ export async function saveQuestionForUser(
     return question.id;
   });
 
-  if (!savedQuestionId) {
-    return null;
-  }
-
-  const savedQuestion = await findQuestionById(savedQuestionId, userId);
-  return savedQuestion ?? null;
+  return Boolean(savedQuestionId);
 }
 
 export async function unsaveQuestionForUser(
   questionId: string,
   userId: string,
-): Promise<ForumQuestionWithTags | null> {
+): Promise<boolean> {
   const savedQuestionId = await db.transaction(async (tx) => {
     const [question] = await tx
       .select({ id: forumQuestion.id })
@@ -1676,10 +1671,5 @@ export async function unsaveQuestionForUser(
     return question.id;
   });
 
-  if (!savedQuestionId) {
-    return null;
-  }
-
-  const unsavedQuestion = await findQuestionById(savedQuestionId, userId);
-  return unsavedQuestion ?? null;
+  return Boolean(savedQuestionId);
 }

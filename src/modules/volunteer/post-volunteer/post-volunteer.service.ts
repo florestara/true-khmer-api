@@ -13,16 +13,20 @@ import {
   findVolunteerApplicationTargetByRoleId,
   findVolunteerLocationById,
   findVolunteerOpportunityApplicationTargetById,
+  getSavedVolunteerOpportunities,
   getVolunteerCategories,
   getVolunteerOpportunityById,
   getVolunteerLocations,
   getVolunteerOpportunities,
   hasVolunteerApplicationForOpportunity,
+  saveVolunteerOpportunityForUser,
+  unsaveVolunteerOpportunityForUser,
 } from "./post-volunteer.query";
 import type {
   CreateVolunteerApplicationBodyInput,
   CreateVolunteerCategoryBodyInput,
   CreateVolunteerOpportunityBodyInput,
+  GetSavedVolunteerOpportunitiesQuery,
   GetVolunteerOpportunityParams,
   GetVolunteerOpportunitiesQuery,
   PresignVolunteerApplicationDocumentUploadPayload,
@@ -167,11 +171,13 @@ export async function handleGetVolunteerOpportunities(
   query: GetVolunteerOpportunitiesQuery,
   isPublic = false,
 ) {
+  let viewerId: string | undefined;
   if (!isPublic) {
     const authResult = getAuthUserId(c);
     if (!authResult.ok) {
       return authResult.response;
     }
+    viewerId = authResult.userId;
   }
 
   try {
@@ -192,10 +198,31 @@ export async function handleGetVolunteerOpportunities(
       return c.json({ ok: false, error: "Location not found" }, 404);
     }
 
-    const result = await getVolunteerOpportunities(query);
+    const result = await getVolunteerOpportunities(query, viewerId);
     return c.json({ ok: true, ...result }, 200);
   } catch (err) {
     console.error("Failed to get volunteer opportunities", err);
+    return c.json({ ok: false, error: "Internal server error" }, 500);
+  }
+}
+
+export async function handleGetSavedVolunteerOpportunities(
+  c: Context,
+  query: GetSavedVolunteerOpportunitiesQuery,
+) {
+  const authResult = getAuthUserId(c);
+  if (!authResult.ok) {
+    return authResult.response;
+  }
+
+  try {
+    const result = await getSavedVolunteerOpportunities(
+      authResult.userId,
+      query,
+    );
+    return c.json({ ok: true, ...result }, 200);
+  } catch (err) {
+    console.error("Failed to get saved volunteer opportunities", err);
     return c.json({ ok: false, error: "Internal server error" }, 500);
   }
 }
@@ -205,15 +232,20 @@ export async function handleGetVolunteerOpportunity(
   params: GetVolunteerOpportunityParams,
   isPublic = false,
 ) {
+  let viewerId: string | undefined;
   if (!isPublic) {
     const authResult = getAuthUserId(c);
     if (!authResult.ok) {
       return authResult.response;
     }
+    viewerId = authResult.userId;
   }
 
   try {
-    const opportunity = await getVolunteerOpportunityById(params.opportunityId);
+    const opportunity = await getVolunteerOpportunityById(
+      params.opportunityId,
+      viewerId,
+    );
 
     if (!opportunity) {
       return c.json({ ok: false, error: "Volunteer opportunity not found" }, 404);
@@ -226,6 +258,58 @@ export async function handleGetVolunteerOpportunity(
     return c.json({ ok: true, opportunity: responseOpportunity }, 200);
   } catch (err) {
     console.error("Failed to get volunteer opportunity", err);
+    return c.json({ ok: false, error: "Internal server error" }, 500);
+  }
+}
+
+export async function handleSaveVolunteerOpportunity(
+  c: Context,
+  params: GetVolunteerOpportunityParams,
+) {
+  const authResult = getAuthUserId(c);
+  if (!authResult.ok) {
+    return authResult.response;
+  }
+
+  try {
+    const savedOpportunity = await saveVolunteerOpportunityForUser(
+      params.opportunityId,
+      authResult.userId,
+    );
+
+    if (!savedOpportunity) {
+      return c.json({ ok: false, error: "Volunteer opportunity not found" }, 404);
+    }
+
+    return c.json({ ok: true }, 200);
+  } catch (err) {
+    console.error("Failed to save volunteer opportunity", err);
+    return c.json({ ok: false, error: "Internal server error" }, 500);
+  }
+}
+
+export async function handleUnsaveVolunteerOpportunity(
+  c: Context,
+  params: GetVolunteerOpportunityParams,
+) {
+  const authResult = getAuthUserId(c);
+  if (!authResult.ok) {
+    return authResult.response;
+  }
+
+  try {
+    const unsavedOpportunity = await unsaveVolunteerOpportunityForUser(
+      params.opportunityId,
+      authResult.userId,
+    );
+
+    if (!unsavedOpportunity) {
+      return c.json({ ok: false, error: "Volunteer opportunity not found" }, 404);
+    }
+
+    return c.json({ ok: true }, 200);
+  } catch (err) {
+    console.error("Failed to unsave volunteer opportunity", err);
     return c.json({ ok: false, error: "Internal server error" }, 500);
   }
 }

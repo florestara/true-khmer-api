@@ -90,6 +90,7 @@ export const volunteerOpportunityListItemResponseSchema = z
     capacity: z.number(),
     coverImageKey: z.string(),
     createdAt: z.string(),
+    viewerSave: z.boolean(),
     category: volunteerOpportunityReferenceSchema,
     location: volunteerOpportunityReferenceSchema,
   })
@@ -116,6 +117,7 @@ export const volunteerOpportunityResponseSchema = z
     createdBy: z.string(),
     createdAt: z.string(),
     updatedAt: z.string(),
+    viewerSave: z.boolean(),
     roles: z.array(volunteerOpportunityRoleResponseSchema),
   })
   .openapi("VolunteerOpportunityResponse");
@@ -140,6 +142,12 @@ export const getVolunteerOpportunityResponseSchema = z
     opportunity: volunteerOpportunityResponseSchema,
   })
   .openapi("GetVolunteerOpportunityResponse");
+
+export const saveVolunteerOpportunityResponseSchema = z
+  .object({
+    ok: z.literal(true),
+  })
+  .openapi("SaveVolunteerOpportunityResponse");
 
 export const getPublicVolunteerOpportunityResponseSchema = z
   .object({

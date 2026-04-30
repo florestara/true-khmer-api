@@ -390,7 +390,7 @@ export async function handleSaveQuestion(c: Context, params: QuestionIdParams) {
       return c.json({ ok: false, error: "Question not found" }, 404);
     }
 
-    return c.json({ ok: true, question: savedQuestion }, 200);
+    return c.json({ ok: true }, 200);
   } catch (err) {
     console.error("Failed to save question", err);
     return c.json({ ok: false, error: "Internal server error" }, 500);
@@ -420,7 +420,7 @@ export async function handleUnsaveQuestion(
       return c.json({ ok: false, error: "Question not found" }, 404);
     }
 
-    return c.json({ ok: true, question: unsavedQuestion }, 200);
+    return c.json({ ok: true }, 200);
   } catch (err) {
     console.error("Failed to unsave question", err);
     return c.json({ ok: false, error: "Internal server error" }, 500);
