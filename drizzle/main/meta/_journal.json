@@ -127,6 +127,13 @@
       "when": 1777399997265,
       "tag": "0017_melted_valkyrie",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1777459817378,
+      "tag": "0018_mixed_warstar",
+      "breakpoints": true
     }
   ]
 }

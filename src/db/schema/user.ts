@@ -13,6 +13,7 @@ export const user = pgTable("user", {
   gender: userGender("gender").default("other").notNull(),
   // Stores the user's occupation/profession.
   occupation: text("occupation").notNull(),
+  phoneNumber: varchar("phone_number", { length: 20 }),
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified").default(false).notNull(),
   // Compatibility field for Better Auth; canonical avatar is stored in user_profile.
