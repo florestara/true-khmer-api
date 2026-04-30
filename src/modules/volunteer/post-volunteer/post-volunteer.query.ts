@@ -1353,42 +1353,17 @@ export async function unsaveVolunteerOpportunityForUser(
   userId: string,
 ): Promise<boolean> {
   const unsavedOpportunityId = await db.transaction(async (tx) => {
-    const [opportunity] = await tx
-      .select({ id: volunteerOpportunity.id })
-      .from(volunteerOpportunity)
-      .innerJoin(
-        volunteerCategory,
-        eq(volunteerCategory.id, volunteerOpportunity.categoryId),
-      )
-      .innerJoin(city, eq(city.id, volunteerOpportunity.cityId))
-      .innerJoin(country, eq(city.countryId, country.id))
-      .where(
-        and(
-          eq(volunteerOpportunity.id, opportunityId),
-          eq(volunteerOpportunity.status, "PUBLISHED"),
-          eq(volunteerCategory.status, "ACTIVE"),
-          eq(city.isActive, true),
-          eq(country.isActive, true),
-          eq(country.normalizedName, CAMBODIA_NORMALIZED_NAME),
-          isNotNull(volunteerOpportunity.publishedAt),
-        ),
-      )
-      .limit(1);
-
-    if (!opportunity) {
-      return null;
-    }
-
-    await tx
+    const [deletedSave] = await tx
       .delete(volunteerOpportunitySave)
       .where(
         and(
           eq(volunteerOpportunitySave.opportunityId, opportunityId),
           eq(volunteerOpportunitySave.saverId, userId),
         ),
-      );
+      )
+      .returning({ opportunityId: volunteerOpportunitySave.opportunityId });
 
-    return opportunity.id;
+    return deletedSave?.opportunityId ?? null;
   });
 
   return Boolean(unsavedOpportunityId);
