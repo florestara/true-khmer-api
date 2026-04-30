@@ -22,6 +22,7 @@ type UserLike = {
   email: string;
   emailVerified: boolean;
   name: string;
+  phoneNumber?: string | null;
   image?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -150,6 +151,7 @@ export async function signUpWithEmailPassword(payload: AuthRegisterPayload) {
       lastName: payload.lastName,
       gender: payload.gender,
       occupation: payload.occupation,
+      phoneNumber: payload.phoneNumber,
       email: payload.email,
       password: payload.password,
     }),
