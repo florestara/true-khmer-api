@@ -27,6 +27,7 @@ import {
   getQuestionsResponseSchema,
   getQuestionsQuerySchema,
   getQuestionParamsSchema,
+  saveQuestionResponseSchema,
   voteQuestionSchema,
 } from "./questions.schema";
 
@@ -247,7 +248,7 @@ const saveQuestionRoute = createRoute({
       description: "Question saved",
       content: {
         "application/json": {
-          schema: createQuestionResponseSchema,
+          schema: saveQuestionResponseSchema,
         },
       },
     },
@@ -269,7 +270,7 @@ const unsaveQuestionRoute = createRoute({
       description: "Question unsaved",
       content: {
         "application/json": {
-          schema: createQuestionResponseSchema,
+          schema: saveQuestionResponseSchema,
         },
       },
     },

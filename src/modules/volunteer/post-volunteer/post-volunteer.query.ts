@@ -24,6 +24,7 @@ import {
   volunteerApplication,
   volunteerCategory,
   volunteerOpportunity,
+  volunteerOpportunitySave,
   volunteerRole,
   volunteerRoleRequirement,
 } from "../../../db/schema";
@@ -38,10 +39,13 @@ import {
 } from "../lib/constants";
 import {
   encodeVolunteerOpportunitiesPageCursor,
+  encodeSavedVolunteerOpportunitiesPageCursor,
   type CreateVolunteerApplicationBodyInput,
   type CreateVolunteerCategoryInput,
   type CreateVolunteerOpportunityBodyInput,
+  type GetSavedVolunteerOpportunitiesQuery,
   type GetVolunteerOpportunitiesQuery,
+  type SavedVolunteerOpportunitiesPageCursor,
   type VolunteerOpportunitiesPageCursor,
 } from "./post-volunteer.schema";
 
@@ -57,6 +61,7 @@ type VolunteerLocationRow = {
   name: string;
 };
 type VolunteerOpportunityRow = typeof volunteerOpportunity.$inferSelect;
+type VolunteerOpportunitySaveInsert = typeof volunteerOpportunitySave.$inferInsert;
 type VolunteerApplicationRow = typeof volunteerApplication.$inferSelect;
 type VolunteerRoleRow = typeof volunteerRole.$inferSelect;
 type VolunteerRoleRequirementRow = typeof volunteerRoleRequirement.$inferSelect;
@@ -107,6 +112,12 @@ type VolunteerOpportunityBaseRow = {
   category: VolunteerReference;
   location: VolunteerReference;
 };
+type SavedVolunteerOpportunityListRow = VolunteerOpportunityBaseRow & {
+  applicationCount: number;
+  capacity: number;
+  viewerSave: boolean;
+  savedAt: string;
+};
 type VolunteerApplicationTarget = {
   opportunityId: string;
   roleId: string;
@@ -131,6 +142,7 @@ export type VolunteerOpportunityListItem = {
   capacity: number;
   coverImageKey: string;
   createdAt: string;
+  viewerSave: boolean;
   category: VolunteerReference;
   location: VolunteerReference;
 };
@@ -154,6 +166,7 @@ export type VolunteerOpportunityDetail = {
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+  viewerSave: boolean;
   roles: Array<{
     id: string;
     title: string;
@@ -189,6 +202,10 @@ const volunteerRoleSearch = aliasedTable(volunteerRole, "volunteer_role_search")
 const volunteerRoleRequirementSearch = aliasedTable(
   volunteerRoleRequirement,
   "volunteer_role_requirement_search",
+);
+const volunteerOpportunitySaveList = aliasedTable(
+  volunteerOpportunitySave,
+  "volunteer_opportunity_save_list",
 );
 const organizerProfileCity = aliasedTable(city, "organizer_profile_city");
 
@@ -405,6 +422,7 @@ export type CreateVolunteerApplicationInput =
 type VolunteerOpportunityListRow = VolunteerOpportunityBaseRow & {
   applicationCount: number;
   capacity: number;
+  viewerSave: boolean;
 };
 
 function hydrateVolunteerOpportunityListItem(
@@ -421,6 +439,7 @@ function hydrateVolunteerOpportunityListItem(
     capacity: toInteger(row.capacity),
     coverImageKey: row.opportunity.coverImageKey,
     createdAt: row.opportunity.createdAt,
+    viewerSave: row.viewerSave,
     category: row.category,
     location: row.location,
   };
@@ -475,6 +494,7 @@ function hydrateVolunteerOpportunityDetail(
   roles: HydratedVolunteerRole[],
   requirementsByRoleId: Map<string, HydratedVolunteerRequirement[]>,
   applicationCount: number,
+  viewerSave: boolean,
 ): VolunteerOpportunityDetail {
   const capacity = roles.reduce(
     (total, role) => total + toInteger(role.capacity),
@@ -509,6 +529,7 @@ function hydrateVolunteerOpportunityDetail(
     createdBy: opportunity.createdBy,
     createdAt: opportunity.createdAt,
     updatedAt: opportunity.updatedAt,
+    viewerSave,
     roles: roles.map((role) => ({
       id: role.id,
       title: role.title,
@@ -677,6 +698,31 @@ function buildNextVolunteerOpportunitiesCursor(
   });
 }
 
+function buildNextSavedVolunteerOpportunitiesCursor(
+  row: SavedVolunteerOpportunityListRow,
+): string {
+  return encodeSavedVolunteerOpportunitiesPageCursor({
+    savedAt: row.savedAt,
+    opportunityId: row.opportunity.id,
+  });
+}
+
+function buildSavedVolunteerOpportunitiesCursorFilter(
+  cursor?: SavedVolunteerOpportunitiesPageCursor,
+): SQL<unknown> | undefined {
+  if (!cursor) {
+    return undefined;
+  }
+
+  return or(
+    lt(volunteerOpportunitySaveList.createdAt, cursor.savedAt),
+    and(
+      eq(volunteerOpportunitySaveList.createdAt, cursor.savedAt),
+      lt(volunteerOpportunity.id, cursor.opportunityId),
+    ),
+  );
+}
+
 async function getActiveApplicationCountsByOpportunityIds(
   executor: VolunteerQueryExecutor,
   opportunityIds: string[],
@@ -731,8 +777,34 @@ async function getOpportunityCapacitiesByOpportunityIds(
   return new Map(rows.map((row) => [row.opportunityId, toInteger(row.capacity)]));
 }
 
+async function getSavedOpportunityIdsByOpportunityIds(
+  executor: VolunteerQueryExecutor,
+  opportunityIds: string[],
+  viewerId?: string,
+): Promise<Set<string>> {
+  const uniqueOpportunityIds = [...new Set(opportunityIds)];
+  if (!viewerId || uniqueOpportunityIds.length === 0) {
+    return new Set();
+  }
+
+  const rows = await executor
+    .select({
+      opportunityId: volunteerOpportunitySave.opportunityId,
+    })
+    .from(volunteerOpportunitySave)
+    .where(
+      and(
+        inArray(volunteerOpportunitySave.opportunityId, uniqueOpportunityIds),
+        eq(volunteerOpportunitySave.saverId, viewerId),
+      ),
+    );
+
+  return new Set(rows.map((row) => row.opportunityId));
+}
+
 async function hydrateVolunteerOpportunityDetails(
   rows: VolunteerOpportunityBaseRow[],
+  viewerId?: string,
 ): Promise<VolunteerOpportunityDetail[]> {
   if (rows.length === 0) {
     return [];
@@ -787,8 +859,11 @@ async function hydrateVolunteerOpportunityDetails(
 
   const organizerIds = [...new Set(rows.map((row) => row.opportunity.createdBy))];
   const organizerById = await getVolunteerOrganizersByUserIds(db, organizerIds);
-  const applicationCountByOpportunityId =
-    await getActiveApplicationCountsByOpportunityIds(db, opportunityIds);
+  const [applicationCountByOpportunityId, savedOpportunityIds] =
+    await Promise.all([
+      getActiveApplicationCountsByOpportunityIds(db, opportunityIds),
+      getSavedOpportunityIdsByOpportunityIds(db, opportunityIds, viewerId),
+    ]);
 
   return rows.map((row) => {
     const organizer = organizerById.get(row.opportunity.createdBy);
@@ -807,6 +882,7 @@ async function hydrateVolunteerOpportunityDetails(
       rolesByOpportunityId.get(row.opportunity.id) ?? [],
       requirementsByRoleId,
       applicationCountByOpportunityId.get(row.opportunity.id) ?? 0,
+      savedOpportunityIds.has(row.opportunity.id),
     );
   });
 }
@@ -871,13 +947,16 @@ async function getVolunteerOrganizerByUserId(
   return organizersById.get(userId) ?? null;
 }
 
-export async function getVolunteerOpportunities({
-  categoryId,
-  locationId,
-  search,
-  limit,
-  cursor,
-}: GetVolunteerOpportunitiesQuery): Promise<VolunteerOpportunitiesListResult> {
+export async function getVolunteerOpportunities(
+  {
+    categoryId,
+    locationId,
+    search,
+    limit,
+    cursor,
+  }: GetVolunteerOpportunitiesQuery,
+  viewerId?: string,
+): Promise<VolunteerOpportunitiesListResult> {
   const rowsQuery = db
     .select({
       opportunity: volunteerOpportunity,
@@ -927,10 +1006,15 @@ export async function getVolunteerOpportunities({
       getNextCursor: buildNextVolunteerOpportunitiesCursor,
     });
   const opportunityIds = paginatedRows.map((row) => row.opportunity.id);
-  const [applicationCountByOpportunityId, capacityByOpportunityId] =
+  const [
+    applicationCountByOpportunityId,
+    capacityByOpportunityId,
+    savedOpportunityIds,
+  ] =
     await Promise.all([
       getActiveApplicationCountsByOpportunityIds(db, opportunityIds),
       getOpportunityCapacitiesByOpportunityIds(db, opportunityIds),
+      getSavedOpportunityIdsByOpportunityIds(db, opportunityIds, viewerId),
     ]);
 
   const opportunityRows: VolunteerOpportunityListRow[] = paginatedRows.map(
@@ -939,6 +1023,7 @@ export async function getVolunteerOpportunities({
       applicationCount:
         applicationCountByOpportunityId.get(row.opportunity.id) ?? 0,
       capacity: capacityByOpportunityId.get(row.opportunity.id) ?? 0,
+      viewerSave: savedOpportunityIds.has(row.opportunity.id),
     }),
   );
   const opportunities = opportunityRows.map((row) =>
@@ -951,7 +1036,122 @@ export async function getVolunteerOpportunities({
   };
 }
 
-export async function getVolunteerOpportunityById(opportunityId: string) {
+export async function getSavedVolunteerOpportunities(
+  userId: string,
+  { limit, cursor }: GetSavedVolunteerOpportunitiesQuery,
+): Promise<VolunteerOpportunitiesListResult> {
+  const cursorFilter = buildSavedVolunteerOpportunitiesCursorFilter(cursor);
+  const filters: SQL<unknown>[] = [
+    eq(volunteerOpportunitySaveList.saverId, userId),
+    eq(volunteerOpportunity.status, "PUBLISHED"),
+    eq(volunteerCategory.status, "ACTIVE"),
+    eq(city.isActive, true),
+    eq(country.isActive, true),
+    eq(country.normalizedName, CAMBODIA_NORMALIZED_NAME),
+    isNotNull(volunteerOpportunity.publishedAt),
+  ];
+
+  if (cursorFilter) {
+    filters.push(cursorFilter);
+  }
+
+  const rowsQuery = db
+    .select({
+      opportunity: volunteerOpportunity,
+      category: {
+        id: volunteerCategory.id,
+        name: volunteerCategory.name,
+      },
+      location: {
+        id: city.id,
+        name: city.name,
+      },
+      savedAt: volunteerOpportunitySaveList.createdAt,
+    })
+    .from(volunteerOpportunitySaveList)
+    .innerJoin(
+      volunteerOpportunity,
+      eq(volunteerOpportunity.id, volunteerOpportunitySaveList.opportunityId),
+    )
+    .innerJoin(
+      volunteerCategory,
+      eq(volunteerCategory.id, volunteerOpportunity.categoryId),
+    )
+    .innerJoin(city, eq(city.id, volunteerOpportunity.cityId))
+    .innerJoin(country, eq(country.id, city.countryId))
+    .where(and(...filters))
+    .orderBy(
+      desc(volunteerOpportunitySaveList.createdAt),
+      desc(volunteerOpportunity.id),
+    )
+    .limit(limit + 1);
+
+  const countQuery = db
+    .select({ total: sql<number>`count(*)::int` })
+    .from(volunteerOpportunitySaveList)
+    .innerJoin(
+      volunteerOpportunity,
+      eq(volunteerOpportunity.id, volunteerOpportunitySaveList.opportunityId),
+    )
+    .innerJoin(
+      volunteerCategory,
+      eq(volunteerCategory.id, volunteerOpportunity.categoryId),
+    )
+    .innerJoin(city, eq(city.id, volunteerOpportunity.cityId))
+    .innerJoin(country, eq(country.id, city.countryId))
+    .where(
+      and(
+        eq(volunteerOpportunitySaveList.saverId, userId),
+        eq(volunteerOpportunity.status, "PUBLISHED"),
+        eq(volunteerCategory.status, "ACTIVE"),
+        eq(city.isActive, true),
+        eq(country.isActive, true),
+        eq(country.normalizedName, CAMBODIA_NORMALIZED_NAME),
+        isNotNull(volunteerOpportunity.publishedAt),
+      ),
+    );
+
+  const [rows, countResult] = await Promise.all([rowsQuery, countQuery]);
+  const total = normalizePaginationTotal(countResult[0]?.total);
+  const { pageRows: paginatedRows, pagination } =
+    buildCursorPagination<SavedVolunteerOpportunityListRow>({
+      rows: rows.map((row) => ({
+        ...row,
+        applicationCount: 0,
+        capacity: 0,
+        viewerSave: true,
+      })),
+      limit,
+      total,
+      getNextCursor: buildNextSavedVolunteerOpportunitiesCursor,
+    });
+  const opportunityIds = paginatedRows.map((row) => row.opportunity.id);
+  const [applicationCountByOpportunityId, capacityByOpportunityId] =
+    await Promise.all([
+      getActiveApplicationCountsByOpportunityIds(db, opportunityIds),
+      getOpportunityCapacitiesByOpportunityIds(db, opportunityIds),
+    ]);
+
+  const opportunities = paginatedRows.map((row) =>
+    hydrateVolunteerOpportunityListItem({
+      ...row,
+      applicationCount:
+        applicationCountByOpportunityId.get(row.opportunity.id) ?? 0,
+      capacity: capacityByOpportunityId.get(row.opportunity.id) ?? 0,
+      viewerSave: true,
+    }),
+  );
+
+  return {
+    opportunities,
+    pagination,
+  };
+}
+
+export async function getVolunteerOpportunityById(
+  opportunityId: string,
+  viewerId?: string,
+) {
   const [row] = await db
     .select({
       opportunity: volunteerOpportunity,
@@ -988,7 +1188,7 @@ export async function getVolunteerOpportunityById(opportunityId: string) {
     return null;
   }
 
-  const [opportunity] = await hydrateVolunteerOpportunityDetails([row]);
+  const [opportunity] = await hydrateVolunteerOpportunityDetails([row], viewerId);
   return opportunity ?? null;
 }
 
@@ -1091,8 +1291,82 @@ export async function createVolunteerOpportunity(
         ]),
       ),
       0,
+      false,
     );
   });
+}
+
+export async function saveVolunteerOpportunityForUser(
+  opportunityId: string,
+  userId: string,
+): Promise<boolean> {
+  const savedOpportunityId = await db.transaction(async (tx) => {
+    const [opportunity] = await tx
+      .select({ id: volunteerOpportunity.id })
+      .from(volunteerOpportunity)
+      .innerJoin(
+        volunteerCategory,
+        eq(volunteerCategory.id, volunteerOpportunity.categoryId),
+      )
+      .innerJoin(city, eq(city.id, volunteerOpportunity.cityId))
+      .innerJoin(country, eq(city.countryId, country.id))
+      .where(
+        and(
+          eq(volunteerOpportunity.id, opportunityId),
+          eq(volunteerOpportunity.status, "PUBLISHED"),
+          eq(volunteerCategory.status, "ACTIVE"),
+          eq(city.isActive, true),
+          eq(country.isActive, true),
+          eq(country.normalizedName, CAMBODIA_NORMALIZED_NAME),
+          isNotNull(volunteerOpportunity.publishedAt),
+        ),
+      )
+      .limit(1);
+
+    if (!opportunity) {
+      return null;
+    }
+
+    const saveInsertData: VolunteerOpportunitySaveInsert = {
+      opportunityId,
+      saverId: userId,
+    };
+
+    await tx
+      .insert(volunteerOpportunitySave)
+      .values(saveInsertData)
+      .onConflictDoNothing({
+        target: [
+          volunteerOpportunitySave.opportunityId,
+          volunteerOpportunitySave.saverId,
+        ],
+      });
+
+    return opportunity.id;
+  });
+
+  return Boolean(savedOpportunityId);
+}
+
+export async function unsaveVolunteerOpportunityForUser(
+  opportunityId: string,
+  userId: string,
+): Promise<boolean> {
+  const unsavedOpportunityId = await db.transaction(async (tx) => {
+    const [deletedSave] = await tx
+      .delete(volunteerOpportunitySave)
+      .where(
+        and(
+          eq(volunteerOpportunitySave.opportunityId, opportunityId),
+          eq(volunteerOpportunitySave.saverId, userId),
+        ),
+      )
+      .returning({ opportunityId: volunteerOpportunitySave.opportunityId });
+
+    return deletedSave?.opportunityId ?? null;
+  });
+
+  return Boolean(unsavedOpportunityId);
 }
 
 export async function createVolunteerApplication(

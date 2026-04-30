@@ -83,6 +83,12 @@ export const createQuestionResponseSchema = z
   })
   .openapi("CreateQuestionResponse");
 
+export const saveQuestionResponseSchema = z
+  .object({
+    ok: z.literal(true),
+  })
+  .openapi("SaveQuestionResponse");
+
 export const trendingTagResponseSchema = z
   .object({
     id: z.string(),

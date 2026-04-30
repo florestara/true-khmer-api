@@ -78,8 +78,20 @@ const volunteerOpportunitiesPageCursorSchema = z.object({
   id: z.string().trim().regex(VOLUNTEER_UUID_RE, "cursor.id must be a valid UUID"),
 });
 
+const savedVolunteerOpportunitiesPageCursorSchema = z.object({
+  savedAt: cursorTimestampSchema,
+  opportunityId: z
+    .string()
+    .trim()
+    .regex(VOLUNTEER_UUID_RE, "cursor.opportunityId must be a valid UUID"),
+});
+
 export type VolunteerOpportunitiesPageCursor = z.infer<
   typeof volunteerOpportunitiesPageCursorSchema
+>;
+
+export type SavedVolunteerOpportunitiesPageCursor = z.infer<
+  typeof savedVolunteerOpportunitiesPageCursorSchema
 >;
 
 export function encodeVolunteerOpportunitiesPageCursor(
@@ -114,6 +126,38 @@ function decodeVolunteerOpportunitiesPageCursor(
   try {
     const parsed = JSON.parse(Buffer.from(raw, "base64url").toString("utf8"));
     const cursor = volunteerOpportunitiesPageCursorSchema.safeParse(parsed);
+    return cursor.success ? cursor.data : null;
+  } catch {
+    return null;
+  }
+}
+
+export function encodeSavedVolunteerOpportunitiesPageCursor(
+  cursor: SavedVolunteerOpportunitiesPageCursor,
+): string {
+  const savedAt = normalizeVolunteerOpportunitiesCursorTimestamp(cursor.savedAt);
+
+  if (!savedAt) {
+    throw new Error(
+      "Cannot encode saved volunteer opportunities page cursor with invalid savedAt",
+    );
+  }
+
+  return Buffer.from(
+    JSON.stringify({
+      savedAt,
+      opportunityId: cursor.opportunityId,
+    }),
+    "utf8",
+  ).toString("base64url");
+}
+
+function decodeSavedVolunteerOpportunitiesPageCursor(
+  raw: string,
+): SavedVolunteerOpportunitiesPageCursor | null {
+  try {
+    const parsed = JSON.parse(Buffer.from(raw, "base64url").toString("utf8"));
+    const cursor = savedVolunteerOpportunitiesPageCursorSchema.safeParse(parsed);
     return cursor.success ? cursor.data : null;
   } catch {
     return null;
@@ -503,6 +547,37 @@ export const getVolunteerOpportunitiesQuerySchema = z
   }))
   .openapi("GetVolunteerOpportunitiesQuery");
 
+export const getSavedVolunteerOpportunitiesQuerySchema = z
+  .object({
+    limit: z.coerce
+      .number()
+      .int()
+      .min(1, "limit must be between 1 and 50")
+      .max(MAX_VOLUNTEER_OPPORTUNITIES_PAGE_SIZE, "limit must be between 1 and 50")
+      .default(DEFAULT_VOLUNTEER_OPPORTUNITIES_PAGE_SIZE),
+    cursor: z.string().optional().transform((value, ctx) => {
+      if (value === undefined) {
+        return undefined;
+      }
+
+      const cursor = decodeSavedVolunteerOpportunitiesPageCursor(value);
+      if (!cursor) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "cursor must be a valid pagination cursor",
+        });
+        return z.NEVER;
+      }
+
+      return cursor;
+    }),
+  })
+  .transform((value) => ({
+    limit: value.limit,
+    cursor: value.cursor,
+  }))
+  .openapi("GetSavedVolunteerOpportunitiesQuery");
+
 export const getVolunteerOpportunityParamsSchema = z
   .object({
     opportunityId: z
@@ -514,6 +589,10 @@ export const getVolunteerOpportunityParamsSchema = z
 
 export type GetVolunteerOpportunitiesQuery = z.infer<
   typeof getVolunteerOpportunitiesQuerySchema
+>;
+
+export type GetSavedVolunteerOpportunitiesQuery = z.infer<
+  typeof getSavedVolunteerOpportunitiesQuerySchema
 >;
 
 export type GetVolunteerOpportunityParams = z.infer<

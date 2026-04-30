@@ -96,6 +96,37 @@ export const volunteerOpportunity = pgTable(
   ],
 );
 
+export const volunteerOpportunitySave = pgTable(
+  "volunteer_opportunity_save",
+  {
+    id: uuid("id").defaultRandom().primaryKey().notNull(),
+    opportunityId: uuid("opportunity_id")
+      .notNull()
+      .references(() => volunteerOpportunity.id, { onDelete: "cascade" }),
+    saverId: uuid("saver_id")
+      .notNull()
+      .references(() => user.id),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("volunteer_opportunity_save_opportunity_saver_unique_idx").using(
+      "btree",
+      table.opportunityId,
+      table.saverId,
+    ),
+    index("volunteer_opportunity_save_opportunity_idx").using(
+      "btree",
+      table.opportunityId,
+    ),
+    index("volunteer_opportunity_save_saver_idx").using(
+      "btree",
+      table.saverId,
+    ),
+  ],
+);
+
 export const volunteerRole = pgTable(
   "volunteer_role",
   {

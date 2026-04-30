@@ -18,10 +18,12 @@ import {
   getVolunteerOpportunityResponseSchema,
   getVolunteerOpportunitiesResponseSchema,
   getVolunteerOpportunitiesQuerySchema,
+  getSavedVolunteerOpportunitiesQuerySchema,
   presignVolunteerApplicationDocumentUploadResponseSchema,
   presignVolunteerApplicationDocumentUploadSchema,
   presignVolunteerOpportunityCoverUploadResponseSchema,
   presignVolunteerOpportunityCoverUploadSchema,
+  saveVolunteerOpportunityResponseSchema,
   volunteerCategoryValidationErrorResponseSchema,
   volunteerOperationErrorResponseSchema,
   volunteerValidationErrorResponseSchema,
@@ -30,12 +32,15 @@ import {
   handleCreateVolunteerApplication,
   handleCreateVolunteerCategory,
   handleCreateVolunteerOpportunity,
+  handleGetSavedVolunteerOpportunities,
   handleGetVolunteerCategories,
   handleGetVolunteerLocations,
   handleGetVolunteerOpportunity,
   handleGetVolunteerOpportunities,
   handlePresignVolunteerApplicationDocumentUpload,
   handlePresignVolunteerOpportunityCoverUpload,
+  handleSaveVolunteerOpportunity,
+  handleUnsaveVolunteerOpportunity,
 } from "./post-volunteer.service";
 
 export const postVolunteerRouter = new OpenAPIHono<AppBindings>();
@@ -386,6 +391,59 @@ const getVolunteerOpportunitiesRoute = createRoute({
   },
 });
 
+const getSavedVolunteerOpportunitiesRoute = createRoute({
+  method: "get",
+  path: "/saved",
+  tags: ["Volunteer Post"],
+  middleware: [requireAccessToken],
+  security: [{ BearerAuth: [] }],
+  request: {
+    query: getSavedVolunteerOpportunitiesQuerySchema,
+  },
+  responses: {
+    200: {
+      description: "List of volunteer opportunities saved by the authenticated user",
+      content: {
+        "application/json": {
+          schema: getVolunteerOpportunitiesResponseSchema,
+        },
+      },
+    },
+    400: {
+      description: "Validation failed",
+      content: {
+        "application/json": {
+          schema: volunteerValidationErrorResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: "Unauthorized",
+      content: {
+        "application/json": {
+          schema: authProtectedErrorResponseSchema,
+        },
+      },
+    },
+    403: {
+      description: "Forbidden",
+      content: {
+        "application/json": {
+          schema: authProtectedErrorResponseSchema,
+        },
+      },
+    },
+    500: {
+      description: "Internal server error",
+      content: {
+        "application/json": {
+          schema: volunteerOperationErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
 const getVolunteerOpportunityRoute = createRoute({
   method: "get",
   path: "/opportunities/{opportunityId}",
@@ -401,6 +459,128 @@ const getVolunteerOpportunityRoute = createRoute({
       content: {
         "application/json": {
           schema: getVolunteerOpportunityResponseSchema,
+        },
+      },
+    },
+    400: {
+      description: "Bad Request - invalid opportunityId",
+      content: {
+        "application/json": {
+          schema: volunteerValidationErrorResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: "Unauthorized",
+      content: {
+        "application/json": {
+          schema: authProtectedErrorResponseSchema,
+        },
+      },
+    },
+    403: {
+      description: "Forbidden",
+      content: {
+        "application/json": {
+          schema: authProtectedErrorResponseSchema,
+        },
+      },
+    },
+    404: {
+      description: "Volunteer opportunity not found",
+      content: {
+        "application/json": {
+          schema: volunteerOperationErrorResponseSchema,
+        },
+      },
+    },
+    500: {
+      description: "Internal server error",
+      content: {
+        "application/json": {
+          schema: volunteerOperationErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+const saveVolunteerOpportunityRoute = createRoute({
+  method: "post",
+  path: "/save-opportunity/{opportunityId}",
+  tags: ["Volunteer Post"],
+  middleware: [requireAccessToken],
+  security: [{ BearerAuth: [] }],
+  request: {
+    params: getVolunteerOpportunityParamsSchema,
+  },
+  responses: {
+    200: {
+      description: "Volunteer opportunity saved",
+      content: {
+        "application/json": {
+          schema: saveVolunteerOpportunityResponseSchema,
+        },
+      },
+    },
+    400: {
+      description: "Bad Request - invalid opportunityId",
+      content: {
+        "application/json": {
+          schema: volunteerValidationErrorResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: "Unauthorized",
+      content: {
+        "application/json": {
+          schema: authProtectedErrorResponseSchema,
+        },
+      },
+    },
+    403: {
+      description: "Forbidden",
+      content: {
+        "application/json": {
+          schema: authProtectedErrorResponseSchema,
+        },
+      },
+    },
+    404: {
+      description: "Volunteer opportunity not found",
+      content: {
+        "application/json": {
+          schema: volunteerOperationErrorResponseSchema,
+        },
+      },
+    },
+    500: {
+      description: "Internal server error",
+      content: {
+        "application/json": {
+          schema: volunteerOperationErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+const unsaveVolunteerOpportunityRoute = createRoute({
+  method: "delete",
+  path: "/save-opportunity/{opportunityId}",
+  tags: ["Volunteer Post"],
+  middleware: [requireAccessToken],
+  security: [{ BearerAuth: [] }],
+  request: {
+    params: getVolunteerOpportunityParamsSchema,
+  },
+  responses: {
+    200: {
+      description: "Volunteer opportunity unsaved",
+      content: {
+        "application/json": {
+          schema: saveVolunteerOpportunityResponseSchema,
         },
       },
     },
@@ -622,9 +802,24 @@ postVolunteerRouter.openapi(getVolunteerOpportunitiesRoute, async (c) => {
   return handleGetVolunteerOpportunities(c, query) as any;
 });
 
+postVolunteerRouter.openapi(getSavedVolunteerOpportunitiesRoute, async (c) => {
+  const query = c.req.valid("query");
+  return handleGetSavedVolunteerOpportunities(c, query) as any;
+});
+
 postVolunteerRouter.openapi(getVolunteerOpportunityRoute, async (c) => {
   const params = c.req.valid("param");
   return handleGetVolunteerOpportunity(c, params) as any;
+});
+
+postVolunteerRouter.openapi(saveVolunteerOpportunityRoute, async (c) => {
+  const params = c.req.valid("param");
+  return handleSaveVolunteerOpportunity(c, params) as any;
+});
+
+postVolunteerRouter.openapi(unsaveVolunteerOpportunityRoute, async (c) => {
+  const params = c.req.valid("param");
+  return handleUnsaveVolunteerOpportunity(c, params) as any;
 });
 
 postVolunteerRouter.openapi(createVolunteerOpportunityRoute, async (c) => {
