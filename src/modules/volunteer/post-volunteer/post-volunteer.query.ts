@@ -124,12 +124,13 @@ export type VolunteerOpportunityListItem = {
   id: string;
   title: string;
   overview: string;
-  durationLabel: string;
-  commitmentLabel: string;
+  durationLabel: string | null;
+  commitmentLabel: string | null;
   applicationDeadline: string;
   applicationCount: number;
   capacity: number;
   coverImageKey: string;
+  createdAt: string;
   category: VolunteerReference;
   location: VolunteerReference;
 };
@@ -140,8 +141,8 @@ export type VolunteerOpportunityDetail = {
   title: string;
   overview: string;
   communityImpact: string | null;
-  durationLabel: string;
-  commitmentLabel: string;
+  durationLabel: string | null;
+  commitmentLabel: string | null;
   applicationDeadline: string;
   applicationCount: number;
   capacity: number;
@@ -419,6 +420,7 @@ function hydrateVolunteerOpportunityListItem(
     applicationCount: toInteger(row.applicationCount),
     capacity: toInteger(row.capacity),
     coverImageKey: row.opportunity.coverImageKey,
+    createdAt: row.opportunity.createdAt,
     category: row.category,
     location: row.location,
   };
