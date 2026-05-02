@@ -219,6 +219,7 @@ export const userProgress = pgTable(
   },
   (table) => [
     index("user_progress_current_tier_id_idx").on(table.currentTierId),
+    index("user_progress_total_points_idx").on(table.totalPoints),
   ],
 );
 

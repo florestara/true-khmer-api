@@ -7,11 +7,34 @@ const UUID_RE =
 const uuidSchema = z.string().trim().regex(UUID_RE, "must be a valid UUID");
 const visibilitySchema = z.enum(["public", "members", "private"]);
 const genderSchema = z.enum(["male", "female", "other"]);
+
+function isValidDateOnly(value: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) {
+    return false;
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+
+  if (month < 1 || month > 12 || day < 1 || day > 31) {
+    return false;
+  }
+
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  );
+}
+
 const dateOnlySchema = z
   .string()
   .trim()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "dateOfBirth must be YYYY-MM-DD")
-  .refine((value) => !Number.isNaN(Date.parse(`${value}T00:00:00Z`)), {
+  .refine(isValidDateOnly, {
     message: "dateOfBirth must be a valid date",
   });
 
@@ -70,9 +93,18 @@ const skillsSchema = z
       .pipe(z.string().min(1, "skill cannot be empty").max(80)),
   )
   .max(20, "skills must contain at most 20 items")
-  .transform((skills) =>
-    Array.from(new Map(skills.map((skill) => [skill.toLowerCase(), skill])).values()),
-  );
+  .transform((skills) => {
+    const uniqueSkills = new Map<string, string>();
+
+    for (const skill of skills) {
+      const normalized = skill.toLowerCase();
+      if (!uniqueSkills.has(normalized)) {
+        uniqueSkills.set(normalized, skill);
+      }
+    }
+
+    return Array.from(uniqueSkills.values());
+  });
 
 export const updateProfileSchema = z
   .object({

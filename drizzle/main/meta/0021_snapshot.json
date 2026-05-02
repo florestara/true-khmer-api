@@ -1485,6 +1485,21 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "user_progress_total_points_idx": {
+          "name": "user_progress_total_points_idx",
+          "columns": [
+            {
+              "expression": "total_points",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {

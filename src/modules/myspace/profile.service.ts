@@ -27,18 +27,32 @@ function normalizeOwnedAvatarKey(userId: string, avatarKey: string): string | nu
   return normalizedKey;
 }
 
+function isPostgresDateError(error: unknown) {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const code = "code" in error ? String(error.code) : "";
+  return code === "22007" || code === "22008";
+}
+
 export async function handleGetProfile(c: Context) {
   const authResult = getAuthUserId(c);
   if (!authResult.ok) {
     return authResult.response;
   }
 
-  const profile = await getProfile(authResult.userId);
-  if (!profile) {
-    return c.json({ ok: false, error: "User not found" }, 404);
-  }
+  try {
+    const profile = await getProfile(authResult.userId);
+    if (!profile) {
+      return c.json({ ok: false, error: "User not found" }, 404);
+    }
 
-  return c.json({ ok: true, profile }, 200);
+    return c.json({ ok: true, profile }, 200);
+  } catch (err) {
+    console.error("Failed to get profile", err);
+    return c.json({ ok: false, error: "Internal server error" }, 500);
+  }
 }
 
 export async function handleUpdateProfile(
@@ -97,6 +111,13 @@ export async function handleUpdateProfile(
 
     return c.json({ ok: true, profile }, 200);
   } catch (err) {
+    if (isPostgresDateError(err)) {
+      return c.json(
+        { ok: false, error: "dateOfBirth must be a valid date" },
+        400,
+      );
+    }
+
     console.error("Failed to update profile", err);
     return c.json({ ok: false, error: "Internal server error" }, 500);
   }

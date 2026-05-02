@@ -39,4 +39,5 @@ CREATE UNIQUE INDEX "user_skill_user_skill_unique_idx" ON "user_skill" USING btr
 CREATE INDEX "user_skill_user_id_idx" ON "user_skill" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "user_skill_skill_id_idx" ON "user_skill" USING btree ("skill_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "user_social_link_user_platform_unique_idx" ON "user_social_link" USING btree ("user_id","platform");--> statement-breakpoint
-CREATE INDEX "user_social_link_user_id_idx" ON "user_social_link" USING btree ("user_id");
+CREATE INDEX "user_social_link_user_id_idx" ON "user_social_link" USING btree ("user_id");--> statement-breakpoint
+CREATE INDEX "user_progress_total_points_idx" ON "user_progress" USING btree ("total_points");

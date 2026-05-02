@@ -280,7 +280,21 @@ export async function updateProfile(
     cityId?: string;
   },
 ) {
-  await db.transaction(async (tx) => {
+  const updated = await db.transaction(async (tx) => {
+    const [existingUser] = await tx
+      .select({
+        id: user.id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+      })
+      .from(user)
+      .where(eq(user.id, userId))
+      .limit(1);
+
+    if (!existingUser) {
+      return false;
+    }
+
     const userUpdate: Partial<typeof user.$inferInsert> = {};
 
     if (payload.firstName !== undefined) userUpdate.firstName = payload.firstName;
@@ -295,38 +309,25 @@ export async function updateProfile(
 
     if (Object.keys(userUpdate).length > 0) {
       if (userUpdate.firstName !== undefined || userUpdate.lastName !== undefined) {
-        const [existingUser] = await tx
-          .select({
-            firstName: user.firstName,
-            lastName: user.lastName,
-          })
-          .from(user)
-          .where(eq(user.id, userId))
-          .limit(1);
-
         userUpdate.name = computeDisplayName(
-          userUpdate.firstName ?? existingUser?.firstName ?? "",
-          userUpdate.lastName ?? existingUser?.lastName ?? "",
+          userUpdate.firstName ?? existingUser.firstName,
+          userUpdate.lastName ?? existingUser.lastName,
         );
       }
 
       await tx.update(user).set(userUpdate).where(eq(user.id, userId));
     }
 
-    const [currentUser] = await tx
-      .select({
-        firstName: user.firstName,
-        lastName: user.lastName,
-      })
-      .from(user)
-      .where(eq(user.id, userId))
-      .limit(1);
+    const profileUpdate: Partial<typeof userProfile.$inferInsert> = {};
+    const shouldSyncDisplayName =
+      payload.firstName !== undefined || payload.lastName !== undefined;
 
-    const profileUpdate: Partial<typeof userProfile.$inferInsert> = {
-      displayName: currentUser
-        ? computeDisplayName(currentUser.firstName, currentUser.lastName)
-        : null,
-    };
+    if (shouldSyncDisplayName) {
+      profileUpdate.displayName = computeDisplayName(
+        userUpdate.firstName ?? existingUser.firstName,
+        userUpdate.lastName ?? existingUser.lastName,
+      );
+    }
 
     if (payload.avatarKey !== undefined) {
       profileUpdate.avatarKey = payload.avatarKey;
@@ -371,7 +372,13 @@ export async function updateProfile(
     if (payload.socialLinks !== undefined) {
       await updateUserSocialLinks(tx, userId, payload.socialLinks);
     }
+
+    return true;
   });
+
+  if (!updated) {
+    return null;
+  }
 
   return getProfile(userId);
 }

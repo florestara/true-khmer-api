@@ -51,6 +51,14 @@ const getProfileRoute = createRoute({
         },
       },
     },
+    500: {
+      description: "Internal server error",
+      content: {
+        "application/json": {
+          schema: profileErrorResponseSchema,
+        },
+      },
+    },
   },
 });
 
