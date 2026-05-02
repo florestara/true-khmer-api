@@ -223,8 +223,8 @@ export const volunteerApplication = pgTable(
       "volunteer_application_supporting_document_keys_array_check",
       sql`jsonb_typeof(${table.supportingDocumentKeys}) = 'array'`,
     ),
-    uniqueIndex("volunteer_application_applicant_opportunity_active_unique_idx")
-      .on(table.applicantId, table.opportunityId)
+    uniqueIndex("volunteer_application_applicant_role_active_unique_idx")
+      .on(table.applicantId, table.roleId)
       .where(
         sql`${table.status} in ('SUBMITTED', 'ACCEPTED')`,
       ),
