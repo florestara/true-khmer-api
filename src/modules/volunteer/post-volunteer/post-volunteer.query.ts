@@ -175,6 +175,7 @@ export type VolunteerOpportunityDetail = {
     responsibilities: string[];
     requirements: string[];
     displayOrder: number;
+    viewerApplied: boolean;
   }>;
 };
 export type VolunteerApplicationDetail = {
@@ -384,9 +385,9 @@ export async function findVolunteerApplicationTargetByRoleId(
   return row ?? null;
 }
 
-export async function hasVolunteerApplicationForOpportunity(
+export async function hasVolunteerApplicationForRole(
   applicantId: string,
-  opportunityId: string,
+  roleId: string,
 ): Promise<boolean> {
   const [row] = await db
     .select({ id: volunteerApplication.id })
@@ -394,7 +395,7 @@ export async function hasVolunteerApplicationForOpportunity(
     .where(
       and(
         eq(volunteerApplication.applicantId, applicantId),
-        eq(volunteerApplication.opportunityId, opportunityId),
+        eq(volunteerApplication.roleId, roleId),
         inArray(
           volunteerApplication.status,
           ACTIVE_VOLUNTEER_APPLICATION_STATUSES,
@@ -495,6 +496,7 @@ function hydrateVolunteerOpportunityDetail(
   requirementsByRoleId: Map<string, HydratedVolunteerRequirement[]>,
   applicationCount: number,
   viewerSave: boolean,
+  appliedRoleIds: Set<string>,
 ): VolunteerOpportunityDetail {
   const capacity = roles.reduce(
     (total, role) => total + toInteger(role.capacity),
@@ -540,6 +542,7 @@ function hydrateVolunteerOpportunityDetail(
         (requirement) => requirement.requirementText,
       ),
       displayOrder: role.displayOrder,
+      viewerApplied: appliedRoleIds.has(role.id),
     })),
   };
 }
@@ -802,6 +805,35 @@ async function getSavedOpportunityIdsByOpportunityIds(
   return new Set(rows.map((row) => row.opportunityId));
 }
 
+async function getAppliedRoleIdsByRoleIds(
+  executor: VolunteerQueryExecutor,
+  roleIds: string[],
+  viewerId?: string,
+): Promise<Set<string>> {
+  const uniqueRoleIds = [...new Set(roleIds)];
+  if (!viewerId || uniqueRoleIds.length === 0) {
+    return new Set();
+  }
+
+  const rows = await executor
+    .select({
+      roleId: volunteerApplication.roleId,
+    })
+    .from(volunteerApplication)
+    .where(
+      and(
+        inArray(volunteerApplication.roleId, uniqueRoleIds),
+        eq(volunteerApplication.applicantId, viewerId),
+        inArray(
+          volunteerApplication.status,
+          ACTIVE_VOLUNTEER_APPLICATION_STATUSES,
+        ),
+      ),
+    );
+
+  return new Set(rows.map((row) => row.roleId));
+}
+
 async function hydrateVolunteerOpportunityDetails(
   rows: VolunteerOpportunityBaseRow[],
   viewerId?: string,
@@ -859,10 +891,15 @@ async function hydrateVolunteerOpportunityDetails(
 
   const organizerIds = [...new Set(rows.map((row) => row.opportunity.createdBy))];
   const organizerById = await getVolunteerOrganizersByUserIds(db, organizerIds);
-  const [applicationCountByOpportunityId, savedOpportunityIds] =
+  const [
+    applicationCountByOpportunityId,
+    savedOpportunityIds,
+    appliedRoleIds,
+  ] =
     await Promise.all([
       getActiveApplicationCountsByOpportunityIds(db, opportunityIds),
       getSavedOpportunityIdsByOpportunityIds(db, opportunityIds, viewerId),
+      getAppliedRoleIdsByRoleIds(db, roleIds, viewerId),
     ]);
 
   return rows.map((row) => {
@@ -883,6 +920,7 @@ async function hydrateVolunteerOpportunityDetails(
       requirementsByRoleId,
       applicationCountByOpportunityId.get(row.opportunity.id) ?? 0,
       savedOpportunityIds.has(row.opportunity.id),
+      appliedRoleIds,
     );
   });
 }
@@ -1219,7 +1257,9 @@ export async function createVolunteerOpportunity(
       })
       .returning();
 
-    const createdRoles: VolunteerOpportunityDetail["roles"] = [];
+    const createdRoles: Array<
+      Omit<VolunteerOpportunityDetail["roles"][number], "viewerApplied">
+    > = [];
 
     for (const [roleIndex, roleInput] of data.roles.entries()) {
       const [newRole] = await tx
@@ -1292,6 +1332,7 @@ export async function createVolunteerOpportunity(
       ),
       0,
       false,
+      new Set(),
     );
   });
 }

@@ -57,6 +57,7 @@ const volunteerOpportunityRoleResponseSchema = z
     responsibilities: z.array(z.string()),
     requirements: z.array(z.string()),
     displayOrder: z.number(),
+    viewerApplied: z.boolean(),
   })
   .openapi("VolunteerOpportunityRoleResponse");
 

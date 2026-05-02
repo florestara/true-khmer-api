@@ -18,7 +18,6 @@ import {
   getVolunteerOpportunityById,
   getVolunteerLocations,
   getVolunteerOpportunities,
-  hasVolunteerApplicationForOpportunity,
   saveVolunteerOpportunityForUser,
   unsaveVolunteerOpportunityForUser,
 } from "./post-volunteer.query";
@@ -37,8 +36,24 @@ const VOLUNTEER_CATEGORY_SLUG_UNIQUE_INDEX =
   "volunteer_category_slug_unique_idx";
 const VOLUNTEER_CATEGORY_NAME_UNIQUE_INDEX =
   "volunteer_category_name_unique_idx";
-const VOLUNTEER_APPLICATION_APPLICANT_OPPORTUNITY_UNIQUE_INDEX =
-  "volunteer_application_applicant_opportunity_active_unique_idx";
+const VOLUNTEER_APPLICATION_APPLICANT_ROLE_UNIQUE_INDEX =
+  "volunteer_application_applicant_role_active_unique_idx";
+
+type PostgresErrorLike = {
+  code?: string;
+  constraint?: string;
+  constraint_name?: string;
+  cause?: PostgresErrorLike;
+};
+
+function getPostgresError(error: unknown): PostgresErrorLike | null {
+  const candidate = error as PostgresErrorLike | null;
+  return candidate?.cause ?? candidate ?? null;
+}
+
+function getPostgresConstraint(error: PostgresErrorLike | null) {
+  return error?.constraint ?? error?.constraint_name;
+}
 
 function sanitizePublicVolunteerOpportunity<
   T extends {
@@ -331,14 +346,16 @@ export async function handleCreateVolunteerCategory(
 
     return c.json({ ok: true, category }, 201);
   } catch (err) {
-    const error = err as { code?: string; constraint?: string } | null;
+    const error = getPostgresError(err);
 
     if (error?.code === POSTGRES_UNIQUE_VIOLATION) {
-      if (error.constraint === VOLUNTEER_CATEGORY_NAME_UNIQUE_INDEX) {
+      const constraint = getPostgresConstraint(error);
+
+      if (constraint === VOLUNTEER_CATEGORY_NAME_UNIQUE_INDEX) {
         return c.json({ ok: false, error: "Category name already exists" }, 409);
       }
 
-      if (error.constraint === VOLUNTEER_CATEGORY_SLUG_UNIQUE_INDEX) {
+      if (constraint === VOLUNTEER_CATEGORY_SLUG_UNIQUE_INDEX) {
         return c.json({ ok: false, error: "Category slug already exists" }, 409);
       }
 
@@ -402,16 +419,8 @@ export async function handlePresignVolunteerApplicationDocumentUpload(
       return c.json({ ok: false, error: targetError.error }, targetError.status);
     }
 
-    const alreadyApplied = await hasVolunteerApplicationForOpportunity(
-      authResult.userId,
-      payload.opportunityId,
-    );
-
-    if (alreadyApplied) {
-      return c.json(
-        { ok: false, error: "You have already applied to this opportunity" },
-        409,
-      );
+    if (!target) {
+      throw new Error("Volunteer application target missing after validation");
     }
 
     const uploads = payload.files.map((file) =>
@@ -491,14 +500,15 @@ export async function handleCreateVolunteerApplication(
 
     return c.json({ ok: true, application }, 201);
   } catch (err) {
-    const error = err as { code?: string; constraint?: string } | null;
+    const error = getPostgresError(err);
 
     if (
       error?.code === POSTGRES_UNIQUE_VIOLATION &&
-      error.constraint === VOLUNTEER_APPLICATION_APPLICANT_OPPORTUNITY_UNIQUE_INDEX
+      getPostgresConstraint(error) ===
+        VOLUNTEER_APPLICATION_APPLICANT_ROLE_UNIQUE_INDEX
     ) {
       return c.json(
-        { ok: false, error: "You have already applied to this opportunity" },
+        { ok: false, error: "You have already applied to this role" },
         409,
       );
     }
