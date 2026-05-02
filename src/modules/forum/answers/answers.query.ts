@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../../../db/index";
 import {
   forumAnswer,
@@ -9,6 +9,7 @@ import {
 } from "../../../db/schema";
 import { FORUM_ADVISORY_LOCK_NAMESPACE } from "../lib/constants";
 import type {
+  AnswerSortBy,
   AnswerVoteType,
   CreateAnswerInput,
   UpdateAnswerInput,
@@ -75,6 +76,7 @@ type AnswersByQuestionResult = {
   bestAnswer: ForumAnswerWithViewerVote[];
   answers: ForumAnswerWithViewerVote[];
 };
+const ANSWER_SCORE_SQL = sql<number>`${forumAnswer.upvoteCount} - ${forumAnswer.downvoteCount}`;
 export type MarkBestAnswerResult =
   | { kind: "Marked"; answer: ForumAnswerWithViewerVote }
   | { kind: "NotFound" }
@@ -116,6 +118,22 @@ function compareAnswersByCreatedAt(
   right: { createdAt: string | Date },
 ) {
   return getCreatedAtTime(left.createdAt) - getCreatedAtTime(right.createdAt);
+}
+
+function buildAnswersOrderBy(sortBy: AnswerSortBy) {
+  if (sortBy === "oldest") {
+    return [asc(forumAnswer.createdAt), asc(forumAnswer.id)] as const;
+  }
+
+  if (sortBy === "newest") {
+    return [desc(forumAnswer.createdAt), desc(forumAnswer.id)] as const;
+  }
+
+  return [
+    desc(ANSWER_SCORE_SQL),
+    desc(forumAnswer.createdAt),
+    desc(forumAnswer.id),
+  ] as const;
 }
 
 function buildAnswersBaseQuery(
@@ -320,6 +338,7 @@ export async function findAnswerWithViewerVoteById(
 export async function findAnswersByQuestionId(
   questionId: string,
   viewerId: string,
+  sortBy: AnswerSortBy = "popular",
 ): Promise<AnswersByQuestionResult> {
   const rows = await buildAnswersBaseQuery(db, viewerId)
     .where(
@@ -328,13 +347,14 @@ export async function findAnswersByQuestionId(
         eq(forumAnswer.status, "PUBLISHED"),
       ),
     )
-    .orderBy(desc(forumAnswer.upvoteCount), desc(forumAnswer.createdAt));
+    .orderBy(...buildAnswersOrderBy(sortBy));
 
   return groupAnswersWithReplies(rows.map((row) => hydrateAnswer(row)));
 }
 
 export async function findAnswersByQuestionIdPublic(
   questionId: string,
+  sortBy: AnswerSortBy = "popular",
 ): Promise<AnswersByQuestionResult> {
   const rows = await buildPublicAnswersBaseQuery(db)
     .where(
@@ -343,7 +363,7 @@ export async function findAnswersByQuestionIdPublic(
         eq(forumAnswer.status, "PUBLISHED"),
       ),
     )
-    .orderBy(desc(forumAnswer.upvoteCount), desc(forumAnswer.createdAt));
+    .orderBy(...buildAnswersOrderBy(sortBy));
 
   return groupAnswersWithReplies(rows.map((row) => hydratePublicAnswer(row)));
 }
