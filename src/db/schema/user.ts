@@ -1,5 +1,16 @@
 import { relations } from "drizzle-orm";
-import { boolean, index, integer, pgEnum, pgTable, text, timestamp, uuid, varchar } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  date,
+  index,
+  integer,
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+  varchar,
+} from "drizzle-orm/pg-core";
 
 export const userGender = pgEnum("user_gender", ["male", "female", "other"]);
 
@@ -11,9 +22,11 @@ export const user = pgTable("user", {
   firstName: varchar("first_name", { length: 100 }).notNull(),
   lastName: varchar("last_name", { length: 100 }).notNull(),
   gender: userGender("gender").default("other").notNull(),
+  dateOfBirth: date("date_of_birth"),
   // Stores the user's occupation/profession.
   occupation: text("occupation").notNull(),
   phoneNumber: varchar("phone_number", { length: 20 }),
+  telegramUsername: varchar("telegram_username", { length: 32 }),
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified").default(false).notNull(),
   // Compatibility field for Better Auth; canonical avatar is stored in user_profile.

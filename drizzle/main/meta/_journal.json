@@ -155,6 +155,13 @@
       "when": 1777708667486,
       "tag": "0021_bumpy_wildside",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1777689553051,
+      "tag": "0022_spotty_wrecker",
+      "breakpoints": true
     }
   ]
 }
