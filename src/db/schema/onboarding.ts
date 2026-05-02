@@ -3,6 +3,7 @@ import {
   boolean,
   index,
   integer,
+  pgEnum,
   pgTable,
   text,
   timestamp,
@@ -11,6 +12,12 @@ import {
   varchar,
 } from "drizzle-orm/pg-core";
 import { user } from "./user";
+
+export const profileVisibility = pgEnum("profile_visibility", [
+  "public",
+  "members",
+  "private",
+]);
 
 export const country = pgTable(
   "country",
@@ -84,6 +91,18 @@ export const userProfile = pgTable(
     cityId: uuid("city_id").references(() => city.id, {
       onDelete: "set null",
     }),
+    profileVisibility: profileVisibility("profile_visibility")
+      .default("public")
+      .notNull(),
+    contactVisibility: profileVisibility("contact_visibility")
+      .default("members")
+      .notNull(),
+    socialLinksVisibility: profileVisibility("social_links_visibility")
+      .default("members")
+      .notNull(),
+    contributionVisibility: profileVisibility("contribution_visibility")
+      .default("public")
+      .notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
       .defaultNow()
