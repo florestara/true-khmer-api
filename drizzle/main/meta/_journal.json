@@ -162,6 +162,13 @@
       "when": 1777689553051,
       "tag": "0022_spotty_wrecker",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1777803660609,
+      "tag": "0023_sudden_professor_monster",
+      "breakpoints": true
     }
   ]
 }

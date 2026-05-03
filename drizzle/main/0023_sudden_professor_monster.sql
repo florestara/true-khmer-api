@@ -1,0 +1,1 @@
+ALTER TABLE "launchpad" ADD COLUMN "document_names" jsonb DEFAULT '[]'::jsonb NOT NULL;
