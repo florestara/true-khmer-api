@@ -133,6 +133,16 @@ export const createLaunchpadRequestSchema = z
       )
       .min(1, "At least one materialDocumentKey is required")
       .max(5, "materialDocumentKey can have at most 5 documents"),
+    materialDocumentName: z
+      .array(
+        z
+          .string()
+          .trim()
+          .min(1, "materialDocumentName is required")
+          .max(255, "materialDocumentName must be <= 255 characters"),
+      )
+      .min(1, "At least one materialDocumentName is required")
+      .max(5, "materialDocumentName can have at most 5 documents"),
     phoneNumber: z
       .string()
       .transform((value) => normalizeText(value))
@@ -161,6 +171,16 @@ export const createLaunchpadRequestSchema = z
         "telegramUsername must be 5..32 characters and contain only letters, numbers, or underscores",
       ),
   })
+  .superRefine((data, ctx) => {
+    if (data.materialDocumentKey.length !== data.materialDocumentName.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          "materialDocumentKey and materialDocumentName must have the same number of entries",
+        path: ["materialDocumentName"],
+      });
+    }
+  })
   .openapi("CreateLaunchpadRequest");
 
 export const getLaunchpadQuerySchema = z.object({
@@ -170,12 +190,10 @@ export const getLaunchpadQuerySchema = z.object({
     .regex(FORUM_UUID_RE, "launchpadId is required and must be a valid UUID"),
 });
 
-const launchpadSortBySchema = z
-  .enum(["newest", "oldest"])
-  .openapi({
-    description: "Launchpad ordering. Allowed values: newest, oldest.",
-    example: "newest",
-  });
+const launchpadSortBySchema = z.enum(["newest", "oldest"]).openapi({
+  description: "Launchpad ordering. Allowed values: newest, oldest.",
+  example: "newest",
+});
 
 export type LaunchpadSortBy = z.infer<typeof launchpadSortBySchema>;
 
@@ -220,9 +238,13 @@ const launchpadPageCursorSchema = z.discriminatedUnion("sortBy", [
 export type LaunchpadPageCursor = z.infer<typeof launchpadPageCursorSchema>;
 
 export function encodeLaunchpadPageCursor(cursor: LaunchpadPageCursor): string {
-  const normalizedTimestamp = normalizeLaunchpadCursorTimestamp(cursor.createdAt);
+  const normalizedTimestamp = normalizeLaunchpadCursorTimestamp(
+    cursor.createdAt,
+  );
   if (!normalizedTimestamp) {
-    throw new Error("Cannot encode launchpad page cursor with invalid createdAt");
+    throw new Error(
+      "Cannot encode launchpad page cursor with invalid createdAt",
+    );
   }
 
   return Buffer.from(
@@ -273,13 +295,10 @@ export const getLaunchpadQueryListSchema = z
       .max(MAX_LAUNCHPADS_PAGE_SIZE, "limit must be between 1 and 50")
       .default(DEFAULT_LAUNCHPADS_PAGE_SIZE),
     sortBy: launchpadSortBySchema.default("newest"),
-    cursor: z
-      .string()
-      .optional()
-      .openapi({
-        description:
-          "Opaque pagination cursor returned by a previous launchpads list response.",
-      }),
+    cursor: z.string().optional().openapi({
+      description:
+        "Opaque pagination cursor returned by a previous launchpads list response.",
+    }),
     categoryId: z
       .string()
       .trim()

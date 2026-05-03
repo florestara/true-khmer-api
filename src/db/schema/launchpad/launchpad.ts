@@ -34,6 +34,10 @@ export const launchpad = pgTable(
       .$type<string[]>()
       .notNull()
       .default(sql`'[]'::jsonb`),
+    documentNames: jsonb("document_names")
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
     phoneNumber: varchar("phone_number", { length: 20 }),
     email: varchar("email", { length: 255 }),
     telegramUsername: varchar("telegram_username", { length: 255 }),
