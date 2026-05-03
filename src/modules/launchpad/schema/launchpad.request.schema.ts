@@ -280,6 +280,14 @@ export const getLaunchpadQueryListSchema = z
         description:
           "Opaque pagination cursor returned by a previous launchpads list response.",
       }),
+    categoryId: z
+      .string()
+      .trim()
+      .regex(FORUM_UUID_RE, "categoryId must be a valid UUID")
+      .optional()
+      .openapi({
+        description: "Filter launchpads by category ID",
+      }),
   })
   .superRefine((value, ctx) => {
     const decodedCursor = value.cursor
@@ -309,6 +317,7 @@ export const getLaunchpadQueryListSchema = z
     cursor: value.cursor
       ? (decodeLaunchpadPageCursor(value.cursor) as LaunchpadPageCursor)
       : undefined,
+    categoryId: value.categoryId,
   }))
   .openapi("GetLaunchpadQueryList");
 

@@ -1,4 +1,4 @@
-import { sql, eq } from "drizzle-orm";
+import { sql, eq, and } from "drizzle-orm";
 import { db } from "../../db";
 import {
   LAUNCHPAD_ADVISORY_LOCK_NAMESPACE,
@@ -132,18 +132,27 @@ function buildLaunchpadBaseQuery() {
 
 function buildLaunchpadWhereClause(
   cursor: GetLaunchpadQueryListInput["cursor"],
+  categoryId?: string,
 ) {
-  if (!cursor) {
-    return undefined;
+  const conditions = [];
+
+  if (categoryId) {
+    conditions.push(eq(launchpad.categoryId, categoryId));
   }
 
-  if (cursor.sortBy === "newest") {
-    return sql`${launchpad.createdAt} < ${new Date(cursor.createdAt).toISOString()}::timestamptz OR (${launchpad.createdAt} = ${new Date(cursor.createdAt).toISOString()}::timestamptz AND ${launchpad.id} < ${cursor.id})`;
-  } else if (cursor.sortBy === "oldest") {
-    return sql`${launchpad.createdAt} > ${new Date(cursor.createdAt).toISOString()}::timestamptz OR (${launchpad.createdAt} = ${new Date(cursor.createdAt).toISOString()}::timestamptz AND ${launchpad.id} > ${cursor.id})`;
+  if (cursor) {
+    if (cursor.sortBy === "newest") {
+      conditions.push(
+        sql`${launchpad.createdAt} < ${new Date(cursor.createdAt).toISOString()}::timestamptz OR (${launchpad.createdAt} = ${new Date(cursor.createdAt).toISOString()}::timestamptz AND ${launchpad.id} < ${cursor.id})`,
+      );
+    } else if (cursor.sortBy === "oldest") {
+      conditions.push(
+        sql`${launchpad.createdAt} > ${new Date(cursor.createdAt).toISOString()}::timestamptz OR (${launchpad.createdAt} = ${new Date(cursor.createdAt).toISOString()}::timestamptz AND ${launchpad.id} > ${cursor.id})`,
+      );
+    }
   }
 
-  return undefined;
+  return conditions.length > 0 ? and(...conditions) : undefined;
 }
 
 function buildLaunchpadOrderBy(sortBy: GetLaunchpadQueryListInput["sortBy"]) {
@@ -384,7 +393,7 @@ export async function findLaunchpadById(
 export async function findLaunchpads(
   params: GetLaunchpadQueryListInput,
 ): Promise<{ launchpads: LaunchpadListItem[]; nextCursor: string | null }> {
-  const whereClause = buildLaunchpadWhereClause(params.cursor);
+  const whereClause = buildLaunchpadWhereClause(params.cursor, params.categoryId);
   const orderByClause = buildLaunchpadOrderBy(params.sortBy);
 
   const baseQuery = buildLaunchpadBaseQuery()
