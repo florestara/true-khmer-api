@@ -307,6 +307,23 @@ export const getLaunchpadQueryListSchema = z
       .openapi({
         description: "Filter launchpads by category ID",
       }),
+    cityId: z
+      .string()
+      .trim()
+      .regex(FORUM_UUID_RE, "cityId must be a valid UUID")
+      .optional()
+      .openapi({
+        description: "Filter launchpads by city ID",
+      }),
+    search: z
+      .string()
+      .trim()
+      .min(1, "search must be at least 1 character")
+      .max(120, "search must be at most 120 characters")
+      .optional()
+      .openapi({
+        description: "Search launchpads by name (case-insensitive)",
+      }),
   })
   .superRefine((value, ctx) => {
     const decodedCursor = value.cursor
@@ -337,6 +354,8 @@ export const getLaunchpadQueryListSchema = z
       ? (decodeLaunchpadPageCursor(value.cursor) as LaunchpadPageCursor)
       : undefined,
     categoryId: value.categoryId,
+    cityId: value.cityId,
+    search: value.search,
   }))
   .openapi("GetLaunchpadQueryList");
 
