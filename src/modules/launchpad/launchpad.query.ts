@@ -1,4 +1,4 @@
-import { sql, eq, and } from "drizzle-orm";
+import { sql, eq, and, ilike } from "drizzle-orm";
 import { db } from "../../db";
 import {
   LAUNCHPAD_ADVISORY_LOCK_NAMESPACE,
@@ -135,11 +135,21 @@ function buildLaunchpadBaseQuery() {
 function buildLaunchpadWhereClause(
   cursor: GetLaunchpadQueryListInput["cursor"],
   categoryId?: string,
+  cityId?: string,
+  search?: string,
 ) {
   const conditions = [];
 
   if (categoryId) {
     conditions.push(eq(launchpad.categoryId, categoryId));
+  }
+
+  if (cityId) {
+    conditions.push(eq(launchpad.cityId, cityId));
+  }
+
+  if (search) {
+    conditions.push(ilike(launchpad.name, `%${search}%`));
   }
 
   if (cursor) {
@@ -401,6 +411,8 @@ export async function findLaunchpads(
   const whereClause = buildLaunchpadWhereClause(
     params.cursor,
     params.categoryId,
+    params.cityId,
+    params.search,
   );
   const orderByClause = buildLaunchpadOrderBy(params.sortBy);
 
