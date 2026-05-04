@@ -1,4 +1,4 @@
-import { sql, eq } from "drizzle-orm";
+import { sql, eq, and } from "drizzle-orm";
 import { db } from "../../db";
 import {
   LAUNCHPAD_ADVISORY_LOCK_NAMESPACE,
@@ -36,6 +36,7 @@ export type LaunchpadDetail = {
   logoKey: string | null;
   coverKey: string | null;
   documentKeys: string[];
+  documentNames: string[];
   phoneNumber: string | null;
   email: string | null;
   telegramUsername: string | null;
@@ -66,6 +67,7 @@ export type LaunchpadListItem = {
   logoKey: string | null;
   coverKey: string | null;
   documentKeys: string[];
+  documentNames: string[];
   phoneNumber: string | null;
   email: string | null;
   telegramUsername: string | null;
@@ -132,18 +134,27 @@ function buildLaunchpadBaseQuery() {
 
 function buildLaunchpadWhereClause(
   cursor: GetLaunchpadQueryListInput["cursor"],
+  categoryId?: string,
 ) {
-  if (!cursor) {
-    return undefined;
+  const conditions = [];
+
+  if (categoryId) {
+    conditions.push(eq(launchpad.categoryId, categoryId));
   }
 
-  if (cursor.sortBy === "newest") {
-    return sql`${launchpad.createdAt} < ${new Date(cursor.createdAt).toISOString()}::timestamptz OR (${launchpad.createdAt} = ${new Date(cursor.createdAt).toISOString()}::timestamptz AND ${launchpad.id} < ${cursor.id})`;
-  } else if (cursor.sortBy === "oldest") {
-    return sql`${launchpad.createdAt} > ${new Date(cursor.createdAt).toISOString()}::timestamptz OR (${launchpad.createdAt} = ${new Date(cursor.createdAt).toISOString()}::timestamptz AND ${launchpad.id} > ${cursor.id})`;
+  if (cursor) {
+    if (cursor.sortBy === "newest") {
+      conditions.push(
+        sql`(${launchpad.createdAt} < ${new Date(cursor.createdAt).toISOString()}::timestamptz OR (${launchpad.createdAt} = ${new Date(cursor.createdAt).toISOString()}::timestamptz AND ${launchpad.id} < ${cursor.id}))`,
+      );
+    } else if (cursor.sortBy === "oldest") {
+      conditions.push(
+        sql`(${launchpad.createdAt} > ${new Date(cursor.createdAt).toISOString()}::timestamptz OR (${launchpad.createdAt} = ${new Date(cursor.createdAt).toISOString()}::timestamptz AND ${launchpad.id} > ${cursor.id}))`,
+      );
+    }
   }
 
-  return undefined;
+  return conditions.length > 0 ? and(...conditions) : undefined;
 }
 
 function buildLaunchpadOrderBy(sortBy: GetLaunchpadQueryListInput["sortBy"]) {
@@ -196,6 +207,7 @@ export async function createLaunchpad(
       logoKey: data.logoKey,
       coverKey: data.coverKey,
       documentKeys: data.materialDocumentKey,
+      documentNames: data.materialDocumentName,
       phoneNumber: data.phoneNumber,
       email: data.email,
       telegramUsername: data.telegramUsername,
@@ -259,6 +271,7 @@ export async function createLaunchpad(
       logoKey: created.logoKey,
       coverKey: created.coverKey,
       documentKeys: created.documentKeys as string[],
+      documentNames: created.documentNames as string[],
       phoneNumber: created.phoneNumber,
       email: created.email,
       telegramUsername: created.telegramUsername,
@@ -354,6 +367,7 @@ export async function findLaunchpadById(
     logoKey: row.launchpad.logoKey,
     coverKey: row.launchpad.coverKey,
     documentKeys: row.launchpad.documentKeys as string[],
+    documentNames: row.launchpad.documentNames as string[],
     phoneNumber: row.launchpad.phoneNumber,
     email: row.launchpad.email,
     telegramUsername: row.launchpad.telegramUsername,
@@ -384,7 +398,10 @@ export async function findLaunchpadById(
 export async function findLaunchpads(
   params: GetLaunchpadQueryListInput,
 ): Promise<{ launchpads: LaunchpadListItem[]; nextCursor: string | null }> {
-  const whereClause = buildLaunchpadWhereClause(params.cursor);
+  const whereClause = buildLaunchpadWhereClause(
+    params.cursor,
+    params.categoryId,
+  );
   const orderByClause = buildLaunchpadOrderBy(params.sortBy);
 
   const baseQuery = buildLaunchpadBaseQuery()
@@ -416,6 +433,7 @@ export async function findLaunchpads(
     logoKey: row.launchpad.logoKey,
     coverKey: row.launchpad.coverKey,
     documentKeys: row.launchpad.documentKeys as string[],
+    documentNames: row.launchpad.documentNames as string[],
     phoneNumber: row.launchpad.phoneNumber,
     email: row.launchpad.email,
     telegramUsername: row.launchpad.telegramUsername,
