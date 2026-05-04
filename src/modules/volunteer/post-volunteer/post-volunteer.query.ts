@@ -726,7 +726,38 @@ function buildSavedVolunteerOpportunitiesCursorFilter(
   );
 }
 
-async function getActiveApplicationCountsByOpportunityIds(
+// async function getActiveApplicationCountsByOpportunityIds(
+//   executor: VolunteerQueryExecutor,
+//   opportunityIds: string[],
+// ): Promise<Map<string, number>> {
+//   const uniqueOpportunityIds = [...new Set(opportunityIds)];
+//   if (uniqueOpportunityIds.length === 0) {
+//     return new Map();
+//   }
+
+//   const rows = await executor
+//     .select({
+//       opportunityId: volunteerApplication.opportunityId,
+//       applicationCount: sql<number>`count(*)::int`.as("application_count"),
+//     })
+//     .from(volunteerApplication)
+//     .where(
+//       and(
+//         inArray(volunteerApplication.opportunityId, uniqueOpportunityIds),
+//         inArray(
+//           volunteerApplication.status,
+//           ACTIVE_VOLUNTEER_APPLICATION_STATUSES,
+//         ),
+//       ),
+//     )
+//     .groupBy(volunteerApplication.opportunityId);
+
+//   return new Map(
+//     rows.map((row) => [row.opportunityId, toInteger(row.applicationCount)]),
+//   );
+// }
+
+async function getAcceptedApplicationCountsByOpportunityIds(
   executor: VolunteerQueryExecutor,
   opportunityIds: string[],
 ): Promise<Map<string, number>> {
@@ -744,10 +775,7 @@ async function getActiveApplicationCountsByOpportunityIds(
     .where(
       and(
         inArray(volunteerApplication.opportunityId, uniqueOpportunityIds),
-        inArray(
-          volunteerApplication.status,
-          ACTIVE_VOLUNTEER_APPLICATION_STATUSES,
-        ),
+        eq(volunteerApplication.status, "ACCEPTED"),
       ),
     )
     .groupBy(volunteerApplication.opportunityId);
@@ -897,7 +925,7 @@ async function hydrateVolunteerOpportunityDetails(
     appliedRoleIds,
   ] =
     await Promise.all([
-      getActiveApplicationCountsByOpportunityIds(db, opportunityIds),
+      getAcceptedApplicationCountsByOpportunityIds(db, opportunityIds),
       getSavedOpportunityIdsByOpportunityIds(db, opportunityIds, viewerId),
       getAppliedRoleIdsByRoleIds(db, roleIds, viewerId),
     ]);
@@ -1050,7 +1078,7 @@ export async function getVolunteerOpportunities(
     savedOpportunityIds,
   ] =
     await Promise.all([
-      getActiveApplicationCountsByOpportunityIds(db, opportunityIds),
+      getAcceptedApplicationCountsByOpportunityIds(db, opportunityIds),
       getOpportunityCapacitiesByOpportunityIds(db, opportunityIds),
       getSavedOpportunityIdsByOpportunityIds(db, opportunityIds, viewerId),
     ]);
@@ -1166,7 +1194,7 @@ export async function getSavedVolunteerOpportunities(
   const opportunityIds = paginatedRows.map((row) => row.opportunity.id);
   const [applicationCountByOpportunityId, capacityByOpportunityId] =
     await Promise.all([
-      getActiveApplicationCountsByOpportunityIds(db, opportunityIds),
+      getAcceptedApplicationCountsByOpportunityIds(db, opportunityIds),
       getOpportunityCapacitiesByOpportunityIds(db, opportunityIds),
     ]);
 
