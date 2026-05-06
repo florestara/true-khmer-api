@@ -1,4 +1,5 @@
 import type { Context } from "hono";
+import { db } from "../../db";
 import { getAuthUserId } from "../auth/utils/get-auth";
 import {
   deleteRecentActivitiesByReference,
@@ -51,7 +52,11 @@ const DEFAULT_RECENT_ACTIVITY_LIMIT = 10;
 const MAX_RECENT_ACTIVITY_LIMIT = 50;
 
 export function recordRecentActivity(input: RecordRecentActivityInput) {
-  return insertRecentActivity({
+  return insertRecentActivity(buildRecentActivityInsert(input));
+}
+
+function buildRecentActivityInsert(input: RecordRecentActivityInput) {
+  return {
     userId: input.userId,
     type: input.type,
     title: input.title,
@@ -61,7 +66,7 @@ export function recordRecentActivity(input: RecordRecentActivityInput) {
     referenceType: input.referenceType,
     referenceId: input.referenceId,
     data: input.data ?? {},
-  } satisfies RecentActivityInsert);
+  } satisfies RecentActivityInsert;
 }
 
 export function recordRecentActivityQuietly(input: RecordRecentActivityInput) {
@@ -85,10 +90,12 @@ export async function replaceRecentActivitiesByReference(params: {
   types: RecentActivityType[];
   activity?: RecordRecentActivityInput | null;
 }) {
-  await deleteRecentActivitiesByReference(params);
-  if (params.activity) {
-    await recordRecentActivity(params.activity);
-  }
+  await db.transaction(async (tx) => {
+    await deleteRecentActivitiesByReference(params, tx);
+    if (params.activity) {
+      await insertRecentActivity(buildRecentActivityInsert(params.activity), tx);
+    }
+  });
 }
 
 export async function handleGetRecentActivities(c: Context) {

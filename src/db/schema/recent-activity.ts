@@ -5,6 +5,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
@@ -51,6 +52,13 @@ export const recentActivity = pgTable(
       "btree",
       table.referenceType,
       table.referenceId,
+    ),
+    uniqueIndex("recent_activity_user_reference_type_unique_idx").using(
+      "btree",
+      table.userId,
+      table.referenceType,
+      table.referenceId,
+      table.type,
     ),
   ],
 );

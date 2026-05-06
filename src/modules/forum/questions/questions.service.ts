@@ -394,7 +394,7 @@ export async function handleVoteQuestion(
       console.error("Failed to award forum_upvote points", err),
     );
 
-    await replaceRecentActivitiesByReference({
+    void replaceRecentActivitiesByReference({
       userId: authResult.userId,
       referenceType: "forum_question",
       referenceId: votedQuestion.id,

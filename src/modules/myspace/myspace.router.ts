@@ -157,6 +157,14 @@ const getRecentActivitiesRoute = createRoute({
         },
       },
     },
+    403: {
+      description: "Onboarding required",
+      content: {
+        "application/json": {
+          schema: authProtectedErrorResponseSchema,
+        },
+      },
+    },
     500: {
       description: "Internal server error",
       content: {

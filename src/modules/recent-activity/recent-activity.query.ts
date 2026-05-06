@@ -4,9 +4,15 @@ import { recentActivity } from "../../db/schema";
 
 export type RecentActivityRow = typeof recentActivity.$inferSelect;
 export type RecentActivityInsert = typeof recentActivity.$inferInsert;
+type RecentActivityExecutor =
+  | typeof db
+  | Parameters<Parameters<typeof db.transaction>[0]>[0];
 
-export async function insertRecentActivity(data: RecentActivityInsert) {
-  const [row] = await db.insert(recentActivity).values(data).returning();
+export async function insertRecentActivity(
+  data: RecentActivityInsert,
+  executor: RecentActivityExecutor = db,
+) {
+  const [row] = await executor.insert(recentActivity).values(data).returning();
   return row;
 }
 
@@ -15,12 +21,12 @@ export async function deleteRecentActivitiesByReference(params: {
   referenceType: string;
   referenceId: string;
   types: string[];
-}) {
+}, executor: RecentActivityExecutor = db) {
   if (params.types.length === 0) {
     return [];
   }
 
-  return db
+  return executor
     .delete(recentActivity)
     .where(
       and(
