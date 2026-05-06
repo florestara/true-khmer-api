@@ -9,3 +9,4 @@ export * from "./point_system/point-systems";
 export * from "./launchpad/categories/categories";
 export * from "./launchpad/roles/roles";
 export * from "./launchpad/launchpad";
+export * from "./recent-activity";

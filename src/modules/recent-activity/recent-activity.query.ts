@@ -1,0 +1,46 @@
+import { and, desc, eq, inArray } from "drizzle-orm";
+import { db } from "../../db";
+import { recentActivity } from "../../db/schema";
+
+export type RecentActivityRow = typeof recentActivity.$inferSelect;
+export type RecentActivityInsert = typeof recentActivity.$inferInsert;
+
+export async function insertRecentActivity(data: RecentActivityInsert) {
+  const [row] = await db.insert(recentActivity).values(data).returning();
+  return row;
+}
+
+export async function deleteRecentActivitiesByReference(params: {
+  userId: string;
+  referenceType: string;
+  referenceId: string;
+  types: string[];
+}) {
+  if (params.types.length === 0) {
+    return [];
+  }
+
+  return db
+    .delete(recentActivity)
+    .where(
+      and(
+        eq(recentActivity.userId, params.userId),
+        eq(recentActivity.referenceType, params.referenceType),
+        eq(recentActivity.referenceId, params.referenceId),
+        inArray(recentActivity.type, params.types),
+      ),
+    )
+    .returning({ id: recentActivity.id });
+}
+
+export async function findRecentActivitiesByUserId(
+  userId: string,
+  limit: number,
+): Promise<RecentActivityRow[]> {
+  return db
+    .select()
+    .from(recentActivity)
+    .where(eq(recentActivity.userId, userId))
+    .orderBy(desc(recentActivity.createdAt), desc(recentActivity.id))
+    .limit(limit);
+}

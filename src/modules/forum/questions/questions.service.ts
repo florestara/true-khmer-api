@@ -31,6 +31,14 @@ import {
   awardPoints,
   awardForumUpvotePoints,
 } from "../../points/points.service";
+import {
+  recordRecentActivityQuietly,
+  replaceRecentActivitiesByReference,
+} from "../../recent-activity/recent-activity.service";
+
+function quoteActivityText(value: string) {
+  return `'${value}'`;
+}
 
 export async function handleGetQuestions(
   c: Context,
@@ -195,6 +203,21 @@ export async function handleCreateQuestion(
       console.error("Failed to award points for question", err),
     );
 
+    recordRecentActivityQuietly({
+      userId: authResult.userId,
+      type: "forum_question_posted",
+      title: "Shared a new post in Forum",
+      description: quoteActivityText(newQuestion.title),
+      targetType: "forum_question",
+      targetId: newQuestion.id,
+      referenceType: "forum_question",
+      referenceId: newQuestion.id,
+      data: {
+        questionId: newQuestion.id,
+        categoryId: newQuestion.category.id,
+      },
+    });
+
     return c.json({ ok: true, question: newQuestion }, 201);
   } catch (err) {
     const code = (err as { code?: string } | null)?.code;
@@ -307,6 +330,20 @@ export async function handleDeleteQuestion(
       return c.json({ ok: false, error: "Question not found" }, 404);
     }
 
+    recordRecentActivityQuietly({
+      userId: authResult.userId,
+      type: "forum_question_deleted",
+      title: "Deleted a Forum post",
+      description: quoteActivityText(existingQuestion.title),
+      targetType: "forum_question",
+      targetId: deletedQuestion.id,
+      referenceType: "forum_question",
+      referenceId: deletedQuestion.id,
+      data: {
+        questionId: deletedQuestion.id,
+      },
+    });
+
     return c.json({ ok: true }, 200);
   } catch (err) {
     console.error("Failed to delete question", err);
@@ -357,6 +394,38 @@ export async function handleVoteQuestion(
       console.error("Failed to award forum_upvote points", err),
     );
 
+    await replaceRecentActivitiesByReference({
+      userId: authResult.userId,
+      referenceType: "forum_question",
+      referenceId: votedQuestion.id,
+      types: ["forum_question_upvoted", "forum_question_downvoted"],
+      activity:
+        data.voteType === "NONE"
+          ? null
+          : {
+        userId: authResult.userId,
+        type:
+          data.voteType === "UPVOTE"
+            ? "forum_question_upvoted"
+            : "forum_question_downvoted",
+        title:
+          data.voteType === "UPVOTE"
+            ? "Upvoted a Forum post"
+            : "Downvoted a Forum post",
+        description: quoteActivityText(votedQuestion.title),
+        targetType: "forum_question",
+        targetId: votedQuestion.id,
+        referenceType: "forum_question",
+        referenceId: votedQuestion.id,
+        data: {
+          questionId: votedQuestion.id,
+          voteType: data.voteType,
+        },
+      },
+    }).catch((err) => {
+      console.error("Failed to replace forum question vote activity", err);
+    });
+
     return c.json(
       {
         ok: true,
@@ -388,6 +457,22 @@ export async function handleSaveQuestion(c: Context, params: QuestionIdParams) {
     );
     if (!savedQuestion) {
       return c.json({ ok: false, error: "Question not found" }, 404);
+    }
+
+    if (savedQuestion.created) {
+      recordRecentActivityQuietly({
+        userId: authResult.userId,
+        type: "forum_question_saved",
+        title: "Saved a Forum post",
+        description: quoteActivityText(existingQuestion.title),
+        targetType: "forum_question",
+        targetId: existingQuestion.id,
+        referenceType: "forum_question",
+        referenceId: existingQuestion.id,
+        data: {
+          questionId: existingQuestion.id,
+        },
+      });
     }
 
     return c.json({ ok: true }, 200);
