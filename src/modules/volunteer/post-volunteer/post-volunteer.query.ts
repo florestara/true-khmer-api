@@ -61,7 +61,8 @@ type VolunteerLocationRow = {
   name: string;
 };
 type VolunteerOpportunityRow = typeof volunteerOpportunity.$inferSelect;
-type VolunteerOpportunitySaveInsert = typeof volunteerOpportunitySave.$inferInsert;
+type VolunteerOpportunitySaveInsert =
+  typeof volunteerOpportunitySave.$inferInsert;
 type VolunteerApplicationRow = typeof volunteerApplication.$inferSelect;
 type VolunteerRoleRow = typeof volunteerRole.$inferSelect;
 type VolunteerRoleRequirementRow = typeof volunteerRoleRequirement.$inferSelect;
@@ -197,9 +198,11 @@ type VolunteerOpportunitiesListResult = {
   pagination: CursorPagination;
 };
 
-const CAMBODIA_NORMALIZED_NAME =
-  env.VOLUNTEER_COUNTRY_NORMALIZED_NAME;
-const volunteerRoleSearch = aliasedTable(volunteerRole, "volunteer_role_search");
+const CAMBODIA_NORMALIZED_NAME = env.VOLUNTEER_COUNTRY_NORMALIZED_NAME;
+const volunteerRoleSearch = aliasedTable(
+  volunteerRole,
+  "volunteer_role_search",
+);
 const volunteerRoleRequirementSearch = aliasedTable(
   volunteerRoleRequirement,
   "volunteer_role_requirement_search",
@@ -231,7 +234,9 @@ function toInteger(value: unknown, fallback = 0): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-export async function getVolunteerCategories(): Promise<VolunteerCategoryRow[]> {
+export async function getVolunteerCategories(): Promise<
+  VolunteerCategoryRow[]
+> {
   return db
     .select()
     .from(volunteerCategory)
@@ -297,7 +302,10 @@ export async function getVolunteerLocations(): Promise<VolunteerLocationRow[]> {
         eq(country.normalizedName, CAMBODIA_NORMALIZED_NAME),
       ),
     )
-    .orderBy(asc(city.name));
+    .orderBy(
+      sql`CASE WHEN ${city.name} = 'Phnom Penh' THEN 0 ELSE 1 END`,
+      asc(city.name),
+    );
 }
 
 export async function findActiveVolunteerCategoryById(
@@ -797,15 +805,18 @@ async function getOpportunityCapacitiesByOpportunityIds(
   const rows = await executor
     .select({
       opportunityId: volunteerRole.opportunityId,
-      capacity: sql<number>`coalesce(sum(${volunteerRole.capacity}), 0)::int`.as(
-        "capacity",
-      ),
+      capacity:
+        sql<number>`coalesce(sum(${volunteerRole.capacity}), 0)::int`.as(
+          "capacity",
+        ),
     })
     .from(volunteerRole)
     .where(inArray(volunteerRole.opportunityId, uniqueOpportunityIds))
     .groupBy(volunteerRole.opportunityId);
 
-  return new Map(rows.map((row) => [row.opportunityId, toInteger(row.capacity)]));
+  return new Map(
+    rows.map((row) => [row.opportunityId, toInteger(row.capacity)]),
+  );
 }
 
 async function getSavedOpportunityIdsByOpportunityIds(
@@ -917,13 +928,11 @@ async function hydrateVolunteerOpportunityDetails(
     roleRequirements.push(requirement);
   }
 
-  const organizerIds = [...new Set(rows.map((row) => row.opportunity.createdBy))];
+  const organizerIds = [
+    ...new Set(rows.map((row) => row.opportunity.createdBy)),
+  ];
   const organizerById = await getVolunteerOrganizersByUserIds(db, organizerIds);
-  const [
-    applicationCountByOpportunityId,
-    savedOpportunityIds,
-    appliedRoleIds,
-  ] =
+  const [applicationCountByOpportunityId, savedOpportunityIds, appliedRoleIds] =
     await Promise.all([
       getAcceptedApplicationCountsByOpportunityIds(db, opportunityIds),
       getSavedOpportunityIdsByOpportunityIds(db, opportunityIds, viewerId),
@@ -993,7 +1002,10 @@ async function getVolunteerOrganizersByUserIds(
     })
     .from(user)
     .leftJoin(userProfile, eq(userProfile.userId, user.id))
-    .leftJoin(organizerProfileCity, eq(organizerProfileCity.id, userProfile.cityId))
+    .leftJoin(
+      organizerProfileCity,
+      eq(organizerProfileCity.id, userProfile.cityId),
+    )
     .leftJoin(opportunityCounts, eq(opportunityCounts.userId, user.id))
     .where(inArray(user.id, uniqueUserIds));
 
@@ -1009,7 +1021,9 @@ async function getVolunteerOrganizerByUserId(
   executor: VolunteerQueryExecutor,
   userId: string,
 ): Promise<VolunteerOrganizerBase | null> {
-  const organizersById = await getVolunteerOrganizersByUserIds(executor, [userId]);
+  const organizersById = await getVolunteerOrganizersByUserIds(executor, [
+    userId,
+  ]);
   return organizersById.get(userId) ?? null;
 }
 
@@ -1076,12 +1090,11 @@ export async function getVolunteerOpportunities(
     applicationCountByOpportunityId,
     capacityByOpportunityId,
     savedOpportunityIds,
-  ] =
-    await Promise.all([
-      getAcceptedApplicationCountsByOpportunityIds(db, opportunityIds),
-      getOpportunityCapacitiesByOpportunityIds(db, opportunityIds),
-      getSavedOpportunityIdsByOpportunityIds(db, opportunityIds, viewerId),
-    ]);
+  ] = await Promise.all([
+    getAcceptedApplicationCountsByOpportunityIds(db, opportunityIds),
+    getOpportunityCapacitiesByOpportunityIds(db, opportunityIds),
+    getSavedOpportunityIdsByOpportunityIds(db, opportunityIds, viewerId),
+  ]);
 
   const opportunityRows: VolunteerOpportunityListRow[] = paginatedRows.map(
     (row) => ({
@@ -1254,7 +1267,10 @@ export async function getVolunteerOpportunityById(
     return null;
   }
 
-  const [opportunity] = await hydrateVolunteerOpportunityDetails([row], viewerId);
+  const [opportunity] = await hydrateVolunteerOpportunityDetails(
+    [row],
+    viewerId,
+  );
   return opportunity ?? null;
 }
 
