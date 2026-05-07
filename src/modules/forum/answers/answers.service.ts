@@ -28,6 +28,14 @@ import {
   awardForumParticipationPoints,
   awardForumUpvotePoints,
 } from "../../points/points.service";
+import {
+  recordRecentActivityQuietly,
+  replaceRecentActivitiesByReference,
+} from "../../recent-activity/recent-activity.service";
+
+function quoteActivityText(value: string) {
+  return `'${value}'`;
+}
 
 export async function handleGetAnswers(
   c: Context,
@@ -149,6 +157,24 @@ export async function handleCreateAnswer(c: Context, data: CreateAnswerInput) {
       console.error("Failed to award forum answer points", err),
     );
 
+    recordRecentActivityQuietly({
+      userId: authResult.userId,
+      type: "forum_answer_posted",
+      title: data.replyToAnswer
+        ? "Replied to a Forum answer"
+        : "Answered a Forum post",
+      description: quoteActivityText(question.title),
+      targetType: "forum_question",
+      targetId: question.id,
+      referenceType: "forum_answer",
+      referenceId: newAnswer.id,
+      data: {
+        questionId: question.id,
+        answerId: newAnswer.id,
+        replyToAnswerId: data.replyToAnswer ?? null,
+      },
+    });
+
     return c.json({ ok: true, answer: newAnswer }, 201);
   } catch (err) {
     if (err instanceof ReplyTargetUnavailableError) {
@@ -244,6 +270,22 @@ export async function handleDeleteAnswer(c: Context, params: AnswerIdParams) {
       return c.json({ ok: false, error: "Answer not found" }, 404);
     }
 
+    const question = await findQuestionById(deletedAnswer.questionId);
+    recordRecentActivityQuietly({
+      userId: authResult.userId,
+      type: "forum_answer_deleted",
+      title: "Deleted a Forum answer",
+      description: question ? quoteActivityText(question.title) : null,
+      targetType: "forum_question",
+      targetId: deletedAnswer.questionId,
+      referenceType: "forum_answer",
+      referenceId: deletedAnswer.id,
+      data: {
+        questionId: deletedAnswer.questionId,
+        answerId: deletedAnswer.id,
+      },
+    });
+
     return c.json({ ok: true }, 200);
   } catch (err) {
     console.error("Failed to delete answer", err);
@@ -280,6 +322,22 @@ export async function handleMarkBestAnswer(
         409,
       );
     }
+
+    const question = await findQuestionById(markedAnswer.answer.questionId);
+    recordRecentActivityQuietly({
+      userId: authResult.userId,
+      type: "forum_best_answer_marked",
+      title: "Marked a best answer in Forum",
+      description: question ? quoteActivityText(question.title) : null,
+      targetType: "forum_question",
+      targetId: markedAnswer.answer.questionId,
+      referenceType: "forum_answer",
+      referenceId: markedAnswer.answer.id,
+      data: {
+        questionId: markedAnswer.answer.questionId,
+        answerId: markedAnswer.answer.id,
+      },
+    });
 
     return c.json({ ok: true, answer: markedAnswer.answer }, 200);
   } catch (err) {
@@ -338,6 +396,43 @@ export async function handleVoteAnswer(
     }).catch((err) =>
       console.error("Failed to award forum_answer_upvotes points", err),
     );
+
+    const question =
+      data.voteType === "NONE"
+        ? null
+        : await findQuestionById(existingAnswer.questionId);
+    await replaceRecentActivitiesByReference({
+      userId: authResult.userId,
+      referenceType: "forum_answer",
+      referenceId: params.answerId,
+      types: ["forum_answer_upvoted", "forum_answer_downvoted"],
+      activity:
+        data.voteType === "NONE"
+          ? null
+          : {
+        userId: authResult.userId,
+        type:
+          data.voteType === "UPVOTE"
+            ? "forum_answer_upvoted"
+            : "forum_answer_downvoted",
+        title:
+          data.voteType === "UPVOTE"
+            ? "Upvoted a Forum answer"
+            : "Downvoted a Forum answer",
+        description: question ? quoteActivityText(question.title) : null,
+        targetType: "forum_question",
+        targetId: existingAnswer.questionId,
+        referenceType: "forum_answer",
+        referenceId: params.answerId,
+        data: {
+          questionId: existingAnswer.questionId,
+          answerId: params.answerId,
+          voteType: data.voteType,
+        },
+      },
+    }).catch((err) => {
+      console.error("Failed to replace forum answer vote activity", err);
+    });
 
     return c.json(
       {

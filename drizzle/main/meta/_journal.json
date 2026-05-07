@@ -173,15 +173,15 @@
     {
       "idx": 24,
       "version": "7",
-      "when": 1778122787197,
-      "tag": "0024_high_jackal",
+      "when": 1778037462662,
+      "tag": "0024_mighty_triathlon",
       "breakpoints": true
     },
     {
       "idx": 25,
       "version": "7",
-      "when": 1778150765644,
-      "tag": "0025_slim_imperial_guard",
+      "when": 1778152105593,
+      "tag": "0025_happy_speed",
       "breakpoints": true
     }
   ]

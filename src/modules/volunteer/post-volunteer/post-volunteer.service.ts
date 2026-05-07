@@ -31,6 +31,7 @@ import type {
   PresignVolunteerApplicationDocumentUploadPayload,
   PresignVolunteerOpportunityCoverUploadPayload,
 } from "./post-volunteer.schema";
+import { recordRecentActivityQuietly } from "../../recent-activity/recent-activity.service";
 
 const VOLUNTEER_CATEGORY_SLUG_UNIQUE_INDEX =
   "volunteer_category_slug_unique_idx";
@@ -38,6 +39,10 @@ const VOLUNTEER_CATEGORY_NAME_UNIQUE_INDEX =
   "volunteer_category_name_unique_idx";
 const VOLUNTEER_APPLICATION_APPLICANT_ROLE_UNIQUE_INDEX =
   "volunteer_application_applicant_role_active_unique_idx";
+
+function quoteActivityText(value: string) {
+  return `'${value}'`;
+}
 
 type PostgresErrorLike = {
   code?: string;
@@ -296,6 +301,22 @@ export async function handleSaveVolunteerOpportunity(
       return c.json({ ok: false, error: "Volunteer opportunity not found" }, 404);
     }
 
+    if (savedOpportunity.created) {
+      recordRecentActivityQuietly({
+        userId: authResult.userId,
+        type: "volunteer_opportunity_saved",
+        title: `Saved ${quoteActivityText(savedOpportunity.opportunity.title)} volunteer opportunity`,
+        description: savedOpportunity.opportunity.overview,
+        targetType: "volunteer_opportunity",
+        targetId: savedOpportunity.opportunity.id,
+        referenceType: "volunteer_opportunity",
+        referenceId: savedOpportunity.opportunity.id,
+        data: {
+          opportunityId: savedOpportunity.opportunity.id,
+        },
+      });
+    }
+
     return c.json({ ok: true }, 200);
   } catch (err) {
     console.error("Failed to save volunteer opportunity", err);
@@ -438,6 +459,110 @@ export async function handlePresignVolunteerApplicationDocumentUpload(
   }
 }
 
+export async function handleCreateVolunteerApplication(
+  c: Context,
+  data: CreateVolunteerApplicationBodyInput,
+) {
+  const authResult = getAuthUserId(c);
+  if (!authResult.ok) {
+    return authResult.response;
+  }
+
+  try {
+    const target = await findVolunteerApplicationTargetByRoleId(data.roleId);
+    const targetError = resolveVolunteerApplicationTargetError(
+      target,
+      authResult.userId,
+      "Volunteer role not found",
+    );
+
+    if (targetError) {
+      return c.json({ ok: false, error: targetError.error }, targetError.status);
+    }
+
+    if (!target) {
+      throw new Error("Volunteer application target missing after validation");
+    }
+
+    const normalizedSupportingDocumentKeys = normalizeOwnedSupportingDocumentKeys(
+      target.opportunityId,
+      authResult.userId,
+      data.supportingDocumentKeys,
+    );
+
+    if (!normalizedSupportingDocumentKeys) {
+      return c.json(
+        {
+          ok: false,
+          error: "Validation failed",
+          issues: [
+            {
+              path: "supportingDocumentKeys",
+              message:
+                "supportingDocumentKeys must belong to current user and opportunity",
+            },
+          ],
+        },
+        400,
+      );
+    }
+
+    const application = await createVolunteerApplication({
+      ...data,
+      applicantId: authResult.userId,
+      opportunityId: target.opportunityId,
+      opportunityTitle: target.opportunityTitle,
+      coverImageKey: target.coverImageKey,
+      applicationDeadline: target.applicationDeadline,
+      category: {
+        id: target.categoryId,
+        name: target.categoryName,
+      },
+      location: {
+        id: target.cityId,
+        name: target.cityName,
+      },
+      roleTitle: target.roleTitle,
+      supportingDocumentKeys: normalizedSupportingDocumentKeys,
+    });
+
+    recordRecentActivityQuietly({
+      userId: authResult.userId,
+      type: "volunteer_application_submitted",
+      title: `Applied to ${quoteActivityText(target.opportunityTitle)} volunteer opportunity`,
+      description: target.opportunityOverview,
+      targetType: "volunteer_opportunity",
+      targetId: target.opportunityId,
+      referenceType: "volunteer_application",
+      referenceId: application.id,
+      data: {
+        opportunityId: target.opportunityId,
+        applicationId: application.id,
+        roleId: target.roleId,
+        roleTitle: target.roleTitle,
+      },
+    });
+
+    return c.json({ ok: true, application }, 201);
+  } catch (err) {
+    const error = getPostgresError(err);
+
+    if (
+      error?.code === POSTGRES_UNIQUE_VIOLATION &&
+      getPostgresConstraint(error) ===
+        VOLUNTEER_APPLICATION_APPLICANT_ROLE_UNIQUE_INDEX
+    ) {
+      return c.json(
+        { ok: false, error: "You have already applied to this role" },
+        409,
+      );
+    }
+
+    console.error("Failed to create volunteer application", err);
+    return c.json({ ok: false, error: "Internal server error" }, 500);
+  }
+}
+
 export async function handleCreateVolunteerOpportunity(
   c: Context,
   data: CreateVolunteerOpportunityBodyInput,
@@ -490,98 +615,25 @@ export async function handleCreateVolunteerOpportunity(
       createdBy: authResult.userId,
     });
 
+    recordRecentActivityQuietly({
+      userId: authResult.userId,
+      type: "volunteer_opportunity_posted",
+      title: `Posted ${quoteActivityText(opportunity.title)} volunteer opportunity`,
+      description: opportunity.overview,
+      targetType: "volunteer_opportunity",
+      targetId: opportunity.id,
+      referenceType: "volunteer_opportunity",
+      referenceId: opportunity.id,
+      data: {
+        opportunityId: opportunity.id,
+        categoryId: opportunity.category.id,
+        locationId: opportunity.location.id,
+      },
+    });
+
     return c.json({ ok: true, opportunity }, 201);
   } catch (error) {
     console.error("Failed to create volunteer opportunity", error);
-    return c.json({ ok: false, error: "Internal server error" }, 500);
-  }
-}
-
-export async function handleCreateVolunteerApplication(
-  c: Context,
-  data: CreateVolunteerApplicationBodyInput,
-) {
-  const authResult = getAuthUserId(c);
-  if (!authResult.ok) {
-    return authResult.response;
-  }
-
-  try {
-    const target = await findVolunteerApplicationTargetByRoleId(data.roleId);
-    const targetError = resolveVolunteerApplicationTargetError(
-      target,
-      authResult.userId,
-      "Volunteer role not found",
-    );
-
-    if (targetError) {
-      return c.json({ ok: false, error: targetError.error }, targetError.status);
-    }
-
-    if (!target) {
-      throw new Error("Volunteer application target missing after validation");
-    }
-
-    const normalizedSupportingDocumentKeys = normalizeOwnedSupportingDocumentKeys(
-      target.opportunityId,
-      authResult.userId,
-      data.supportingDocumentKeys,
-    );
-
-    if (!normalizedSupportingDocumentKeys) {
-      return c.json(
-        {
-          ok: false,
-          error: "Validation failed",
-          issues: [
-            {
-              path: "supportingDocumentKeys",
-              message:
-                "supportingDocumentKeys must belong to current user and opportunity",
-            },
-          ],
-        },
-        400,
-      );
-    }
-
-    const application = await createVolunteerApplication({
-      roleId: data.roleId,
-      applicantId: authResult.userId,
-      opportunityId: target.opportunityId,
-      opportunityTitle: target.opportunityTitle,
-      coverImageKey: target.coverImageKey,
-      applicationDeadline: target.applicationDeadline,
-      category: {
-        id: target.categoryId,
-        name: target.categoryName,
-      },
-      location: {
-        id: target.cityId,
-        name: target.cityName,
-      },
-      roleTitle: target.roleTitle,
-      availability: data.availability,
-      relevantExperience: data.relevantExperience,
-      supportingDocumentKeys: normalizedSupportingDocumentKeys,
-    });
-
-    return c.json({ ok: true, application }, 201);
-  } catch (err) {
-    const error = getPostgresError(err);
-
-    if (
-      error?.code === POSTGRES_UNIQUE_VIOLATION &&
-      getPostgresConstraint(error) ===
-        VOLUNTEER_APPLICATION_APPLICANT_ROLE_UNIQUE_INDEX
-    ) {
-      return c.json(
-        { ok: false, error: "You have already applied to this role" },
-        409,
-      );
-    }
-
-    console.error("Failed to create volunteer application", err);
     return c.json({ ok: false, error: "Internal server error" }, 500);
   }
 }

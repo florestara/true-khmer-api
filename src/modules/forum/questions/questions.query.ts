@@ -1606,8 +1606,8 @@ export async function setQuestionVote(
 export async function saveQuestionForUser(
   questionId: string,
   userId: string,
-): Promise<boolean> {
-  const savedQuestionId = await db.transaction(async (tx) => {
+): Promise<{ questionId: string; created: boolean } | null> {
+  return db.transaction(async (tx) => {
     const [question] = await tx
       .select({ id: forumQuestion.id })
       .from(forumQuestion)
@@ -1627,17 +1627,19 @@ export async function saveQuestionForUser(
       saverId: userId,
     };
 
-    await tx
+    const insertedSaves = await tx
       .insert(forumQuestionSave)
       .values(saveInsertData)
       .onConflictDoNothing({
         target: [forumQuestionSave.questionId, forumQuestionSave.saverId],
-      });
+      })
+      .returning({ questionId: forumQuestionSave.questionId });
 
-    return question.id;
+    return {
+      questionId: question.id,
+      created: insertedSaves.length > 0,
+    };
   });
-
-  return Boolean(savedQuestionId);
 }
 
 export async function unsaveQuestionForUser(

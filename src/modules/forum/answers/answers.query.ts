@@ -66,11 +66,19 @@ type RepliedAnswerWithViewerVote = Omit<
 type ForumAnswerWithViewerVote = RepliedAnswerWithViewerVote & {
   repliedAnswers: RepliedAnswerWithViewerVote[] | null;
 };
+type ForumAnswerWithoutQuestionId = Omit<ForumAnswerWithViewerVote, "questionId">;
+type ForumAnswerQuestion = Omit<ForumQuestionRow, "authorId" | "deletedAt">;
+type ForumAnswerWithQuestion = ForumAnswerWithoutQuestionId & {
+  question: ForumAnswerQuestion;
+};
 type HydratedRepliedAnswerWithViewerVote = RepliedAnswerWithViewerVote & {
   isBestAnswer: boolean;
 };
 type HydratedForumAnswerWithViewerVote = HydratedRepliedAnswerWithViewerVote & {
   repliedAnswers: HydratedRepliedAnswerWithViewerVote[] | null;
+};
+type AnswerWithQuestionHydrationRow = AnswerHydrationRow & {
+  question: ForumQuestionRow;
 };
 type AnswersByQuestionResult = {
   bestAnswer: ForumAnswerWithViewerVote[];
@@ -245,6 +253,28 @@ function stripBestAnswerFlag(
   };
 }
 
+function hydrateAnswerQuestion(
+  question: ForumQuestionRow,
+): ForumAnswerQuestion {
+  const { authorId: _authorId, deletedAt: _deletedAt, ...publicQuestion } =
+    question;
+
+  return publicQuestion;
+}
+
+function hydrateAnswerWithQuestion(
+  row: AnswerWithQuestionHydrationRow,
+): ForumAnswerWithQuestion {
+  const { questionId: _questionId, ...answer } = stripBestAnswerFlag(
+    hydrateAnswer(row),
+  );
+
+  return {
+    ...answer,
+    question: hydrateAnswerQuestion(row.question),
+  };
+}
+
 function groupAnswersWithReplies(
   answers: HydratedForumAnswerWithViewerVote[],
 ): AnswersByQuestionResult {
@@ -370,9 +400,28 @@ export async function findAnswersByQuestionIdPublic(
 
 export async function findAnswersByAuthorId(
   authorId: string,
-): Promise<ForumAnswerWithViewerVote[]> {
-  const rows = await buildAnswersBaseQuery(db, authorId)
+): Promise<ForumAnswerWithQuestion[]> {
+  const rows = await db
+    .select({
+      answer: forumAnswer,
+      question: forumQuestion,
+      questionBestAnswerId: forumQuestion.bestAnswerId,
+      authorDisplayName: userProfile.displayName,
+      authorFullName: user.name,
+      authorAvatarKey: userProfile.avatarKey,
+      viewerVoteType: forumAnswerVote.voteType,
+    })
+    .from(forumAnswer)
     .innerJoin(forumQuestion, eq(forumQuestion.id, forumAnswer.questionId))
+    .innerJoin(user, eq(user.id, forumAnswer.authorId))
+    .leftJoin(userProfile, eq(userProfile.userId, user.id))
+    .leftJoin(
+      forumAnswerVote,
+      and(
+        eq(forumAnswerVote.answerId, forumAnswer.id),
+        eq(forumAnswerVote.voterId, authorId),
+      ),
+    )
     .where(
       and(
         eq(forumAnswer.authorId, authorId),
@@ -382,7 +431,7 @@ export async function findAnswersByAuthorId(
     )
     .orderBy(desc(forumAnswer.createdAt), desc(forumAnswer.upvoteCount));
 
-  return rows.map((row) => stripBestAnswerFlag(hydrateAnswer(row)));
+  return rows.map(hydrateAnswerWithQuestion);
 }
 
 export async function createAnswer(
