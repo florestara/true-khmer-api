@@ -176,6 +176,13 @@
       "when": 1778122787197,
       "tag": "0024_high_jackal",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1778150765644,
+      "tag": "0025_slim_imperial_guard",
+      "breakpoints": true
     }
   ]
 }

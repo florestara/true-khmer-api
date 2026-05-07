@@ -1,6 +1,5 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import type { AppBindings } from "../lib/types";
-import { applicationRouter } from "../modules/application/application.router";
 import { authRouter } from "../modules/auth/auth.router";
 import { answersRouter } from "../modules/forum/answers/answers.router";
 import { categoriesRouter } from "../modules/forum/categories/categories.router";
@@ -16,6 +15,7 @@ import { reportingTypeRouter } from "../modules/forum/reportingType/reportingTyp
 import { reportingRouter } from "../modules/forum/reporting/reporting.router";
 import { launchpadCategoriesRouter } from "../modules/launchpad/categories/categories.router";
 import { launchpadRouter } from "../modules/launchpad/launchpad.router";
+import { myApplicationsRouter } from "../modules/myspace/applications.router";
 import { myspaceRouter } from "../modules/myspace/myspace.router";
 
 const routes = new OpenAPIHono<AppBindings>();
@@ -28,7 +28,6 @@ routes.route("/forum/questions", questionsRouter);
 routes.route("/forum/answer", answersRouter);
 routes.route("/volunteer", postVolunteerRouter);
 routes.route("/volunteer/public", publicPostVolunteerRouter);
-routes.route("/volunteer/applications", applicationRouter);
 routes.route("/forum/public/questions", publicQuestionsRouter);
 routes.route("/forum/public/category", publicCategoriesRouter);
 routes.route("/forum/public/answer", publicAnswersRouter);
@@ -36,6 +35,7 @@ routes.route("/forum/public/reporting-type", reportingTypeRouter);
 routes.route("/forum/reporting", reportingRouter);
 routes.route("/launchpad/public/category", launchpadCategoriesRouter);
 routes.route("/launchpad", launchpadRouter);
+routes.route("/my-application", myApplicationsRouter);
 routes.route("/me", myspaceRouter);
 
 export default routes;

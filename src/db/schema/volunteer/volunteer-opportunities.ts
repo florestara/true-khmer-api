@@ -26,9 +26,11 @@ export const volunteerOpportunityStatus = pgEnum("volunteer_opportunity_status",
 
 export const volunteerApplicationStatus = pgEnum("volunteer_application_status", [
   "SUBMITTED",
-  "APPROVAL",
-  "ACCEPTED",
-  "REJECTED",
+  "UNDER_REVIEW",
+  "APPROVED",
+  "DECLINED",
+  "CONFIRMED",
+  "COMPLETED",
   "WITHDRAWN",
 ]);
 
@@ -227,7 +229,7 @@ export const volunteerApplication = pgTable(
     uniqueIndex("volunteer_application_applicant_role_active_unique_idx")
       .on(table.applicantId, table.roleId)
       .where(
-        sql`${table.status} in ('SUBMITTED', 'APPROVAL', 'ACCEPTED')`,
+        sql`${table.status} in ('SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'CONFIRMED', 'COMPLETED')`,
       ),
     index("volunteer_application_opportunity_idx").using(
       "btree",
