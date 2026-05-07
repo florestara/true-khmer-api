@@ -51,8 +51,11 @@ export type RecordRecentActivityInput = {
 const DEFAULT_RECENT_ACTIVITY_LIMIT = 10;
 const MAX_RECENT_ACTIVITY_LIMIT = 50;
 
-export function recordRecentActivity(input: RecordRecentActivityInput) {
-  return insertRecentActivity(buildRecentActivityInsert(input));
+export function recordRecentActivity(
+  input: RecordRecentActivityInput,
+  executor?: Parameters<typeof insertRecentActivity>[1],
+) {
+  return insertRecentActivity(buildRecentActivityInsert(input), executor);
 }
 
 function buildRecentActivityInsert(input: RecordRecentActivityInput) {
@@ -69,8 +72,11 @@ function buildRecentActivityInsert(input: RecordRecentActivityInput) {
   } satisfies RecentActivityInsert;
 }
 
-export function recordRecentActivityQuietly(input: RecordRecentActivityInput) {
-  recordRecentActivity(input).catch((err) => {
+export function recordRecentActivityQuietly(
+  input: RecordRecentActivityInput,
+  executor?: Parameters<typeof insertRecentActivity>[1],
+) {
+  recordRecentActivity(input, executor).catch((err) => {
     console.error("Failed to record recent activity", {
       err,
       type: input.type,
@@ -93,7 +99,10 @@ export async function replaceRecentActivitiesByReference(params: {
   await db.transaction(async (tx) => {
     await deleteRecentActivitiesByReference(params, tx);
     if (params.activity) {
-      await insertRecentActivity(buildRecentActivityInsert(params.activity), tx);
+      await insertRecentActivity(
+        buildRecentActivityInsert(params.activity),
+        tx,
+      );
     }
   });
 }
