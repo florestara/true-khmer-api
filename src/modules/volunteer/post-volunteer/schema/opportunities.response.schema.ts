@@ -81,6 +81,7 @@ const volunteerApplicationOpportunitySchema = z
     title: z.string(),
     coverImageKey: z.string(),
     status: z.enum(["DRAFT", "PUBLISHED", "ARCHIVED", "CLOSED"]),
+    applicationDeadline: z.string(),
     category: volunteerOpportunityReferenceSchema,
     location: volunteerOpportunityReferenceSchema,
   })
