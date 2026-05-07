@@ -123,6 +123,8 @@ type VolunteerApplicationTarget = {
   opportunityId: string;
   roleId: string;
   roleTitle: string;
+  opportunityTitle: string;
+  opportunityOverview: string;
   createdBy: string;
   applicationDeadline: string;
   status: VolunteerOpportunityRow["status"];
@@ -132,6 +134,11 @@ type VolunteerApplicationOpportunityTarget = Omit<
   VolunteerApplicationTarget,
   "roleId" | "roleTitle"
 >;
+export type VolunteerActivityTarget = {
+  id: string;
+  title: string;
+  overview: string;
+};
 export type VolunteerOpportunityListItem = {
   id: string;
   title: string;
@@ -357,6 +364,8 @@ export async function findVolunteerOpportunityApplicationTargetById(
   const [row] = await db
     .select({
       opportunityId: volunteerOpportunity.id,
+      opportunityTitle: volunteerOpportunity.title,
+      opportunityOverview: volunteerOpportunity.overview,
       createdBy: volunteerOpportunity.createdBy,
       applicationDeadline: volunteerOpportunity.applicationDeadline,
       status: volunteerOpportunity.status,
@@ -377,6 +386,8 @@ export async function findVolunteerApplicationTargetByRoleId(
       opportunityId: volunteerOpportunity.id,
       roleId: volunteerRole.id,
       roleTitle: volunteerRole.title,
+      opportunityTitle: volunteerOpportunity.title,
+      opportunityOverview: volunteerOpportunity.overview,
       createdBy: volunteerOpportunity.createdBy,
       applicationDeadline: volunteerOpportunity.applicationDeadline,
       status: volunteerOpportunity.status,
@@ -1384,10 +1395,14 @@ export async function createVolunteerOpportunity(
 export async function saveVolunteerOpportunityForUser(
   opportunityId: string,
   userId: string,
-): Promise<boolean> {
-  const savedOpportunityId = await db.transaction(async (tx) => {
+): Promise<{ opportunity: VolunteerActivityTarget; created: boolean } | null> {
+  return db.transaction(async (tx) => {
     const [opportunity] = await tx
-      .select({ id: volunteerOpportunity.id })
+      .select({
+        id: volunteerOpportunity.id,
+        title: volunteerOpportunity.title,
+        overview: volunteerOpportunity.overview,
+      })
       .from(volunteerOpportunity)
       .innerJoin(
         volunteerCategory,
@@ -1417,7 +1432,7 @@ export async function saveVolunteerOpportunityForUser(
       saverId: userId,
     };
 
-    await tx
+    const insertedSaves = await tx
       .insert(volunteerOpportunitySave)
       .values(saveInsertData)
       .onConflictDoNothing({
@@ -1425,12 +1440,14 @@ export async function saveVolunteerOpportunityForUser(
           volunteerOpportunitySave.opportunityId,
           volunteerOpportunitySave.saverId,
         ],
-      });
+      })
+      .returning({ opportunityId: volunteerOpportunitySave.opportunityId });
 
-    return opportunity.id;
+    return {
+      opportunity,
+      created: insertedSaves.length > 0,
+    };
   });
-
-  return Boolean(savedOpportunityId);
 }
 
 export async function unsaveVolunteerOpportunityForUser(

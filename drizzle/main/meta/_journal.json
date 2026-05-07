@@ -169,6 +169,13 @@
       "when": 1777803660609,
       "tag": "0023_sudden_professor_monster",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1778037462662,
+      "tag": "0024_mighty_triathlon",
+      "breakpoints": true
     }
   ]
 }

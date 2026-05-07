@@ -18,6 +18,11 @@ import {
   findLaunchpads,
   incrementLaunchpadViewCount,
 } from "./launchpad.query";
+import { recordRecentActivityQuietly } from "../recent-activity/recent-activity.service";
+
+function quoteActivityText(value: string) {
+  return `'${value}'`;
+}
 
 export async function handlePresignLaunchpadLogoUpload(
   c: Context,
@@ -117,6 +122,21 @@ export async function handleCreateLaunchpad(
 
   try {
     const created = await createLaunchpad(payload, authResult.userId);
+    recordRecentActivityQuietly({
+      userId: authResult.userId,
+      type: "launchpad_created",
+      title: `Created ${quoteActivityText(created.name)} launchpad`,
+      description: created.description,
+      targetType: "launchpad",
+      targetId: created.id,
+      referenceType: "launchpad",
+      referenceId: created.id,
+      data: {
+        launchpadId: created.id,
+        categoryId: created.category?.id ?? null,
+        cityId: created.city?.id ?? null,
+      },
+    });
     return c.json({ ok: true, launchpad: created }, 201);
   } catch (error) {
     console.error("Failed to create launchpad", {
