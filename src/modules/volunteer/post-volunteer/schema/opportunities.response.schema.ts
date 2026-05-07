@@ -68,6 +68,25 @@ const volunteerOpportunityReferenceSchema = z
   })
   .openapi("VolunteerOpportunityReference");
 
+const volunteerApplicationRoleResponseSchema = z
+  .object({
+    id: z.string(),
+    title: z.string(),
+  })
+  .openapi("VolunteerApplicationRoleResponse");
+
+const volunteerApplicationOpportunitySchema = z
+  .object({
+    id: z.string(),
+    title: z.string(),
+    coverImageKey: z.string(),
+    status: z.enum(["DRAFT", "PUBLISHED", "ARCHIVED", "CLOSED"]),
+    applicationDeadline: z.string(),
+    category: volunteerOpportunityReferenceSchema,
+    location: volunteerOpportunityReferenceSchema,
+  })
+  .openapi("VolunteerApplicationOpportunity");
+
 const volunteerOpportunityOrganizerResponseSchema = z
   .object({
     id: z.string(),
@@ -137,6 +156,35 @@ export const createVolunteerOpportunityResponseSchema = z
   })
   .openapi("CreateVolunteerOpportunityResponse");
 
+export const volunteerApplicationResponseSchema = z
+  .object({
+    id: z.string(),
+    opportunity: volunteerApplicationOpportunitySchema,
+    role: volunteerApplicationRoleResponseSchema,
+    availability: z.string(),
+    relevantExperience: z.string(),
+    supportingDocumentKeys: z.array(z.string()),
+    status: z.enum([
+      "SUBMITTED",
+      "UNDER_REVIEW",
+      "APPROVED",
+      "DECLINED",
+      "CONFIRMED",
+      "COMPLETED",
+      "WITHDRAWN",
+    ]),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  })
+  .openapi("VolunteerApplicationResponse");
+
+export const createVolunteerApplicationResponseSchema = z
+  .object({
+    ok: z.literal(true),
+    application: volunteerApplicationResponseSchema,
+  })
+  .openapi("CreateVolunteerApplicationResponse");
+
 export const getVolunteerOpportunityResponseSchema = z
   .object({
     ok: z.literal(true),
@@ -173,31 +221,3 @@ export const getVolunteerOpportunitiesResponseSchema = z
     pagination: volunteerOpportunitiesPaginationResponseSchema,
   })
   .openapi("GetVolunteerOpportunitiesResponse");
-
-const volunteerApplicationRoleResponseSchema = z
-  .object({
-    id: z.string(),
-    title: z.string(),
-  })
-  .openapi("VolunteerApplicationRoleResponse");
-
-export const volunteerApplicationResponseSchema = z
-  .object({
-    id: z.string(),
-    opportunityId: z.string(),
-    role: volunteerApplicationRoleResponseSchema,
-    availability: z.string(),
-    relevantExperience: z.string(),
-    supportingDocumentKeys: z.array(z.string()),
-    status: z.enum(["SUBMITTED", "ACCEPTED", "REJECTED", "WITHDRAWN"]),
-    createdAt: z.string(),
-    updatedAt: z.string(),
-  })
-  .openapi("VolunteerApplicationResponse");
-
-export const createVolunteerApplicationResponseSchema = z
-  .object({
-    ok: z.literal(true),
-    application: volunteerApplicationResponseSchema,
-  })
-  .openapi("CreateVolunteerApplicationResponse");

@@ -1,7 +1,5 @@
 import { z } from "zod";
-
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+import { UUID_RE } from "../../../lib/constant";
 
 const uuidSchema = z.string().trim().regex(UUID_RE, "must be a valid UUID");
 

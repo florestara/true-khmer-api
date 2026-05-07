@@ -440,10 +440,6 @@ export async function handlePresignVolunteerApplicationDocumentUpload(
       return c.json({ ok: false, error: targetError.error }, targetError.status);
     }
 
-    if (!target) {
-      throw new Error("Volunteer application target missing after validation");
-    }
-
     const uploads = payload.files.map((file) =>
       presignVolunteerApplicationDocumentUpload({
         opportunityId: payload.opportunityId,
@@ -515,6 +511,17 @@ export async function handleCreateVolunteerApplication(
       ...data,
       applicantId: authResult.userId,
       opportunityId: target.opportunityId,
+      opportunityTitle: target.opportunityTitle,
+      coverImageKey: target.coverImageKey,
+      applicationDeadline: target.applicationDeadline,
+      category: {
+        id: target.categoryId,
+        name: target.categoryName,
+      },
+      location: {
+        id: target.cityId,
+        name: target.cityName,
+      },
       roleTitle: target.roleTitle,
       supportingDocumentKeys: normalizedSupportingDocumentKeys,
     });

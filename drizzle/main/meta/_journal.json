@@ -176,6 +176,13 @@
       "when": 1778037462662,
       "tag": "0024_mighty_triathlon",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1778152105593,
+      "tag": "0025_happy_speed",
+      "breakpoints": true
     }
   ]
 }

@@ -40,7 +40,6 @@ import {
 import {
   encodeVolunteerOpportunitiesPageCursor,
   encodeSavedVolunteerOpportunitiesPageCursor,
-  type CreateVolunteerApplicationBodyInput,
   type CreateVolunteerCategoryInput,
   type CreateVolunteerOpportunityBodyInput,
   type GetSavedVolunteerOpportunitiesQuery,
@@ -51,7 +50,10 @@ import {
 
 const ACTIVE_VOLUNTEER_APPLICATION_STATUSES = [
   "SUBMITTED",
-  "ACCEPTED",
+  "UNDER_REVIEW",
+  "APPROVED",
+  "CONFIRMED",
+  "COMPLETED",
 ] as const;
 
 type VolunteerCategoryRow = typeof volunteerCategory.$inferSelect;
@@ -61,9 +63,9 @@ type VolunteerLocationRow = {
   name: string;
 };
 type VolunteerOpportunityRow = typeof volunteerOpportunity.$inferSelect;
+type VolunteerApplicationRow = typeof volunteerApplication.$inferSelect;
 type VolunteerOpportunitySaveInsert =
   typeof volunteerOpportunitySave.$inferInsert;
-type VolunteerApplicationRow = typeof volunteerApplication.$inferSelect;
 type VolunteerRoleRow = typeof volunteerRole.$inferSelect;
 type VolunteerRoleRequirementRow = typeof volunteerRoleRequirement.$inferSelect;
 type HydratedVolunteerRole = Pick<
@@ -119,21 +121,6 @@ type SavedVolunteerOpportunityListRow = VolunteerOpportunityBaseRow & {
   viewerSave: boolean;
   savedAt: string;
 };
-type VolunteerApplicationTarget = {
-  opportunityId: string;
-  roleId: string;
-  roleTitle: string;
-  opportunityTitle: string;
-  opportunityOverview: string;
-  createdBy: string;
-  applicationDeadline: string;
-  status: VolunteerOpportunityRow["status"];
-  publishedAt: string | null;
-};
-type VolunteerApplicationOpportunityTarget = Omit<
-  VolunteerApplicationTarget,
-  "roleId" | "roleTitle"
->;
 export type VolunteerActivityTarget = {
   id: string;
   title: string;
@@ -188,7 +175,15 @@ export type VolunteerOpportunityDetail = {
 };
 export type VolunteerApplicationDetail = {
   id: string;
-  opportunityId: string;
+  opportunity: {
+    id: string;
+    title: string;
+    coverImageKey: string;
+    applicationDeadline: string;
+    status: VolunteerOpportunityRow["status"];
+    category: VolunteerReference;
+    location: VolunteerReference;
+  };
   role: {
     id: string;
     title: string;
@@ -204,6 +199,26 @@ type VolunteerOpportunitiesListResult = {
   opportunities: VolunteerOpportunityListItem[];
   pagination: CursorPagination;
 };
+type VolunteerApplicationTarget = {
+  opportunityId: string;
+  opportunityTitle: string;
+  opportunityOverview: string;
+  coverImageKey: string;
+  categoryId: string;
+  categoryName: string;
+  cityId: string;
+  cityName: string;
+  roleId: string;
+  roleTitle: string;
+  createdBy: string;
+  applicationDeadline: string;
+  status: VolunteerOpportunityRow["status"];
+  publishedAt: string | null;
+};
+type VolunteerApplicationOpportunityTarget = Omit<
+  VolunteerApplicationTarget,
+  "roleId" | "roleTitle"
+>;
 
 const CAMBODIA_NORMALIZED_NAME = env.VOLUNTEER_COUNTRY_NORMALIZED_NAME;
 const volunteerRoleSearch = aliasedTable(
@@ -366,12 +381,22 @@ export async function findVolunteerOpportunityApplicationTargetById(
       opportunityId: volunteerOpportunity.id,
       opportunityTitle: volunteerOpportunity.title,
       opportunityOverview: volunteerOpportunity.overview,
+      coverImageKey: volunteerOpportunity.coverImageKey,
+      categoryId: volunteerCategory.id,
+      categoryName: volunteerCategory.name,
+      cityId: city.id,
+      cityName: city.name,
       createdBy: volunteerOpportunity.createdBy,
       applicationDeadline: volunteerOpportunity.applicationDeadline,
       status: volunteerOpportunity.status,
       publishedAt: volunteerOpportunity.publishedAt,
     })
     .from(volunteerOpportunity)
+    .innerJoin(
+      volunteerCategory,
+      eq(volunteerCategory.id, volunteerOpportunity.categoryId),
+    )
+    .innerJoin(city, eq(city.id, volunteerOpportunity.cityId))
     .where(eq(volunteerOpportunity.id, opportunityId))
     .limit(1);
 
@@ -384,9 +409,14 @@ export async function findVolunteerApplicationTargetByRoleId(
   const [row] = await db
     .select({
       opportunityId: volunteerOpportunity.id,
+      opportunityTitle: volunteerOpportunity.title,
+      coverImageKey: volunteerOpportunity.coverImageKey,
+      categoryId: volunteerCategory.id,
+      categoryName: volunteerCategory.name,
+      cityId: city.id,
+      cityName: city.name,
       roleId: volunteerRole.id,
       roleTitle: volunteerRole.title,
-      opportunityTitle: volunteerOpportunity.title,
       opportunityOverview: volunteerOpportunity.overview,
       createdBy: volunteerOpportunity.createdBy,
       applicationDeadline: volunteerOpportunity.applicationDeadline,
@@ -398,32 +428,15 @@ export async function findVolunteerApplicationTargetByRoleId(
       volunteerOpportunity,
       eq(volunteerOpportunity.id, volunteerRole.opportunityId),
     )
+    .innerJoin(
+      volunteerCategory,
+      eq(volunteerCategory.id, volunteerOpportunity.categoryId),
+    )
+    .innerJoin(city, eq(city.id, volunteerOpportunity.cityId))
     .where(eq(volunteerRole.id, roleId))
     .limit(1);
 
   return row ?? null;
-}
-
-export async function hasVolunteerApplicationForRole(
-  applicantId: string,
-  roleId: string,
-): Promise<boolean> {
-  const [row] = await db
-    .select({ id: volunteerApplication.id })
-    .from(volunteerApplication)
-    .where(
-      and(
-        eq(volunteerApplication.applicantId, applicantId),
-        eq(volunteerApplication.roleId, roleId),
-        inArray(
-          volunteerApplication.status,
-          ACTIVE_VOLUNTEER_APPLICATION_STATUSES,
-        ),
-      ),
-    )
-    .limit(1);
-
-  return Boolean(row);
 }
 
 export type CreateVolunteerOpportunityInput =
@@ -432,12 +445,21 @@ export type CreateVolunteerOpportunityInput =
     category: VolunteerReference;
     location: VolunteerReference;
   };
-export type CreateVolunteerApplicationInput =
-  CreateVolunteerApplicationBodyInput & {
-    applicantId: string;
-    opportunityId: string;
-    roleTitle: string;
-  };
+
+type CreateVolunteerApplicationInput = {
+  roleId: string;
+  applicantId: string;
+  opportunityId: string;
+  opportunityTitle: string;
+  coverImageKey: string;
+  applicationDeadline: string;
+  category: VolunteerReference;
+  location: VolunteerReference;
+  roleTitle: string;
+  availability: string;
+  relevantExperience: string;
+  supportingDocumentKeys: string[];
+};
 
 type VolunteerOpportunityListRow = VolunteerOpportunityBaseRow & {
   applicationCount: number;
@@ -465,6 +487,35 @@ function hydrateVolunteerOpportunityListItem(
   };
 }
 
+function hydrateVolunteerApplication(
+  application: VolunteerApplicationRow,
+  roleTitle: string,
+  opportunity: {
+    id: string;
+    title: string;
+    coverImageKey: string;
+    applicationDeadline: string;
+    status: VolunteerOpportunityRow["status"];
+    category: VolunteerReference;
+    location: VolunteerReference;
+  },
+): VolunteerApplicationDetail {
+  return {
+    id: application.id,
+    opportunity,
+    role: {
+      id: application.roleId,
+      title: roleTitle,
+    },
+    availability: application.availability,
+    relevantExperience: application.relevantExperience,
+    supportingDocumentKeys: application.supportingDocumentKeys as string[],
+    status: application.status,
+    createdAt: application.createdAt,
+    updatedAt: application.updatedAt,
+  };
+}
+
 function hydrateVolunteerOrganizer(
   organizer: VolunteerOrganizerQueryRow,
 ): VolunteerOrganizerBase {
@@ -483,26 +534,6 @@ function hydrateVolunteerOrganizer(
             name: organizer.locationName,
           }
         : null,
-  };
-}
-
-function hydrateVolunteerApplication(
-  application: VolunteerApplicationRow,
-  roleTitle: string,
-): VolunteerApplicationDetail {
-  return {
-    id: application.id,
-    opportunityId: application.opportunityId,
-    role: {
-      id: application.roleId,
-      title: roleTitle,
-    },
-    availability: application.availability,
-    relevantExperience: application.relevantExperience,
-    supportingDocumentKeys: application.supportingDocumentKeys as string[],
-    status: application.status,
-    createdAt: application.createdAt,
-    updatedAt: application.updatedAt,
   };
 }
 
@@ -794,7 +825,7 @@ async function getAcceptedApplicationCountsByOpportunityIds(
     .where(
       and(
         inArray(volunteerApplication.opportunityId, uniqueOpportunityIds),
-        eq(volunteerApplication.status, "ACCEPTED"),
+        eq(volunteerApplication.status, "CONFIRMED"),
       ),
     )
     .groupBy(volunteerApplication.opportunityId);
@@ -1392,6 +1423,85 @@ export async function createVolunteerOpportunity(
   });
 }
 
+export async function createVolunteerApplication(
+  data: CreateVolunteerApplicationInput,
+): Promise<VolunteerApplicationDetail> {
+  return db.transaction(async (tx) => {
+    const [application] = await tx
+      .insert(volunteerApplication)
+      .values({
+        opportunityId: data.opportunityId,
+        roleId: data.roleId,
+        applicantId: data.applicantId,
+        availability: data.availability,
+        relevantExperience: data.relevantExperience,
+        supportingDocumentKeys: data.supportingDocumentKeys,
+        status: "SUBMITTED",
+      })
+      .returning();
+
+    return hydrateVolunteerApplication(application, data.roleTitle, {
+      id: data.opportunityId,
+      title: data.opportunityTitle,
+      coverImageKey: data.coverImageKey,
+      applicationDeadline: data.applicationDeadline,
+      status: "PUBLISHED",
+      category: data.category,
+      location: data.location,
+    });
+  });
+}
+
+export async function findVolunteerApplicationsByApplicantId(
+  applicantId: string,
+): Promise<VolunteerApplicationDetail[]> {
+  const rows = await db
+    .select({
+      application: volunteerApplication,
+      roleTitle: volunteerRole.title,
+      opportunityId: volunteerOpportunity.id,
+      opportunityTitle: volunteerOpportunity.title,
+      coverImageKey: volunteerOpportunity.coverImageKey,
+      applicationDeadline: volunteerOpportunity.applicationDeadline,
+      opportunityStatus: volunteerOpportunity.status,
+      categoryId: volunteerCategory.id,
+      categoryName: volunteerCategory.name,
+      cityId: city.id,
+      cityName: city.name,
+    })
+    .from(volunteerApplication)
+    .innerJoin(volunteerRole, eq(volunteerRole.id, volunteerApplication.roleId))
+    .innerJoin(
+      volunteerOpportunity,
+      eq(volunteerOpportunity.id, volunteerApplication.opportunityId),
+    )
+    .innerJoin(
+      volunteerCategory,
+      eq(volunteerCategory.id, volunteerOpportunity.categoryId),
+    )
+    .innerJoin(city, eq(city.id, volunteerOpportunity.cityId))
+    .where(eq(volunteerApplication.applicantId, applicantId))
+    .orderBy(desc(volunteerApplication.createdAt));
+
+  return rows.map((row) =>
+    hydrateVolunteerApplication(row.application, row.roleTitle, {
+      id: row.opportunityId,
+      title: row.opportunityTitle,
+      coverImageKey: row.coverImageKey,
+      applicationDeadline: row.applicationDeadline,
+      status: row.opportunityStatus,
+      category: {
+        id: row.categoryId,
+        name: row.categoryName,
+      },
+      location: {
+        id: row.cityId,
+        name: row.cityName,
+      },
+    }),
+  );
+}
+
 export async function saveVolunteerOpportunityForUser(
   opportunityId: string,
   userId: string,
@@ -1469,25 +1579,4 @@ export async function unsaveVolunteerOpportunityForUser(
   });
 
   return Boolean(unsavedOpportunityId);
-}
-
-export async function createVolunteerApplication(
-  data: CreateVolunteerApplicationInput,
-): Promise<VolunteerApplicationDetail> {
-  return db.transaction(async (tx) => {
-    const [application] = await tx
-      .insert(volunteerApplication)
-      .values({
-        opportunityId: data.opportunityId,
-        roleId: data.roleId,
-        applicantId: data.applicantId,
-        availability: data.availability,
-        relevantExperience: data.relevantExperience,
-        supportingDocumentKeys: data.supportingDocumentKeys,
-        status: "SUBMITTED",
-      })
-      .returning();
-
-    return hydrateVolunteerApplication(application, data.roleTitle);
-  });
 }

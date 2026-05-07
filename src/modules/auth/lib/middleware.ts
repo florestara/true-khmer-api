@@ -4,9 +4,9 @@ import { verifyJwtToken } from "./helper";
 import { findUserOnboardingStatusById, findUserRoleById } from "../auth.query";
 import { ONBOARDING_COMPLETE_STEP } from "../../onboarding/constants";
 import type { Context } from "hono";
+import { UUID_RE } from "../../../lib/constant";
 
-const AUTH_USER_ID_UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const AUTH_USER_ID_UUID_RE = UUID_RE;
 
 function isAccessTokenPayload(payload: Record<string, unknown>) {
   const tokenType = payload.type ?? payload.tokenType ?? payload.token_type;

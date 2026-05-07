@@ -402,7 +402,8 @@ const getSavedVolunteerOpportunitiesRoute = createRoute({
   },
   responses: {
     200: {
-      description: "List of volunteer opportunities saved by the authenticated user",
+      description:
+        "List of volunteer opportunities saved by the authenticated user",
       content: {
         "application/json": {
           schema: getVolunteerOpportunitiesResponseSchema,
@@ -768,6 +769,7 @@ const createVolunteerApplicationRoute = createRoute({
     },
   },
 });
+
 postVolunteerRouter.openapi(getVolunteerCategoriesRoute, async (c) => {
   return handleGetVolunteerCategories(c) as any;
 });

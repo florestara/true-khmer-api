@@ -7,10 +7,10 @@ const VOLUNTEER_COVER_IMAGE_ALLOWED_CONTENT_TYPES = [
   "image/webp",
 ] as const;
 const VOLUNTEER_APPLICATION_DOCUMENT_CONTENT_TYPE = "application/pdf";
-const MAX_VOLUNTEER_OPPORTUNITIES_PAGE_SIZE = 50;
-const DEFAULT_VOLUNTEER_OPPORTUNITIES_PAGE_SIZE = 10;
 const MIN_VOLUNTEER_APPLICATION_DOCUMENT_COUNT = 1;
 const MAX_VOLUNTEER_APPLICATION_DOCUMENT_COUNT = 3;
+const MAX_VOLUNTEER_OPPORTUNITIES_PAGE_SIZE = 50;
+const DEFAULT_VOLUNTEER_OPPORTUNITIES_PAGE_SIZE = 10;
 
 export const VOLUNTEER_COVER_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 export const VOLUNTEER_APPLICATION_DOCUMENT_MAX_BYTES = 10 * 1024 * 1024;
@@ -336,7 +336,10 @@ export const presignVolunteerApplicationDocumentUploadSchema = z
             ),
         }),
       )
-      .min(MIN_VOLUNTEER_APPLICATION_DOCUMENT_COUNT, `files must contain at least ${MIN_VOLUNTEER_APPLICATION_DOCUMENT_COUNT} files`)
+      .min(
+        MIN_VOLUNTEER_APPLICATION_DOCUMENT_COUNT,
+        `files must contain at least ${MIN_VOLUNTEER_APPLICATION_DOCUMENT_COUNT} files`,
+      )
       .max(
         MAX_VOLUNTEER_APPLICATION_DOCUMENT_COUNT,
         `files must contain at most ${MAX_VOLUNTEER_APPLICATION_DOCUMENT_COUNT} files`,
@@ -471,8 +474,14 @@ export const createVolunteerApplicationSchema = z
           .min(1, "supportingDocumentKeys[] is required")
           .max(600, "supportingDocumentKeys[] must be <= 600 characters"),
       )
-      .min(MIN_VOLUNTEER_APPLICATION_DOCUMENT_COUNT, `supportingDocumentKeys must contain at least ${MIN_VOLUNTEER_APPLICATION_DOCUMENT_COUNT} files`)
-      .max(MAX_VOLUNTEER_APPLICATION_DOCUMENT_COUNT, `supportingDocumentKeys must contain at most ${MAX_VOLUNTEER_APPLICATION_DOCUMENT_COUNT} files`)
+      .min(
+        MIN_VOLUNTEER_APPLICATION_DOCUMENT_COUNT,
+        `supportingDocumentKeys must contain at least ${MIN_VOLUNTEER_APPLICATION_DOCUMENT_COUNT} files`,
+      )
+      .max(
+        MAX_VOLUNTEER_APPLICATION_DOCUMENT_COUNT,
+        `supportingDocumentKeys must contain at most ${MAX_VOLUNTEER_APPLICATION_DOCUMENT_COUNT} files`,
+      )
       .superRefine((value, ctx) => {
         const seen = new Set<string>();
         value.forEach((item, index) => {
@@ -494,6 +503,7 @@ export const createVolunteerApplicationSchema = z
 export type PresignVolunteerOpportunityCoverUploadPayload = z.infer<
   typeof presignVolunteerOpportunityCoverUploadSchema
 >;
+
 export type PresignVolunteerApplicationDocumentUploadPayload = z.infer<
   typeof presignVolunteerApplicationDocumentUploadSchema
 >;
