@@ -24,6 +24,23 @@ const repliedAnswerSchema = z
   })
   .openapi("RepliedAnswerResponse");
 
+const answerQuestionResponseSchema = z
+  .object({
+    id: z.string(),
+    categoryId: z.string(),
+    title: z.string(),
+    body: z.string(),
+    status: z.enum(["PUBLISHED", "CLOSED", "DELETED"]),
+    answerCount: z.number().int().nonnegative(),
+    upvoteCount: z.number().int().nonnegative(),
+    downvoteCount: z.number().int().nonnegative(),
+    bestAnswerId: z.string().nullable(),
+    bestAnswerSelectedAt: z.string().nullable(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  })
+  .openapi("AnswerQuestionResponse");
+
 export const answerResponseSchema = z
   .object({
     id: z.string(),
@@ -43,6 +60,15 @@ export const answerResponseSchema = z
   })
   .openapi("AnswerResponse");
 
+export const myAnswerResponseSchema = answerResponseSchema
+  .omit({
+    questionId: true,
+  })
+  .extend({
+    question: answerQuestionResponseSchema,
+  })
+  .openapi("MyAnswerResponse");
+
 export const getAnswersResponseSchema = z
   .object({
     ok: z.boolean(),
@@ -56,7 +82,7 @@ export const getAnswersResponseSchema = z
 export const getMyAnswersResponseSchema = z
   .object({
     ok: z.boolean(),
-    answers: z.array(answerResponseSchema),
+    answers: z.array(myAnswerResponseSchema),
   })
   .openapi("GetMyAnswersResponse");
 
