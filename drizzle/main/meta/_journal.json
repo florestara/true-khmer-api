@@ -183,6 +183,13 @@
       "when": 1778152105593,
       "tag": "0025_happy_speed",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1778194266276,
+      "tag": "0026_fluffy_whizzer",
+      "breakpoints": true
     }
   ]
 }

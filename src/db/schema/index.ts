@@ -10,3 +10,4 @@ export * from "./launchpad/categories/categories";
 export * from "./launchpad/roles/roles";
 export * from "./launchpad/launchpad";
 export * from "./recent-activity";
+export * from "./launchpad/application/application";

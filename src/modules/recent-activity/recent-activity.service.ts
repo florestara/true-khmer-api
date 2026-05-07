@@ -22,7 +22,8 @@ export type RecentActivityType =
   | "volunteer_opportunity_posted"
   | "volunteer_opportunity_saved"
   | "volunteer_application_submitted"
-  | "launchpad_created";
+  | "launchpad_created"
+  | "launchpad_application_submitted";
 
 export type RecentActivityTargetType =
   | "forum_question"
@@ -34,7 +35,8 @@ export type RecentActivityReferenceType =
   | "forum_answer"
   | "volunteer_opportunity"
   | "volunteer_application"
-  | "launchpad";
+  | "launchpad"
+  | "launchpad_application";
 
 export type RecordRecentActivityInput = {
   userId: string;
