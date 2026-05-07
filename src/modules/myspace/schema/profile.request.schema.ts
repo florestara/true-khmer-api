@@ -1,8 +1,6 @@
 import { z } from "zod";
 import { createCleanNameSchema } from "../../../utils/validation/name";
-
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+import { UUID_RE } from "../../../lib/constant";
 
 const uuidSchema = z.string().trim().regex(UUID_RE, "must be a valid UUID");
 const visibilitySchema = z.enum(["public", "members", "private"]);
@@ -78,7 +76,11 @@ const telegramUsernameSchema = z
   });
 
 const urlFieldSchema = z
-  .union([z.string().trim().url().max(500), z.string().trim().length(0), z.null()])
+  .union([
+    z.string().trim().url().max(500),
+    z.string().trim().length(0),
+    z.null(),
+  ])
   .transform((value) => {
     if (value === null || value.length === 0) return null;
     return value;
@@ -108,8 +110,14 @@ const skillsSchema = z
 
 export const updateProfileSchema = z
   .object({
-    firstName: createCleanNameSchema({ label: "firstName", maxLength: 100 }).optional(),
-    lastName: createCleanNameSchema({ label: "lastName", maxLength: 100 }).optional(),
+    firstName: createCleanNameSchema({
+      label: "firstName",
+      maxLength: 100,
+    }).optional(),
+    lastName: createCleanNameSchema({
+      label: "lastName",
+      maxLength: 100,
+    }).optional(),
     gender: genderSchema.optional(),
     dateOfBirth: z.union([dateOnlySchema, z.null()]).optional(),
     occupation: nullableTrimmedText(120, "occupation").optional(),
@@ -118,7 +126,9 @@ export const updateProfileSchema = z
     bio: nullableTrimmedText(1000, "bio").optional(),
     countryId: uuidSchema.optional(),
     cityId: uuidSchema.optional(),
-    avatarKey: z.union([z.string().trim().min(1).max(600), z.null()]).optional(),
+    avatarKey: z
+      .union([z.string().trim().min(1).max(600), z.null()])
+      .optional(),
     skills: skillsSchema.optional(),
     socialLinks: z
       .object({

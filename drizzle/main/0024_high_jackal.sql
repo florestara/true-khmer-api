@@ -1,0 +1,3 @@
+ALTER TYPE "public"."volunteer_application_status" ADD VALUE 'APPROVAL' BEFORE 'ACCEPTED';--> statement-breakpoint
+DROP INDEX "volunteer_application_applicant_role_active_unique_idx";--> statement-breakpoint
+CREATE UNIQUE INDEX "volunteer_application_applicant_role_active_unique_idx" ON "volunteer_application" USING btree ("applicant_id","role_id") WHERE "volunteer_application"."status" in ('SUBMITTED', 'APPROVAL', 'ACCEPTED');

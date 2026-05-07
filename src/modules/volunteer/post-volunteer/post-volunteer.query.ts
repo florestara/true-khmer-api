@@ -40,7 +40,6 @@ import {
 import {
   encodeVolunteerOpportunitiesPageCursor,
   encodeSavedVolunteerOpportunitiesPageCursor,
-  type CreateVolunteerApplicationBodyInput,
   type CreateVolunteerCategoryInput,
   type CreateVolunteerOpportunityBodyInput,
   type GetSavedVolunteerOpportunitiesQuery,
@@ -51,6 +50,7 @@ import {
 
 const ACTIVE_VOLUNTEER_APPLICATION_STATUSES = [
   "SUBMITTED",
+  "APPROVAL",
   "ACCEPTED",
 ] as const;
 
@@ -63,7 +63,6 @@ type VolunteerLocationRow = {
 type VolunteerOpportunityRow = typeof volunteerOpportunity.$inferSelect;
 type VolunteerOpportunitySaveInsert =
   typeof volunteerOpportunitySave.$inferInsert;
-type VolunteerApplicationRow = typeof volunteerApplication.$inferSelect;
 type VolunteerRoleRow = typeof volunteerRole.$inferSelect;
 type VolunteerRoleRequirementRow = typeof volunteerRoleRequirement.$inferSelect;
 type HydratedVolunteerRole = Pick<
@@ -119,19 +118,6 @@ type SavedVolunteerOpportunityListRow = VolunteerOpportunityBaseRow & {
   viewerSave: boolean;
   savedAt: string;
 };
-type VolunteerApplicationTarget = {
-  opportunityId: string;
-  roleId: string;
-  roleTitle: string;
-  createdBy: string;
-  applicationDeadline: string;
-  status: VolunteerOpportunityRow["status"];
-  publishedAt: string | null;
-};
-type VolunteerApplicationOpportunityTarget = Omit<
-  VolunteerApplicationTarget,
-  "roleId" | "roleTitle"
->;
 export type VolunteerOpportunityListItem = {
   id: string;
   title: string;
@@ -178,20 +164,6 @@ export type VolunteerOpportunityDetail = {
     displayOrder: number;
     viewerApplied: boolean;
   }>;
-};
-export type VolunteerApplicationDetail = {
-  id: string;
-  opportunityId: string;
-  role: {
-    id: string;
-    title: string;
-  };
-  availability: string;
-  relevantExperience: string;
-  supportingDocumentKeys: string[];
-  status: VolunteerApplicationRow["status"];
-  createdAt: string;
-  updatedAt: string;
 };
 type VolunteerOpportunitiesListResult = {
   opportunities: VolunteerOpportunityListItem[];
@@ -351,81 +323,11 @@ export async function findVolunteerLocationById(
   return locationRow ?? null;
 }
 
-export async function findVolunteerOpportunityApplicationTargetById(
-  opportunityId: string,
-): Promise<VolunteerApplicationOpportunityTarget | null> {
-  const [row] = await db
-    .select({
-      opportunityId: volunteerOpportunity.id,
-      createdBy: volunteerOpportunity.createdBy,
-      applicationDeadline: volunteerOpportunity.applicationDeadline,
-      status: volunteerOpportunity.status,
-      publishedAt: volunteerOpportunity.publishedAt,
-    })
-    .from(volunteerOpportunity)
-    .where(eq(volunteerOpportunity.id, opportunityId))
-    .limit(1);
-
-  return row ?? null;
-}
-
-export async function findVolunteerApplicationTargetByRoleId(
-  roleId: string,
-): Promise<VolunteerApplicationTarget | null> {
-  const [row] = await db
-    .select({
-      opportunityId: volunteerOpportunity.id,
-      roleId: volunteerRole.id,
-      roleTitle: volunteerRole.title,
-      createdBy: volunteerOpportunity.createdBy,
-      applicationDeadline: volunteerOpportunity.applicationDeadline,
-      status: volunteerOpportunity.status,
-      publishedAt: volunteerOpportunity.publishedAt,
-    })
-    .from(volunteerRole)
-    .innerJoin(
-      volunteerOpportunity,
-      eq(volunteerOpportunity.id, volunteerRole.opportunityId),
-    )
-    .where(eq(volunteerRole.id, roleId))
-    .limit(1);
-
-  return row ?? null;
-}
-
-export async function hasVolunteerApplicationForRole(
-  applicantId: string,
-  roleId: string,
-): Promise<boolean> {
-  const [row] = await db
-    .select({ id: volunteerApplication.id })
-    .from(volunteerApplication)
-    .where(
-      and(
-        eq(volunteerApplication.applicantId, applicantId),
-        eq(volunteerApplication.roleId, roleId),
-        inArray(
-          volunteerApplication.status,
-          ACTIVE_VOLUNTEER_APPLICATION_STATUSES,
-        ),
-      ),
-    )
-    .limit(1);
-
-  return Boolean(row);
-}
-
 export type CreateVolunteerOpportunityInput =
   CreateVolunteerOpportunityBodyInput & {
     createdBy: string;
     category: VolunteerReference;
     location: VolunteerReference;
-  };
-export type CreateVolunteerApplicationInput =
-  CreateVolunteerApplicationBodyInput & {
-    applicantId: string;
-    opportunityId: string;
-    roleTitle: string;
   };
 
 type VolunteerOpportunityListRow = VolunteerOpportunityBaseRow & {
@@ -472,26 +374,6 @@ function hydrateVolunteerOrganizer(
             name: organizer.locationName,
           }
         : null,
-  };
-}
-
-function hydrateVolunteerApplication(
-  application: VolunteerApplicationRow,
-  roleTitle: string,
-): VolunteerApplicationDetail {
-  return {
-    id: application.id,
-    opportunityId: application.opportunityId,
-    role: {
-      id: application.roleId,
-      title: roleTitle,
-    },
-    availability: application.availability,
-    relevantExperience: application.relevantExperience,
-    supportingDocumentKeys: application.supportingDocumentKeys as string[],
-    status: application.status,
-    createdAt: application.createdAt,
-    updatedAt: application.updatedAt,
   };
 }
 
@@ -1452,25 +1334,4 @@ export async function unsaveVolunteerOpportunityForUser(
   });
 
   return Boolean(unsavedOpportunityId);
-}
-
-export async function createVolunteerApplication(
-  data: CreateVolunteerApplicationInput,
-): Promise<VolunteerApplicationDetail> {
-  return db.transaction(async (tx) => {
-    const [application] = await tx
-      .insert(volunteerApplication)
-      .values({
-        opportunityId: data.opportunityId,
-        roleId: data.roleId,
-        applicantId: data.applicantId,
-        availability: data.availability,
-        relevantExperience: data.relevantExperience,
-        supportingDocumentKeys: data.supportingDocumentKeys,
-        status: "SUBMITTED",
-      })
-      .returning();
-
-    return hydrateVolunteerApplication(application, data.roleTitle);
-  });
 }

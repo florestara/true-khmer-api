@@ -173,31 +173,3 @@ export const getVolunteerOpportunitiesResponseSchema = z
     pagination: volunteerOpportunitiesPaginationResponseSchema,
   })
   .openapi("GetVolunteerOpportunitiesResponse");
-
-const volunteerApplicationRoleResponseSchema = z
-  .object({
-    id: z.string(),
-    title: z.string(),
-  })
-  .openapi("VolunteerApplicationRoleResponse");
-
-export const volunteerApplicationResponseSchema = z
-  .object({
-    id: z.string(),
-    opportunityId: z.string(),
-    role: volunteerApplicationRoleResponseSchema,
-    availability: z.string(),
-    relevantExperience: z.string(),
-    supportingDocumentKeys: z.array(z.string()),
-    status: z.enum(["SUBMITTED", "ACCEPTED", "REJECTED", "WITHDRAWN"]),
-    createdAt: z.string(),
-    updatedAt: z.string(),
-  })
-  .openapi("VolunteerApplicationResponse");
-
-export const createVolunteerApplicationResponseSchema = z
-  .object({
-    ok: z.literal(true),
-    application: volunteerApplicationResponseSchema,
-  })
-  .openapi("CreateVolunteerApplicationResponse");

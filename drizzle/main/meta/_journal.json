@@ -169,6 +169,13 @@
       "when": 1777803660609,
       "tag": "0023_sudden_professor_monster",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1778122787197,
+      "tag": "0024_high_jackal",
+      "breakpoints": true
     }
   ]
 }

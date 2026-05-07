@@ -6,8 +6,6 @@ import {
 } from "../../../middlewares/auth.middleware";
 import { authProtectedErrorResponseSchema } from "../../auth/auth.schema";
 import {
-  createVolunteerApplicationResponseSchema,
-  createVolunteerApplicationSchema,
   createVolunteerCategoryResponseSchema,
   createVolunteerCategorySchema,
   createVolunteerOpportunitySchema,
@@ -19,8 +17,6 @@ import {
   getVolunteerOpportunitiesResponseSchema,
   getVolunteerOpportunitiesQuerySchema,
   getSavedVolunteerOpportunitiesQuerySchema,
-  presignVolunteerApplicationDocumentUploadResponseSchema,
-  presignVolunteerApplicationDocumentUploadSchema,
   presignVolunteerOpportunityCoverUploadResponseSchema,
   presignVolunteerOpportunityCoverUploadSchema,
   saveVolunteerOpportunityResponseSchema,
@@ -29,7 +25,6 @@ import {
   volunteerValidationErrorResponseSchema,
 } from "./post-volunteer.schema";
 import {
-  handleCreateVolunteerApplication,
   handleCreateVolunteerCategory,
   handleCreateVolunteerOpportunity,
   handleGetSavedVolunteerOpportunities,
@@ -37,7 +32,6 @@ import {
   handleGetVolunteerLocations,
   handleGetVolunteerOpportunity,
   handleGetVolunteerOpportunities,
-  handlePresignVolunteerApplicationDocumentUpload,
   handlePresignVolunteerOpportunityCoverUpload,
   handleSaveVolunteerOpportunity,
   handleUnsaveVolunteerOpportunity,
@@ -255,81 +249,6 @@ const presignVolunteerOpportunityCoverUploadRoute = createRoute({
   },
 });
 
-const presignVolunteerApplicationDocumentUploadRoute = createRoute({
-  method: "post",
-  path: "/applications/document/presign",
-  tags: ["Volunteer Post"],
-  middleware: [requireAccessToken],
-  security: [{ BearerAuth: [] }],
-  request: {
-    body: {
-      content: {
-        "application/json": {
-          schema: presignVolunteerApplicationDocumentUploadSchema,
-        },
-      },
-    },
-  },
-  responses: {
-    200: {
-      description: "Presigned volunteer application document upload URL generated",
-      content: {
-        "application/json": {
-          schema: presignVolunteerApplicationDocumentUploadResponseSchema,
-        },
-      },
-    },
-    400: {
-      description: "Validation failed",
-      content: {
-        "application/json": {
-          schema: volunteerValidationErrorResponseSchema,
-        },
-      },
-    },
-    401: {
-      description: "Unauthorized",
-      content: {
-        "application/json": {
-          schema: authProtectedErrorResponseSchema,
-        },
-      },
-    },
-    403: {
-      description: "Forbidden",
-      content: {
-        "application/json": {
-          schema: authProtectedErrorResponseSchema,
-        },
-      },
-    },
-    404: {
-      description: "Volunteer opportunity not found",
-      content: {
-        "application/json": {
-          schema: volunteerOperationErrorResponseSchema,
-        },
-      },
-    },
-    409: {
-      description: "Volunteer application already exists",
-      content: {
-        "application/json": {
-          schema: volunteerOperationErrorResponseSchema,
-        },
-      },
-    },
-    500: {
-      description: "Internal server error",
-      content: {
-        "application/json": {
-          schema: volunteerOperationErrorResponseSchema,
-        },
-      },
-    },
-  },
-});
-
 const getVolunteerOpportunitiesRoute = createRoute({
   method: "get",
   path: "/opportunities",
@@ -402,7 +321,8 @@ const getSavedVolunteerOpportunitiesRoute = createRoute({
   },
   responses: {
     200: {
-      description: "List of volunteer opportunities saved by the authenticated user",
+      description:
+        "List of volunteer opportunities saved by the authenticated user",
       content: {
         "application/json": {
           schema: getVolunteerOpportunitiesResponseSchema,
@@ -694,80 +614,6 @@ const createVolunteerOpportunityRoute = createRoute({
   },
 });
 
-const createVolunteerApplicationRoute = createRoute({
-  method: "post",
-  path: "/applications",
-  tags: ["Volunteer Post"],
-  middleware: [requireAccessToken],
-  security: [{ BearerAuth: [] }],
-  request: {
-    body: {
-      content: {
-        "application/json": {
-          schema: createVolunteerApplicationSchema,
-        },
-      },
-    },
-  },
-  responses: {
-    201: {
-      description: "Volunteer application submitted",
-      content: {
-        "application/json": {
-          schema: createVolunteerApplicationResponseSchema,
-        },
-      },
-    },
-    400: {
-      description: "Validation failed",
-      content: {
-        "application/json": {
-          schema: volunteerValidationErrorResponseSchema,
-        },
-      },
-    },
-    401: {
-      description: "Unauthorized",
-      content: {
-        "application/json": {
-          schema: authProtectedErrorResponseSchema,
-        },
-      },
-    },
-    403: {
-      description: "Forbidden",
-      content: {
-        "application/json": {
-          schema: authProtectedErrorResponseSchema,
-        },
-      },
-    },
-    404: {
-      description: "Volunteer role not found",
-      content: {
-        "application/json": {
-          schema: volunteerOperationErrorResponseSchema,
-        },
-      },
-    },
-    409: {
-      description: "Duplicate volunteer application",
-      content: {
-        "application/json": {
-          schema: volunteerOperationErrorResponseSchema,
-        },
-      },
-    },
-    500: {
-      description: "Internal server error",
-      content: {
-        "application/json": {
-          schema: volunteerOperationErrorResponseSchema,
-        },
-      },
-    },
-  },
-});
 postVolunteerRouter.openapi(getVolunteerCategoriesRoute, async (c) => {
   return handleGetVolunteerCategories(c) as any;
 });
@@ -786,14 +632,6 @@ postVolunteerRouter.openapi(
   async (c) => {
     const data = c.req.valid("json");
     return handlePresignVolunteerOpportunityCoverUpload(c, data) as any;
-  },
-);
-
-postVolunteerRouter.openapi(
-  presignVolunteerApplicationDocumentUploadRoute,
-  async (c) => {
-    const data = c.req.valid("json");
-    return handlePresignVolunteerApplicationDocumentUpload(c, data) as any;
   },
 );
 
@@ -825,9 +663,4 @@ postVolunteerRouter.openapi(unsaveVolunteerOpportunityRoute, async (c) => {
 postVolunteerRouter.openapi(createVolunteerOpportunityRoute, async (c) => {
   const data = c.req.valid("json");
   return handleCreateVolunteerOpportunity(c, data) as any;
-});
-
-postVolunteerRouter.openapi(createVolunteerApplicationRoute, async (c) => {
-  const data = c.req.valid("json");
-  return handleCreateVolunteerApplication(c, data) as any;
 });
