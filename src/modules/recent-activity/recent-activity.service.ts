@@ -80,11 +80,9 @@ export function recordRecentActivityQuietly(
     console.error("Failed to record recent activity", {
       err,
       type: input.type,
-      userId: input.userId,
       targetType: input.targetType,
-      targetId: input.targetId,
       referenceType: input.referenceType,
-      referenceId: input.referenceId,
+      hasReferenceId: Boolean(input.referenceId),
     });
   });
 }
