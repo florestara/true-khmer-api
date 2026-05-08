@@ -318,6 +318,11 @@ export const presignVolunteerApplicationDocumentUploadSchema = z
     files: z
       .array(
         z.object({
+          fileName: z
+            .string()
+            .trim()
+            .min(1, "fileName is required")
+            .max(255, "fileName must be <= 255 characters"),
           contentType: z
             .string()
             .trim()
@@ -466,35 +471,42 @@ export const createVolunteerApplicationSchema = z
             "relevantExperience is required and must be 1..5000 characters",
           ),
       ),
-    supportingDocumentKeys: z
+    supportingDocuments: z
       .array(
-        z
-          .string()
-          .trim()
-          .min(1, "supportingDocumentKeys[] is required")
-          .max(600, "supportingDocumentKeys[] must be <= 600 characters"),
+        z.object({
+          name: z
+            .string()
+            .trim()
+            .min(1, "supportingDocuments[].name is required")
+            .max(255, "supportingDocuments[].name must be <= 255 characters"),
+          key: z
+            .string()
+            .trim()
+            .min(1, "supportingDocuments[].key is required")
+            .max(600, "supportingDocuments[].key must be <= 600 characters"),
+        }),
       )
       .min(
         MIN_VOLUNTEER_APPLICATION_DOCUMENT_COUNT,
-        `supportingDocumentKeys must contain at least ${MIN_VOLUNTEER_APPLICATION_DOCUMENT_COUNT} files`,
+        `supportingDocuments must contain at least ${MIN_VOLUNTEER_APPLICATION_DOCUMENT_COUNT} files`,
       )
       .max(
         MAX_VOLUNTEER_APPLICATION_DOCUMENT_COUNT,
-        `supportingDocumentKeys must contain at most ${MAX_VOLUNTEER_APPLICATION_DOCUMENT_COUNT} files`,
+        `supportingDocuments must contain at most ${MAX_VOLUNTEER_APPLICATION_DOCUMENT_COUNT} files`,
       )
       .superRefine((value, ctx) => {
         const seen = new Set<string>();
         value.forEach((item, index) => {
-          if (seen.has(item)) {
+          if (seen.has(item.key)) {
             ctx.addIssue({
               code: z.ZodIssueCode.custom,
               path: [index],
-              message: "supportingDocumentKeys[] must not contain duplicates",
+              message: "supportingDocuments[] must not contain duplicate keys",
             });
             return;
           }
 
-          seen.add(item);
+          seen.add(item.key);
         });
       }),
   })
