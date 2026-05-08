@@ -2,6 +2,7 @@ import { desc, eq, sql } from "drizzle-orm";
 import { db } from "../../../db";
 import {
   launchpad,
+  launchpadApplication,
   launchpadRole,
   volunteerApplication,
   volunteerOpportunity,
@@ -47,6 +48,7 @@ type ProjectPostingRow = {
   description: string | null;
   imageKey: string | null;
   totalView: number;
+  applicantCount: number;
   capacity: number;
   deadline: string | null;
   createdAt: string;
@@ -171,6 +173,16 @@ async function findVolunteerManagePostings(
 async function findProjectManagePostings(
   userId: string,
 ): Promise<ManagePostingItem[]> {
+  const confirmedApplications = db
+    .select({
+      launchpadId: launchpadApplication.launchpadId,
+      applicantCount: sql<number>`count(*)::int`.as("applicant_count"),
+    })
+    .from(launchpadApplication)
+    .where(eq(launchpadApplication.status, "CONFIRMED"))
+    .groupBy(launchpadApplication.launchpadId)
+    .as("confirmed_launchpad_applications");
+
   const roleCapacities = db
     .select({
       launchpadId: launchpadRole.launchpadId,
@@ -190,11 +202,16 @@ async function findProjectManagePostings(
       description: launchpad.description,
       imageKey: launchpad.coverKey,
       totalView: launchpad.totalView,
+      applicantCount: sql<number>`coalesce(${confirmedApplications.applicantCount}, 0)`,
       capacity: sql<number>`coalesce(${roleCapacities.capacity}, 0)`,
       deadline: launchpad.deadline,
       createdAt: launchpad.createdAt,
     })
     .from(launchpad)
+    .leftJoin(
+      confirmedApplications,
+      eq(confirmedApplications.launchpadId, launchpad.id),
+    )
     .leftJoin(roleCapacities, eq(roleCapacities.launchpadId, launchpad.id))
     .where(eq(launchpad.createdBy, userId))
     .orderBy(desc(launchpad.createdAt));
@@ -202,7 +219,7 @@ async function findProjectManagePostings(
   const now = new Date();
 
   return rows.map((row) => {
-    const applicantCount = 0;
+    const applicantCount = toInteger(row.applicantCount);
     const capacity = toInteger(row.capacity);
 
     return {
