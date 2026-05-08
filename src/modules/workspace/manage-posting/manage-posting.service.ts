@@ -13,13 +13,13 @@ export async function handleGetManagePostings(
   }
 
   try {
-    const postings = await findManagePostings(authResult.userId, query);
+    const result = await findManagePostings(authResult.userId, query);
 
     return c.json(
       {
         ok: true,
-        postings,
-        total: postings.length,
+        postings: result.postings,
+        pagination: result.pagination,
       },
       200,
     );
