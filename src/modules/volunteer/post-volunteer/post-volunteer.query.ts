@@ -68,6 +68,10 @@ type VolunteerOpportunitySaveInsert =
   typeof volunteerOpportunitySave.$inferInsert;
 type VolunteerRoleRow = typeof volunteerRole.$inferSelect;
 type VolunteerRoleRequirementRow = typeof volunteerRoleRequirement.$inferSelect;
+export type VolunteerSupportingDocument = {
+  name: string;
+  key: string;
+};
 type HydratedVolunteerRole = Pick<
   VolunteerRoleRow,
   | "id"
@@ -190,7 +194,7 @@ export type VolunteerApplicationDetail = {
   };
   availability: string;
   relevantExperience: string;
-  supportingDocumentKeys: string[];
+  supportingDocuments: VolunteerSupportingDocument[];
   status: VolunteerApplicationRow["status"];
   createdAt: string;
   updatedAt: string;
@@ -458,7 +462,7 @@ type CreateVolunteerApplicationInput = {
   roleTitle: string;
   availability: string;
   relevantExperience: string;
-  supportingDocumentKeys: string[];
+  supportingDocuments: VolunteerSupportingDocument[];
 };
 
 type VolunteerOpportunityListRow = VolunteerOpportunityBaseRow & {
@@ -509,7 +513,8 @@ function hydrateVolunteerApplication(
     },
     availability: application.availability,
     relevantExperience: application.relevantExperience,
-    supportingDocumentKeys: application.supportingDocumentKeys as string[],
+    supportingDocuments:
+      application.supportingDocuments as VolunteerSupportingDocument[],
     status: application.status,
     createdAt: application.createdAt,
     updatedAt: application.updatedAt,
@@ -1435,7 +1440,7 @@ export async function createVolunteerApplication(
         applicantId: data.applicantId,
         availability: data.availability,
         relevantExperience: data.relevantExperience,
-        supportingDocumentKeys: data.supportingDocumentKeys,
+        supportingDocuments: data.supportingDocuments,
         status: "SUBMITTED",
       })
       .returning();

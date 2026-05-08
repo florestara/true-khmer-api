@@ -202,8 +202,8 @@ export const volunteerApplication = pgTable(
       .references(() => user.id, { onDelete: "cascade" }),
     availability: text("availability").notNull(),
     relevantExperience: text("relevant_experience").notNull(),
-    supportingDocumentKeys: jsonb("supporting_document_keys")
-      .$type<string[]>()
+    supportingDocuments: jsonb("supporting_documents")
+      .$type<Array<{ name: string; key: string }>>()
       .notNull()
       .default(sql`'[]'::jsonb`),
     status: volunteerApplicationStatus("status")
@@ -223,8 +223,8 @@ export const volunteerApplication = pgTable(
       foreignColumns: [volunteerRole.id, volunteerRole.opportunityId],
     }).onDelete("cascade"),
     check(
-      "volunteer_application_supporting_document_keys_array_check",
-      sql`jsonb_typeof(${table.supportingDocumentKeys}) = 'array'`,
+      "volunteer_application_supporting_documents_array_check",
+      sql`jsonb_typeof(${table.supportingDocuments}) = 'array'`,
     ),
     uniqueIndex("volunteer_application_applicant_role_active_unique_idx")
       .on(table.applicantId, table.roleId)

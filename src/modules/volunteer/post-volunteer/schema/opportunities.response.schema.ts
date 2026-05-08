@@ -27,7 +27,10 @@ export const presignVolunteerApplicationDocumentUploadResultSchema = z
     uploadUrl: z.string(),
     method: z.literal("PUT"),
     requiredHeaders: presignedUploadHeadersSchema,
-    supportingDocumentKey: z.string(),
+    supportingDocument: z.object({
+      name: z.string(),
+      key: z.string(),
+    }),
     expiresInSeconds: z.number(),
   })
   .openapi("PresignVolunteerApplicationDocumentUploadResult");
@@ -163,7 +166,12 @@ export const volunteerApplicationResponseSchema = z
     role: volunteerApplicationRoleResponseSchema,
     availability: z.string(),
     relevantExperience: z.string(),
-    supportingDocumentKeys: z.array(z.string()),
+    supportingDocuments: z.array(
+      z.object({
+        name: z.string(),
+        key: z.string(),
+      }),
+    ),
     status: z.enum([
       "SUBMITTED",
       "UNDER_REVIEW",
