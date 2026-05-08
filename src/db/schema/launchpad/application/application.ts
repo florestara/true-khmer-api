@@ -14,7 +14,15 @@ import { launchpadRole } from "../roles/roles";
 
 export const launchpadApplicationStatusEnum = pgEnum(
   "launchpad_application_status",
-  ["SUBMITTED", "PASSED", "CONFIRMED", "REJECTED", "COMPLETED", "WITHDRAWN"],
+  [
+    "SUBMITTED",
+    "UNDER_REVIEW",
+    "APPROVED",
+    "DECLINED",
+    "CONFIRMED",
+    "COMPLETED",
+    "WITHDRAWN",
+  ],
 );
 
 const launchpadApplication = pgTable(

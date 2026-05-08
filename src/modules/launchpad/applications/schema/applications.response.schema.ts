@@ -24,9 +24,10 @@ export const presignLaunchpadApplicationDocumentUploadResponseSchema = z
 
 const launchpadApplicationStatusSchema = z.enum([
   "SUBMITTED",
-  "PASSED",
+  "UNDER_REVIEW",
+  "APPROVED",
+  "DECLINED",
   "CONFIRMED",
-  "REJECTED",
   "COMPLETED",
   "WITHDRAWN",
 ]);
