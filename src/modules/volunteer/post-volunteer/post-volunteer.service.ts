@@ -444,6 +444,7 @@ export async function handlePresignVolunteerApplicationDocumentUpload(
       presignVolunteerApplicationDocumentUpload({
         opportunityId: payload.opportunityId,
         applicantId: authResult.userId,
+        fileName: file.fileName,
         contentType: file.contentType,
         fileSize: file.fileSize,
       }),

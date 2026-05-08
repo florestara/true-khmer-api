@@ -256,6 +256,7 @@ export function presignVolunteerCoverUpload(options: {
 export function presignVolunteerApplicationDocumentUpload(options: {
   opportunityId: string;
   applicantId: string;
+  fileName: string;
   contentType: string;
   fileSize: number;
 }) {
@@ -274,6 +275,7 @@ export function presignVolunteerApplicationDocumentUpload(options: {
     method: "PUT",
     requiredHeaders: presigned.requiredHeaders,
     supportingDocumentKey,
+    fileName: options.fileName,
     expiresInSeconds: presigned.expiresInSeconds,
   };
 

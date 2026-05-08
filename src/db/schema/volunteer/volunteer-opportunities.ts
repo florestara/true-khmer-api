@@ -206,6 +206,10 @@ export const volunteerApplication = pgTable(
       .$type<string[]>()
       .notNull()
       .default(sql`'[]'::jsonb`),
+    supportingDocumentNames: jsonb("supporting_document_names")
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
     status: volunteerApplicationStatus("status")
       .default("SUBMITTED")
       .notNull(),
@@ -225,6 +229,10 @@ export const volunteerApplication = pgTable(
     check(
       "volunteer_application_supporting_document_keys_array_check",
       sql`jsonb_typeof(${table.supportingDocumentKeys}) = 'array'`,
+    ),
+    check(
+      "volunteer_application_supporting_document_names_array_check",
+      sql`jsonb_typeof(${table.supportingDocumentNames}) = 'array'`,
     ),
     uniqueIndex("volunteer_application_applicant_role_active_unique_idx")
       .on(table.applicantId, table.roleId)

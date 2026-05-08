@@ -318,6 +318,11 @@ export const presignVolunteerApplicationDocumentUploadSchema = z
     files: z
       .array(
         z.object({
+          fileName: z
+            .string()
+            .trim()
+            .min(1, "fileName is required")
+            .max(255, "fileName must be <= 255 characters"),
           contentType: z
             .string()
             .trim()
@@ -497,6 +502,34 @@ export const createVolunteerApplicationSchema = z
           seen.add(item);
         });
       }),
+    supportingDocumentNames: z
+      .array(
+        z
+          .string()
+          .trim()
+          .min(1, "supportingDocumentNames[] is required")
+          .max(255, "supportingDocumentNames[] must be <= 255 characters"),
+      )
+      .min(
+        MIN_VOLUNTEER_APPLICATION_DOCUMENT_COUNT,
+        `supportingDocumentNames must contain at least ${MIN_VOLUNTEER_APPLICATION_DOCUMENT_COUNT} files`,
+      )
+      .max(
+        MAX_VOLUNTEER_APPLICATION_DOCUMENT_COUNT,
+        `supportingDocumentNames must contain at most ${MAX_VOLUNTEER_APPLICATION_DOCUMENT_COUNT} files`,
+      ),
+  })
+  .superRefine((data, ctx) => {
+    if (
+      data.supportingDocumentKeys.length !== data.supportingDocumentNames.length
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          "supportingDocumentKeys and supportingDocumentNames must have the same number of entries",
+        path: ["supportingDocumentNames"],
+      });
+    }
   })
   .openapi("CreateVolunteerApplicationRequest");
 

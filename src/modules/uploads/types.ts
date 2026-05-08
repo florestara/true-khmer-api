@@ -29,6 +29,7 @@ export type PresignVolunteerApplicationDocumentUploadResponse = {
     "Content-Type": string;
   };
   supportingDocumentKey: string;
+  fileName: string;
   expiresInSeconds: number;
 };
 

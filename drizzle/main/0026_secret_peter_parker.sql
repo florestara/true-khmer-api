@@ -1,0 +1,2 @@
+ALTER TABLE "volunteer_application" ADD COLUMN "supporting_document_names" jsonb DEFAULT '[]'::jsonb NOT NULL;--> statement-breakpoint
+ALTER TABLE "volunteer_application" ADD CONSTRAINT "volunteer_application_supporting_document_names_array_check" CHECK (jsonb_typeof("volunteer_application"."supporting_document_names") = 'array');

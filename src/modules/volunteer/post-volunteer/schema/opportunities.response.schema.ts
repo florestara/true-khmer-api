@@ -28,6 +28,7 @@ export const presignVolunteerApplicationDocumentUploadResultSchema = z
     method: z.literal("PUT"),
     requiredHeaders: presignedUploadHeadersSchema,
     supportingDocumentKey: z.string(),
+    fileName: z.string(),
     expiresInSeconds: z.number(),
   })
   .openapi("PresignVolunteerApplicationDocumentUploadResult");
@@ -164,6 +165,7 @@ export const volunteerApplicationResponseSchema = z
     availability: z.string(),
     relevantExperience: z.string(),
     supportingDocumentKeys: z.array(z.string()),
+    supportingDocumentNames: z.array(z.string()),
     status: z.enum([
       "SUBMITTED",
       "UNDER_REVIEW",

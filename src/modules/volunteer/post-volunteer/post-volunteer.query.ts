@@ -191,6 +191,7 @@ export type VolunteerApplicationDetail = {
   availability: string;
   relevantExperience: string;
   supportingDocumentKeys: string[];
+  supportingDocumentNames: string[];
   status: VolunteerApplicationRow["status"];
   createdAt: string;
   updatedAt: string;
@@ -459,6 +460,7 @@ type CreateVolunteerApplicationInput = {
   availability: string;
   relevantExperience: string;
   supportingDocumentKeys: string[];
+  supportingDocumentNames: string[];
 };
 
 type VolunteerOpportunityListRow = VolunteerOpportunityBaseRow & {
@@ -510,6 +512,7 @@ function hydrateVolunteerApplication(
     availability: application.availability,
     relevantExperience: application.relevantExperience,
     supportingDocumentKeys: application.supportingDocumentKeys as string[],
+    supportingDocumentNames: application.supportingDocumentNames as string[],
     status: application.status,
     createdAt: application.createdAt,
     updatedAt: application.updatedAt,
@@ -1436,6 +1439,7 @@ export async function createVolunteerApplication(
         availability: data.availability,
         relevantExperience: data.relevantExperience,
         supportingDocumentKeys: data.supportingDocumentKeys,
+        supportingDocumentNames: data.supportingDocumentNames,
         status: "SUBMITTED",
       })
       .returning();
