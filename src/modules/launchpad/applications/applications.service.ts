@@ -162,6 +162,10 @@ export async function handleGetLaunchpadApplication(
       return c.json({ ok: false, error: "Application not found" }, 404);
     }
 
+    if (application.createdBy !== authResult.userId) {
+      return c.json({ ok: false, error: "Application not found" }, 404);
+    }
+
     return c.json({ ok: true, application }, 200);
   } catch (error) {
     console.error("Failed to get launchpad application", {

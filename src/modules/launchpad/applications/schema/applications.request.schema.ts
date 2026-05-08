@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "@hono/zod-openapi";
 import { FORUM_UUID_RE } from "../../../forum/lib/constants";
 
 const LAUNCHPAD_APPLICATION_DOCUMENT_ALLOWED_CONTENT_TYPE = "application/pdf";
@@ -59,6 +59,7 @@ export const createLaunchpadApplicationSchema = z
       .string()
       .trim()
       .url("portfolio must be a valid URL")
+      .refine((url) => url.startsWith("https://"), "portfolio must use HTTPS")
       .max(255, "portfolio must be <= 255 characters"),
     documentKeys: z
       .array(z.string().trim().min(1).max(500))

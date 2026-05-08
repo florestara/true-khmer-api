@@ -83,7 +83,7 @@ function buildVolunteerApplicationDocumentKey(
     "supporting-docs",
     opportunityId,
     applicantId,
-    buildVolunteerApplicationDocumentFileName(),
+    buildPdfDocumentFileName(),
   ].join("/");
 }
 
@@ -91,7 +91,7 @@ function buildLaunchpadDocumentKey(userId: string) {
   return [
     "launchpad-document",
     userId,
-    buildVolunteerApplicationDocumentFileName(),
+    buildPdfDocumentFileName(),
   ].join("/");
 }
 
@@ -103,7 +103,7 @@ function buildLaunchpadApplicationDocumentKey(
     "launchpad-application",
     launchpadId,
     applicantId,
-    buildVolunteerApplicationDocumentFileName(),
+    buildPdfDocumentFileName(),
   ].join("/");
 }
 
@@ -117,7 +117,7 @@ function buildImageObjectFileName(fileName: string) {
   return `${Date.now()}-${randomUUID()}.${safeExtension}`;
 }
 
-function buildVolunteerApplicationDocumentFileName() {
+function buildPdfDocumentFileName() {
   return `${randomUUID()}.pdf`;
 }
 

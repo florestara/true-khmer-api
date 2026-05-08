@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "@hono/zod-openapi";
 
 const presignedUploadHeadersSchema = z.object({
   "Content-Length": z.string(),

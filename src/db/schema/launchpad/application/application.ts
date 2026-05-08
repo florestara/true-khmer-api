@@ -52,7 +52,8 @@ const launchpadApplication = pgTable(
       .notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" })
       .defaultNow()
-      .notNull(),
+      .notNull()
+      .$onUpdate(() => sql`now()`),
   },
   (table) => [
     index("launchpad_application_launchpad_id_idx").using(
@@ -67,6 +68,7 @@ const launchpadApplication = pgTable(
       "btree",
       table.createdBy,
     ),
+    sql`CREATE UNIQUE INDEX IF NOT EXISTS launchpad_application_unique_active ON launchpad_application (launchpad_role_id, created_by) WHERE status != 'WITHDRAWN'`,
   ],
 );
 
@@ -103,7 +105,7 @@ const launchpadApplicationLog = pgTable(
 
 export const launchpadApplicationRelations = relations(
   launchpadApplication,
-  ({ one }) => ({
+  ({ one, many }) => ({
     launchpad: one(launchpad, {
       fields: [launchpadApplication.launchpadId],
       references: [launchpad.id],
@@ -112,6 +114,7 @@ export const launchpadApplicationRelations = relations(
       fields: [launchpadApplication.launchpadRoleId],
       references: [launchpadRole.id],
     }),
+    logs: many(launchpadApplicationLog),
   }),
 );
 

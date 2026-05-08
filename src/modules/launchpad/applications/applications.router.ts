@@ -217,11 +217,7 @@ launchpadApplicationsRouter.openapi(
   async (c) => {
     const params = c.req.valid("param");
     const data = c.req.valid("json");
-    return handlePresignLaunchpadApplicationDocumentUpload(
-      c,
-      params,
-      data,
-    ) as any;
+    return handlePresignLaunchpadApplicationDocumentUpload(c, params, data) as any;
   },
 );
 
