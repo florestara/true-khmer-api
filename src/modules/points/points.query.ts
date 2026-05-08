@@ -40,7 +40,7 @@ export async function countUserTransactionsToday(
       and(
         eq(pointTransactions.userId, userId),
         eq(pointTransactions.actionType, actionType),
-        gte(pointTransactions.createdAt, startOfDay),
+        gte(pointTransactions.createdAt, startOfDay.toISOString()),
       ),
     );
   return result?.count ?? 0;
