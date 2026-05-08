@@ -274,8 +274,10 @@ export function presignVolunteerApplicationDocumentUpload(options: {
     uploadUrl: presigned.uploadUrl,
     method: "PUT",
     requiredHeaders: presigned.requiredHeaders,
-    supportingDocumentKey,
-    fileName: options.fileName,
+    supportingDocument: {
+      name: options.fileName,
+      key: supportingDocumentKey,
+    },
     expiresInSeconds: presigned.expiresInSeconds,
   };
 

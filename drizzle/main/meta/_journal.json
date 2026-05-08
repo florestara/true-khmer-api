@@ -190,6 +190,13 @@
       "when": 1778203383568,
       "tag": "0026_secret_peter_parker",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1778284800000,
+      "tag": "0027_plain_tarot",
+      "breakpoints": true
     }
   ]
 }
