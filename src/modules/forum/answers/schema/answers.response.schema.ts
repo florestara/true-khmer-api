@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { categoryResponseSchema } from "../../categories/categories.schema";
 
 const answerAuthorSchema = z.object({
   id: z.string(),
@@ -39,6 +40,7 @@ const answerQuestionResponseSchema = z
     createdAt: z.string(),
     updatedAt: z.string(),
   })
+  .extend({ category: categoryResponseSchema })
   .openapi("AnswerQuestionResponse");
 
 export const answerResponseSchema = z
