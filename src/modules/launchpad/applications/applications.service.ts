@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { Context } from "hono";
 import { getAuthUserId } from "../../auth/utils/get-auth";
 import { recordRecentActivityQuietly } from "../../recent-activity/recent-activity.service";
@@ -136,8 +137,6 @@ export async function handleCreateLaunchpadApplication(
   } catch (err) {
     console.error("Failed to create launchpad application", {
       err,
-      launchpadId: params.launchpadId,
-      userId: authResult.userId,
     });
     return c.json({ ok: false, error: "Failed to submit application" }, 500);
   }
@@ -170,8 +169,6 @@ export async function handleGetLaunchpadApplication(
   } catch (error) {
     console.error("Failed to get launchpad application", {
       error,
-      launchpadId: params.launchpadId,
-      applicationId: params.applicationId,
     });
     return c.json({ ok: false, error: "Failed to get application" }, 500);
   }
