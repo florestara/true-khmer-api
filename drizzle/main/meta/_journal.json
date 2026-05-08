@@ -187,15 +187,29 @@
     {
       "idx": 26,
       "version": "7",
-      "when": 1778203383568,
-      "tag": "0026_secret_peter_parker",
+      "when": 1778194266276,
+      "tag": "0026_fluffy_whizzer",
       "breakpoints": true
     },
     {
       "idx": 27,
       "version": "7",
+      "when": 1778200445734,
+      "tag": "0027_black_joystick",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1778203383568,
+      "tag": "0028_secret_peter_parker",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
       "when": 1778284800000,
-      "tag": "0027_plain_tarot",
+      "tag": "0029_plain_tarot",
       "breakpoints": true
     }
   ]

@@ -4,6 +4,7 @@ import { getAuthUserId } from "../auth/utils/get-auth";
 import type { PresignAvatarUploadPayload } from "./uploads.schema";
 import type {
   PresignAvatarUploadResponse,
+  PresignLaunchpadApplicationDocumentUploadResponse,
   PresignLaunchpadCoverUploadResponse,
   PresignLaunchpadDocumentUploadResponse,
   PresignLaunchpadLogoUploadResponse,
@@ -82,7 +83,7 @@ function buildVolunteerApplicationDocumentKey(
     "supporting-docs",
     opportunityId,
     applicantId,
-    buildVolunteerApplicationDocumentFileName(),
+    buildPdfDocumentFileName(),
   ].join("/");
 }
 
@@ -90,7 +91,19 @@ function buildLaunchpadDocumentKey(userId: string) {
   return [
     "launchpad-document",
     userId,
-    buildVolunteerApplicationDocumentFileName(),
+    buildPdfDocumentFileName(),
+  ].join("/");
+}
+
+function buildLaunchpadApplicationDocumentKey(
+  launchpadId: string,
+  applicantId: string,
+) {
+  return [
+    "launchpad-application",
+    launchpadId,
+    applicantId,
+    buildPdfDocumentFileName(),
   ].join("/");
 }
 
@@ -104,7 +117,7 @@ function buildImageObjectFileName(fileName: string) {
   return `${Date.now()}-${randomUUID()}.${safeExtension}`;
 }
 
-function buildVolunteerApplicationDocumentFileName() {
+function buildPdfDocumentFileName() {
   return `${randomUUID()}.pdf`;
 }
 
@@ -389,6 +402,33 @@ export function presignLaunchpadDocumentUpload(options: {
     requiredHeaders: presigned.requiredHeaders,
     documentKey,
     publicUrl: resolvePublicUrl(documentKey),
+    expiresInSeconds: presigned.expiresInSeconds,
+  };
+
+  return response;
+}
+
+export function presignLaunchpadApplicationDocumentUpload(options: {
+  launchpadId: string;
+  applicantId: string;
+  contentType: string;
+  fileSize: number;
+}) {
+  const documentKey = buildLaunchpadApplicationDocumentKey(
+    options.launchpadId,
+    options.applicantId,
+  );
+  const presigned = buildPresignedPutUrl(
+    documentKey,
+    options.contentType,
+    options.fileSize,
+  );
+
+  const response: PresignLaunchpadApplicationDocumentUploadResponse = {
+    uploadUrl: presigned.uploadUrl,
+    method: "PUT",
+    requiredHeaders: presigned.requiredHeaders,
+    documentKey,
     expiresInSeconds: presigned.expiresInSeconds,
   };
 

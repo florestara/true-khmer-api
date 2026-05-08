@@ -1,5 +1,5 @@
 {
-  "id": "0309e6fd-f2a2-44f5-986d-1ef4c9e3be94",
+  "id": "a8011fd7-7c0a-4954-8b80-8f136affd4c8",
   "prevId": "0668d7c1-324a-4541-b1a5-ea033718face",
   "version": "7",
   "dialect": "postgresql",
@@ -3317,13 +3317,6 @@
           "notNull": true,
           "default": "'[]'::jsonb"
         },
-        "supporting_document_names": {
-          "name": "supporting_document_names",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'[]'::jsonb"
-        },
         "status": {
           "name": "status",
           "type": "volunteer_application_status",
@@ -3515,10 +3508,6 @@
         "volunteer_application_supporting_document_keys_array_check": {
           "name": "volunteer_application_supporting_document_keys_array_check",
           "value": "jsonb_typeof(\"volunteer_application\".\"supporting_document_keys\") = 'array'"
-        },
-        "volunteer_application_supporting_document_names_array_check": {
-          "name": "volunteer_application_supporting_document_names_array_check",
-          "value": "jsonb_typeof(\"volunteer_application\".\"supporting_document_names\") = 'array'"
         }
       },
       "isRLSEnabled": false
@@ -5213,6 +5202,283 @@
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
+    },
+    "public.launchpad_application": {
+      "name": "launchpad_application",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "launchpad_id": {
+          "name": "launchpad_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "launchpad_role_id": {
+          "name": "launchpad_role_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "motivation": {
+          "name": "motivation",
+          "type": "varchar(2000)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "portfolio": {
+          "name": "portfolio",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "launchpad_application_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'SUBMITTED'"
+        },
+        "document_keys": {
+          "name": "document_keys",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "document_names": {
+          "name": "document_names",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "launchpad_application_launchpad_id_idx": {
+          "name": "launchpad_application_launchpad_id_idx",
+          "columns": [
+            {
+              "expression": "launchpad_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "launchpad_application_launchpad_role_id_idx": {
+          "name": "launchpad_application_launchpad_role_id_idx",
+          "columns": [
+            {
+              "expression": "launchpad_role_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "launchpad_application_created_by_idx": {
+          "name": "launchpad_application_created_by_idx",
+          "columns": [
+            {
+              "expression": "created_by",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "launchpad_application_launchpad_id_launchpad_id_fk": {
+          "name": "launchpad_application_launchpad_id_launchpad_id_fk",
+          "tableFrom": "launchpad_application",
+          "tableTo": "launchpad",
+          "columnsFrom": [
+            "launchpad_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "launchpad_application_launchpad_role_id_launchpad_role_id_fk": {
+          "name": "launchpad_application_launchpad_role_id_launchpad_role_id_fk",
+          "tableFrom": "launchpad_application",
+          "tableTo": "launchpad_role",
+          "columnsFrom": [
+            "launchpad_role_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "launchpad_application_created_by_user_id_fk": {
+          "name": "launchpad_application_created_by_user_id_fk",
+          "tableFrom": "launchpad_application",
+          "tableTo": "user",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.launchpad_application_log": {
+      "name": "launchpad_application_log",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "launchpad_application_id": {
+          "name": "launchpad_application_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "launchpad_application_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'SUBMITTED'"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "launchpad_application_log_application_id_idx": {
+          "name": "launchpad_application_log_application_id_idx",
+          "columns": [
+            {
+              "expression": "launchpad_application_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "launchpad_application_log_created_by_idx": {
+          "name": "launchpad_application_log_created_by_idx",
+          "columns": [
+            {
+              "expression": "created_by",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "launchpad_application_log_launchpad_application_id_launchpad_application_id_fk": {
+          "name": "launchpad_application_log_launchpad_application_id_launchpad_application_id_fk",
+          "tableFrom": "launchpad_application_log",
+          "tableTo": "launchpad_application",
+          "columnsFrom": [
+            "launchpad_application_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "launchpad_application_log_created_by_user_id_fk": {
+          "name": "launchpad_application_log_created_by_user_id_fk",
+          "tableFrom": "launchpad_application_log",
+          "tableTo": "user",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     }
   },
   "enums": {
@@ -5394,6 +5660,18 @@
         "ACTIVE",
         "ARCHIVED",
         "HIDDEN"
+      ]
+    },
+    "public.launchpad_application_status": {
+      "name": "launchpad_application_status",
+      "schema": "public",
+      "values": [
+        "SUBMITTED",
+        "PASSED",
+        "CONFIRMED",
+        "REJECTED",
+        "COMPLETED",
+        "WITHDRAWN"
       ]
     }
   },

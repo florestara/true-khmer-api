@@ -1,6 +1,6 @@
 {
-  "id": "1a82ecaa-b80e-4be7-9909-26a6df044fc6",
-  "prevId": "a8011fd7-7c0a-4954-8b80-8f136affd4c8",
+  "id": "51916298-c429-4e24-8890-e66b550c46d9",
+  "prevId": "8113ce25-709d-4c5a-a769-cdf7bce72099",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -3310,13 +3310,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "supporting_document_keys": {
-          "name": "supporting_document_keys",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'[]'::jsonb"
-        },
         "status": {
           "name": "status",
           "type": "volunteer_application_status",
@@ -3338,6 +3331,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "supporting_documents": {
+          "name": "supporting_documents",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
         }
       },
       "indexes": {
@@ -3505,9 +3505,9 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
-        "volunteer_application_supporting_document_keys_array_check": {
-          "name": "volunteer_application_supporting_document_keys_array_check",
-          "value": "jsonb_typeof(\"volunteer_application\".\"supporting_document_keys\") = 'array'"
+        "volunteer_application_supporting_documents_array_check": {
+          "name": "volunteer_application_supporting_documents_array_check",
+          "value": "jsonb_typeof(\"volunteer_application\".\"supporting_documents\") = 'array'"
         }
       },
       "isRLSEnabled": false
