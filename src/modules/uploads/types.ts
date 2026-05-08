@@ -28,7 +28,10 @@ export type PresignVolunteerApplicationDocumentUploadResponse = {
     "Content-Length": string;
     "Content-Type": string;
   };
-  supportingDocumentKey: string;
+  supportingDocument: {
+    name: string;
+    key: string;
+  };
   expiresInSeconds: number;
 };
 
@@ -65,5 +68,16 @@ export type PresignLaunchpadDocumentUploadResponse = {
   };
   documentKey: string;
   publicUrl: string | null;
+  expiresInSeconds: number;
+};
+
+export type PresignLaunchpadApplicationDocumentUploadResponse = {
+  uploadUrl: string;
+  method: "PUT";
+  requiredHeaders: {
+    "Content-Length": string;
+    "Content-Type": string;
+  };
+  documentKey: string;
   expiresInSeconds: number;
 };

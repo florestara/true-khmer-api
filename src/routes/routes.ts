@@ -15,6 +15,7 @@ import { reportingTypeRouter } from "../modules/forum/reportingType/reportingTyp
 import { reportingRouter } from "../modules/forum/reporting/reporting.router";
 import { launchpadCategoriesRouter } from "../modules/launchpad/categories/categories.router";
 import { launchpadRouter } from "../modules/launchpad/launchpad.router";
+import { launchpadApplicationsRouter } from "../modules/launchpad/applications/applications.router";
 import { myApplicationsRouter } from "../modules/myspace/applications.router";
 import { myspaceRouter } from "../modules/myspace/myspace.router";
 import { managePostingRouter } from "../modules/workspace/manage-posting/manage-posting.router";
@@ -36,6 +37,7 @@ routes.route("/forum/public/reporting-type", reportingTypeRouter);
 routes.route("/forum/reporting", reportingRouter);
 routes.route("/launchpad/public/category", launchpadCategoriesRouter);
 routes.route("/launchpad", launchpadRouter);
+routes.route("/launchpad", launchpadApplicationsRouter);
 routes.route("/my-application", myApplicationsRouter);
 routes.route("/me", myspaceRouter);
 routes.route("/workspace/manage-posting", managePostingRouter);

@@ -3,6 +3,7 @@ import { db } from "../../../db/index";
 import {
   forumAnswer,
   forumAnswerVote,
+  forumCategory,
   forumQuestion,
   user,
   userProfile,
@@ -17,6 +18,7 @@ import type {
 } from "./answers.schema";
 
 type ForumQuestionRow = typeof forumQuestion.$inferSelect;
+type ForumCategoryRow = typeof forumCategory.$inferSelect;
 type ForumAnswerRow = typeof forumAnswer.$inferSelect;
 type ForumAnswerInsert = typeof forumAnswer.$inferInsert;
 type ForumAnswerVoteInsert = typeof forumAnswerVote.$inferInsert;
@@ -66,10 +68,15 @@ type RepliedAnswerWithViewerVote = Omit<
 type ForumAnswerWithViewerVote = RepliedAnswerWithViewerVote & {
   repliedAnswers: RepliedAnswerWithViewerVote[] | null;
 };
-type ForumAnswerWithoutQuestionId = Omit<ForumAnswerWithViewerVote, "questionId">;
+type ForumAnswerWithoutQuestionId = Omit<
+  ForumAnswerWithViewerVote,
+  "questionId"
+>;
 type ForumAnswerQuestion = Omit<ForumQuestionRow, "authorId" | "deletedAt">;
 type ForumAnswerWithQuestion = ForumAnswerWithoutQuestionId & {
-  question: ForumAnswerQuestion;
+  question: ForumAnswerQuestion & {
+    category: ForumCategoryRow;
+  };
 };
 type HydratedRepliedAnswerWithViewerVote = RepliedAnswerWithViewerVote & {
   isBestAnswer: boolean;
@@ -79,6 +86,7 @@ type HydratedForumAnswerWithViewerVote = HydratedRepliedAnswerWithViewerVote & {
 };
 type AnswerWithQuestionHydrationRow = AnswerHydrationRow & {
   question: ForumQuestionRow;
+  category: ForumCategoryRow;
 };
 type AnswersByQuestionResult = {
   bestAnswer: ForumAnswerWithViewerVote[];
@@ -201,7 +209,9 @@ async function lockForumQuestionAnswerSelection(
   );
 }
 
-function hydrateAnswer(row: AnswerHydrationRow): HydratedForumAnswerWithViewerVote {
+function hydrateAnswer(
+  row: AnswerHydrationRow,
+): HydratedForumAnswerWithViewerVote {
   const { authorId, deletedAt: _deletedAt, ...answer } = row.answer;
 
   return {
@@ -255,11 +265,18 @@ function stripBestAnswerFlag(
 
 function hydrateAnswerQuestion(
   question: ForumQuestionRow,
-): ForumAnswerQuestion {
-  const { authorId: _authorId, deletedAt: _deletedAt, ...publicQuestion } =
-    question;
+  category: ForumCategoryRow,
+): ForumAnswerQuestion & { category: ForumCategoryRow } {
+  const {
+    authorId: _authorId,
+    deletedAt: _deletedAt,
+    ...publicQuestion
+  } = question;
 
-  return publicQuestion;
+  return {
+    ...publicQuestion,
+    category,
+  };
 }
 
 function hydrateAnswerWithQuestion(
@@ -271,7 +288,7 @@ function hydrateAnswerWithQuestion(
 
   return {
     ...answer,
-    question: hydrateAnswerQuestion(row.question),
+    question: hydrateAnswerQuestion(row.question, row.category),
   };
 }
 
@@ -405,6 +422,7 @@ export async function findAnswersByAuthorId(
     .select({
       answer: forumAnswer,
       question: forumQuestion,
+      category: forumCategory,
       questionBestAnswerId: forumQuestion.bestAnswerId,
       authorDisplayName: userProfile.displayName,
       authorFullName: user.name,
@@ -413,6 +431,7 @@ export async function findAnswersByAuthorId(
     })
     .from(forumAnswer)
     .innerJoin(forumQuestion, eq(forumQuestion.id, forumAnswer.questionId))
+    .innerJoin(forumCategory, eq(forumCategory.id, forumQuestion.categoryId))
     .innerJoin(user, eq(user.id, forumAnswer.authorId))
     .leftJoin(userProfile, eq(userProfile.userId, user.id))
     .leftJoin(
@@ -721,10 +740,7 @@ export async function markBestAnswer(
 
     const markedRows = await buildAnswersBaseQuery(tx, questionAuthorId)
       .where(
-        and(
-          eq(forumAnswer.id, answer.id),
-          eq(forumAnswer.status, "PUBLISHED"),
-        ),
+        and(eq(forumAnswer.id, answer.id), eq(forumAnswer.status, "PUBLISHED")),
       )
       .limit(1);
 

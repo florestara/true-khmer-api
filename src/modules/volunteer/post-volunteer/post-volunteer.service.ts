@@ -32,6 +32,7 @@ import type {
   PresignVolunteerOpportunityCoverUploadPayload,
 } from "./post-volunteer.schema";
 import { recordRecentActivityQuietly } from "../../recent-activity/recent-activity.service";
+import type { VolunteerSupportingDocument } from "./post-volunteer.query";
 
 const VOLUNTEER_CATEGORY_SLUG_UNIQUE_INDEX =
   "volunteer_category_slug_unique_idx";
@@ -91,22 +92,37 @@ function normalizeOwnedSupportingDocumentKey(
 function normalizeOwnedSupportingDocumentKeys(
   opportunityId: string,
   applicantId: string,
-  supportingDocumentKeys: string[],
-): string[] | null {
-  const normalizedKeys = supportingDocumentKeys.map((key) =>
-    normalizeOwnedSupportingDocumentKey(opportunityId, applicantId, key),
-  );
+  supportingDocuments: VolunteerSupportingDocument[],
+): VolunteerSupportingDocument[] | null {
+  const normalizedDocuments = supportingDocuments.map((document) => {
+    const normalizedKey = normalizeOwnedSupportingDocumentKey(
+      opportunityId,
+      applicantId,
+      document.key,
+    );
 
-  if (normalizedKeys.some((key) => key === null)) {
+    if (!normalizedKey) {
+      return null;
+    }
+
+    return {
+      name: document.name,
+      key: normalizedKey,
+    };
+  });
+
+  if (normalizedDocuments.some((document) => document === null)) {
     return null;
   }
 
-  const resolvedNormalizedKeys = normalizedKeys as string[];
-  if (new Set(resolvedNormalizedKeys).size !== resolvedNormalizedKeys.length) {
+  const resolvedNormalizedDocuments =
+    normalizedDocuments as VolunteerSupportingDocument[];
+  const documentKeys = resolvedNormalizedDocuments.map((document) => document.key);
+  if (new Set(documentKeys).size !== documentKeys.length) {
     return null;
   }
 
-  return resolvedNormalizedKeys;
+  return resolvedNormalizedDocuments;
 }
 
 function normalizeOwnedObjectKey(
@@ -444,6 +460,7 @@ export async function handlePresignVolunteerApplicationDocumentUpload(
       presignVolunteerApplicationDocumentUpload({
         opportunityId: payload.opportunityId,
         applicantId: authResult.userId,
+        fileName: file.fileName,
         contentType: file.contentType,
         fileSize: file.fileSize,
       }),
@@ -484,22 +501,22 @@ export async function handleCreateVolunteerApplication(
       throw new Error("Volunteer application target missing after validation");
     }
 
-    const normalizedSupportingDocumentKeys = normalizeOwnedSupportingDocumentKeys(
+    const normalizedSupportingDocuments = normalizeOwnedSupportingDocumentKeys(
       target.opportunityId,
       authResult.userId,
-      data.supportingDocumentKeys,
+      data.supportingDocuments,
     );
 
-    if (!normalizedSupportingDocumentKeys) {
+    if (!normalizedSupportingDocuments) {
       return c.json(
         {
           ok: false,
           error: "Validation failed",
           issues: [
             {
-              path: "supportingDocumentKeys",
+              path: "supportingDocuments",
               message:
-                "supportingDocumentKeys must belong to current user and opportunity",
+                "supportingDocuments must belong to current user and opportunity",
             },
           ],
         },
@@ -523,7 +540,7 @@ export async function handleCreateVolunteerApplication(
         name: target.cityName,
       },
       roleTitle: target.roleTitle,
-      supportingDocumentKeys: normalizedSupportingDocumentKeys,
+      supportingDocuments: normalizedSupportingDocuments,
     });
 
     recordRecentActivityQuietly({
