@@ -1,7 +1,9 @@
 import type { Context } from "hono";
 import { getAuthUserId } from "../auth/utils/get-auth";
 import {
+  findMyProjectApplications,
   findMyVolunteerApplications,
+  type MySpaceProjectApplication,
   type MySpaceVolunteerApplication,
 } from "./applications.query";
 import type { GetMyApplicationsQuery } from "./applications.schema";
@@ -57,6 +59,23 @@ function mapVolunteerApplication(
   };
 }
 
+function mapProjectApplication(
+  application: MySpaceProjectApplication,
+): MyApplicationItem {
+  return {
+    id: application.id,
+    sourceType: "PROJECT",
+    title: application.title,
+    imageKey: application.imageKey,
+    appliedAt: application.appliedAt,
+    deadline: application.deadline,
+    status: application.status,
+    opportunity: application.opportunity,
+    category: application.category,
+    location: application.location,
+  };
+}
+
 function buildSummary(applications: MyApplicationItem[]) {
   return applications.reduce(
     (summary, application) => {
@@ -86,21 +105,18 @@ export async function handleGetMyApplications(
   }
 
   try {
-    if (query.type === "projects") {
-      return c.json(
-        {
-          ok: true,
-          applications: null,
-          summary: buildSummary([]),
-        },
-        200,
-      );
-    }
-
-    const volunteerApplications = await findMyVolunteerApplications(
-      authResult.userId,
-    );
-    const applications = volunteerApplications.map(mapVolunteerApplication).sort(
+    const [volunteerApplications, projectApplications] = await Promise.all([
+      query.type === "projects"
+        ? Promise.resolve([])
+        : findMyVolunteerApplications(authResult.userId),
+      query.type === "volunteer"
+        ? Promise.resolve([])
+        : findMyProjectApplications(authResult.userId),
+    ]);
+    const applications = [
+      ...volunteerApplications.map(mapVolunteerApplication),
+      ...projectApplications.map(mapProjectApplication),
+    ].sort(
       (left, right) =>
         Date.parse(right.appliedAt) - Date.parse(left.appliedAt),
     );
