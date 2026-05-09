@@ -4,6 +4,7 @@ import {
   desc,
   eq,
   exists,
+  getTableColumns,
   ilike,
   inArray,
   isNotNull,
@@ -58,6 +59,9 @@ const ACTIVE_VOLUNTEER_APPLICATION_STATUSES = [
 
 type VolunteerCategoryRow = typeof volunteerCategory.$inferSelect;
 type VolunteerCategoryInsert = typeof volunteerCategory.$inferInsert;
+type VolunteerCategoryWithOpportunityCountRow = VolunteerCategoryRow & {
+  opportunityCount: number;
+};
 type VolunteerLocationRow = {
   id: string;
   name: string;
@@ -261,11 +265,36 @@ function toInteger(value: unknown, fallback = 0): number {
 }
 
 export async function getVolunteerCategories(): Promise<
-  VolunteerCategoryRow[]
+  VolunteerCategoryWithOpportunityCountRow[]
 > {
+  const opportunityCounts = db
+    .select({
+      categoryId: volunteerOpportunity.categoryId,
+      opportunityCount: sql<number>`count(*)::int`.as("opportunity_count"),
+    })
+    .from(volunteerOpportunity)
+    .where(
+      and(
+        eq(volunteerOpportunity.status, "PUBLISHED"),
+        isNotNull(volunteerOpportunity.publishedAt),
+      ),
+    )
+    .groupBy(volunteerOpportunity.categoryId)
+    .as("volunteer_category_opportunity_counts");
+
   return db
-    .select()
+    .select({
+      ...getTableColumns(volunteerCategory),
+      opportunityCount:
+        sql<number>`coalesce(${opportunityCounts.opportunityCount}, 0)::int`.as(
+          "opportunityCount",
+        ),
+    })
     .from(volunteerCategory)
+    .leftJoin(
+      opportunityCounts,
+      eq(opportunityCounts.categoryId, volunteerCategory.id),
+    )
     .where(eq(volunteerCategory.status, "ACTIVE"))
     .orderBy(volunteerCategory.displayOrder, volunteerCategory.name);
 }
