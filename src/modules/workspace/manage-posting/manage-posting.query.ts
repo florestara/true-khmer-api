@@ -8,6 +8,10 @@ import {
   volunteerOpportunity,
   volunteerRole,
 } from "../../../db/schema";
+import {
+  buildPagePagination,
+  type PagePagination,
+} from "../../../utils/page-pagination.helper";
 import type {
   GetManagePostingsQuery,
   ManagePostingFilter,
@@ -28,6 +32,11 @@ export type ManagePostingItem = {
   views: number;
   deadline: string | null;
   createdAt: string;
+};
+
+export type ManagePostingsResult = {
+  postings: ManagePostingItem[];
+  pagination: PagePagination;
 };
 
 type VolunteerPostingRow = {
@@ -246,7 +255,7 @@ async function findProjectManagePostings(
 export async function findManagePostings(
   userId: string,
   query: GetManagePostingsQuery,
-): Promise<ManagePostingItem[]> {
+): Promise<ManagePostingsResult> {
   const [volunteerPostings, projectPostings] = await Promise.all([
     query.type === "projects"
       ? Promise.resolve([])
@@ -256,7 +265,7 @@ export async function findManagePostings(
       : findProjectManagePostings(userId),
   ]);
 
-  return [...volunteerPostings, ...projectPostings]
+  const postings = [...volunteerPostings, ...projectPostings]
     .filter((posting) => matchesFilter(posting.status, query.filter))
     .sort((left, right) => {
       const createdAtDelta =
@@ -266,4 +275,15 @@ export async function findManagePostings(
         ? right.id.localeCompare(left.id)
         : createdAtDelta;
     });
+
+  const { pageRows, pagination } = buildPagePagination({
+    rows: postings,
+    page: query.page,
+    limit: query.limit,
+  });
+
+  return {
+    postings: pageRows,
+    pagination,
+  };
 }
