@@ -9,6 +9,7 @@ import {
   varchar,
 } from "drizzle-orm/pg-core";
 import { user } from "../../user";
+import { applicationDeclinedByEnum } from "../../application";
 import { launchpad } from "../launchpad";
 import { launchpadRole } from "../roles/roles";
 
@@ -92,6 +93,7 @@ const launchpadApplicationLog = pgTable(
     status: launchpadApplicationStatusEnum("status")
       .default("SUBMITTED")
       .notNull(),
+    declinedBy: applicationDeclinedByEnum("declined_by"),
     createdBy: uuid("created_by")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),

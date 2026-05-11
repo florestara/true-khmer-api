@@ -55,6 +55,7 @@ export async function createApplicationLog(
   options: {
     applicationId: string;
     status: ApplicationStatus;
+    declinedBy?: "POSTER" | "APPLICANT" | null;
     createdBy: string;
   },
 ): Promise<LaunchpadApplicationLog> {
@@ -63,6 +64,7 @@ export async function createApplicationLog(
     .values({
       launchpadApplicationId: options.applicationId,
       status: options.status,
+      declinedBy: options.declinedBy ?? null,
       createdBy: options.createdBy,
     })
     .returning();
