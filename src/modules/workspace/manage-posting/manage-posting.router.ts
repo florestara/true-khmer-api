@@ -3,11 +3,17 @@ import type { AppBindings } from "../../../lib/types";
 import { requireAccessToken } from "../../../middlewares/auth.middleware";
 import { authProtectedErrorResponseSchema } from "../../auth/auth.schema";
 import {
+  getManagePostingDetailParamSchema,
+  getManagePostingDetailQuerySchema,
   getManagePostingsQuerySchema,
+  managePostingDetailResponseSchema,
   managePostingsErrorResponseSchema,
   managePostingsResponseSchema,
 } from "./manage-posting.schema";
-import { handleGetManagePostings } from "./manage-posting.service";
+import {
+  handleGetManagePostingDetail,
+  handleGetManagePostings,
+} from "./manage-posting.service";
 
 export const managePostingRouter = new OpenAPIHono<AppBindings>();
 
@@ -56,7 +62,68 @@ const getManagePostingsRoute = createRoute({
   },
 });
 
+const getManagePostingDetailRoute = createRoute({
+  method: "get",
+  path: "/{sourceType}/{postingId}",
+  tags: ["Workspace"],
+  middleware: [requireAccessToken],
+  security: [{ BearerAuth: [] }],
+  request: {
+    params: getManagePostingDetailParamSchema,
+    query: getManagePostingDetailQuerySchema,
+  },
+  responses: {
+    200: {
+      description:
+        "Authenticated user's posting detail with applicants for review",
+      content: {
+        "application/json": {
+          schema: managePostingDetailResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: "Unauthorized",
+      content: {
+        "application/json": {
+          schema: authProtectedErrorResponseSchema,
+        },
+      },
+    },
+    403: {
+      description: "Onboarding required",
+      content: {
+        "application/json": {
+          schema: authProtectedErrorResponseSchema,
+        },
+      },
+    },
+    404: {
+      description: "Posting not found",
+      content: {
+        "application/json": {
+          schema: managePostingsErrorResponseSchema,
+        },
+      },
+    },
+    500: {
+      description: "Internal server error",
+      content: {
+        "application/json": {
+          schema: managePostingsErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
 managePostingRouter.openapi(getManagePostingsRoute, async (c) => {
   const query = c.req.valid("query");
   return (await handleGetManagePostings(c, query)) as any;
+});
+
+managePostingRouter.openapi(getManagePostingDetailRoute, async (c) => {
+  const params = c.req.valid("param");
+  const query = c.req.valid("query");
+  return (await handleGetManagePostingDetail(c, params, query)) as any;
 });
