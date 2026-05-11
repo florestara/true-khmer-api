@@ -22,6 +22,7 @@ import {
   user,
   userProfile,
   volunteerApplication,
+  volunteerApplicationLog,
   volunteerCategory,
   volunteerOpportunity,
   volunteerOpportunitySave,
@@ -1444,6 +1445,13 @@ export async function createVolunteerApplication(
         status: "SUBMITTED",
       })
       .returning();
+
+    await tx.insert(volunteerApplicationLog).values({
+      volunteerApplicationId: application.id,
+      status: "SUBMITTED",
+      declinedBy: null,
+      createdBy: data.applicantId,
+    });
 
     return hydrateVolunteerApplication(application, data.roleTitle, {
       id: data.opportunityId,

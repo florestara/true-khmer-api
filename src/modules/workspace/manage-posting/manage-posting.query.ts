@@ -3,10 +3,12 @@ import { db } from "../../../db";
 import {
   launchpad,
   launchpadApplication,
+  launchpadApplicationLog,
   launchpadRole,
   user,
   userProfile,
   volunteerApplication,
+  volunteerApplicationLog,
   volunteerOpportunity,
   volunteerRole,
 } from "../../../db/schema";
@@ -15,9 +17,11 @@ import {
   type PagePagination,
 } from "../../../utils/page-pagination.helper";
 import type {
+  GetManagePostingApplicationParam,
   GetManagePostingDetailParam,
   GetManagePostingDetailQuery,
   GetManagePostingsQuery,
+  ManagePostingApplicationAction,
   ManagePostingFilter,
   ManagePostingStatus,
 } from "./manage-posting.schema";
@@ -98,6 +102,10 @@ type ManagePostingDetail = {
   };
   applicants: ManagePostingApplicant[];
   pagination: PagePagination;
+};
+
+type ManagePostingApplicationDetail = {
+  applicant: ManagePostingApplicant;
 };
 
 type VolunteerPostingRow = {
@@ -550,6 +558,306 @@ function buildManagePostingDetail(
     applicants: pageRows,
     pagination,
   };
+}
+
+async function findVolunteerManagePostingApplication(
+  userId: string,
+  postingId: string,
+  applicationId: string,
+): Promise<ManagePostingApplicationDetail | null> {
+  const [row] = await db
+    .select({
+      application: volunteerApplication,
+      role: {
+        id: volunteerRole.id,
+        title: volunteerRole.title,
+      },
+      candidate: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        phoneNumber: user.phoneNumber,
+        telegramUsername: user.telegramUsername,
+        avatarUrl: userProfile.avatarUrl,
+        avatarKey: userProfile.avatarKey,
+      },
+    })
+    .from(volunteerApplication)
+    .innerJoin(volunteerRole, eq(volunteerRole.id, volunteerApplication.roleId))
+    .innerJoin(
+      volunteerOpportunity,
+      eq(volunteerOpportunity.id, volunteerApplication.opportunityId),
+    )
+    .innerJoin(user, eq(user.id, volunteerApplication.applicantId))
+    .leftJoin(userProfile, eq(userProfile.userId, user.id))
+    .where(
+      and(
+        eq(volunteerApplication.id, applicationId),
+        eq(volunteerApplication.opportunityId, postingId),
+        eq(volunteerOpportunity.createdBy, userId),
+      ),
+    )
+    .limit(1);
+
+  if (!row) {
+    return null;
+  }
+
+  return {
+    applicant: {
+      id: row.application.id,
+      candidate: row.candidate,
+      role: row.role,
+      status: row.application.status,
+      appliedAt: row.application.createdAt,
+      updatedAt: row.application.updatedAt,
+      contact: {
+        email: row.candidate.email,
+        phoneNumber: row.candidate.phoneNumber,
+        telegramUsername: row.candidate.telegramUsername,
+      },
+      volunteer: {
+        availability: row.application.availability,
+        relevantExperience: row.application.relevantExperience,
+        supportingDocuments: row.application.supportingDocuments as Array<{
+          name: string;
+          key: string;
+        }>,
+      },
+      project: null,
+    },
+  };
+}
+
+async function findProjectManagePostingApplication(
+  userId: string,
+  postingId: string,
+  applicationId: string,
+): Promise<ManagePostingApplicationDetail | null> {
+  const [row] = await db
+    .select({
+      application: launchpadApplication,
+      role: {
+        id: launchpadRole.id,
+        title: launchpadRole.title,
+      },
+      candidate: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        phoneNumber: user.phoneNumber,
+        telegramUsername: user.telegramUsername,
+        avatarUrl: userProfile.avatarUrl,
+        avatarKey: userProfile.avatarKey,
+      },
+    })
+    .from(launchpadApplication)
+    .innerJoin(
+      launchpadRole,
+      eq(launchpadRole.id, launchpadApplication.launchpadRoleId),
+    )
+    .innerJoin(launchpad, eq(launchpad.id, launchpadApplication.launchpadId))
+    .innerJoin(user, eq(user.id, launchpadApplication.createdBy))
+    .leftJoin(userProfile, eq(userProfile.userId, user.id))
+    .where(
+      and(
+        eq(launchpadApplication.id, applicationId),
+        eq(launchpadApplication.launchpadId, postingId),
+        eq(launchpad.createdBy, userId),
+      ),
+    )
+    .limit(1);
+
+  if (!row) {
+    return null;
+  }
+
+  return {
+    applicant: {
+      id: row.application.id,
+      candidate: row.candidate,
+      role: row.role,
+      status: row.application.status,
+      appliedAt: row.application.createdAt,
+      updatedAt: row.application.updatedAt,
+      contact: {
+        email: row.candidate.email,
+        phoneNumber: row.candidate.phoneNumber,
+        telegramUsername: row.candidate.telegramUsername,
+      },
+      volunteer: null,
+      project: {
+        motivation: row.application.motivation,
+        portfolio: row.application.portfolio,
+        documentKeys: row.application.documentKeys as string[],
+        documentNames: row.application.documentNames as string[],
+      },
+    },
+  };
+}
+
+export async function findManagePostingApplication(
+  userId: string,
+  params: GetManagePostingApplicationParam,
+): Promise<ManagePostingApplicationDetail | null> {
+  if (params.sourceType === "volunteer") {
+    return findVolunteerManagePostingApplication(
+      userId,
+      params.postingId,
+      params.applicationId,
+    );
+  }
+
+  return findProjectManagePostingApplication(
+    userId,
+    params.postingId,
+    params.applicationId,
+  );
+}
+
+async function updateVolunteerManagePostingApplication(
+  userId: string,
+  postingId: string,
+  applicationId: string,
+  status: "APPROVED" | "DECLINED",
+): Promise<"not_found" | "conflict" | ManagePostingApplicationDetail> {
+  const result = await db.transaction(async (tx) => {
+    const [current] = await tx
+      .select({
+        id: volunteerApplication.id,
+        status: volunteerApplication.status,
+      })
+      .from(volunteerApplication)
+      .innerJoin(
+        volunteerOpportunity,
+        eq(volunteerOpportunity.id, volunteerApplication.opportunityId),
+      )
+      .where(
+        and(
+          eq(volunteerApplication.id, applicationId),
+          eq(volunteerApplication.opportunityId, postingId),
+          eq(volunteerOpportunity.createdBy, userId),
+        ),
+      )
+      .limit(1);
+
+    if (!current) {
+      return "not_found" as const;
+    }
+
+    if (current.status !== "SUBMITTED" && current.status !== "UNDER_REVIEW") {
+      return "conflict" as const;
+    }
+
+    await tx
+      .update(volunteerApplication)
+      .set({ status, updatedAt: sql`now()` })
+      .where(eq(volunteerApplication.id, applicationId));
+
+    await tx.insert(volunteerApplicationLog).values({
+      volunteerApplicationId: applicationId,
+      status,
+      declinedBy: status === "DECLINED" ? "POSTER" : null,
+      createdBy: userId,
+    });
+
+    return "updated" as const;
+  });
+
+  if (result !== "updated") {
+    return result;
+  }
+
+  const detail = await findVolunteerManagePostingApplication(
+    userId,
+    postingId,
+    applicationId,
+  );
+
+  return detail ?? "not_found";
+}
+
+async function updateProjectManagePostingApplication(
+  userId: string,
+  postingId: string,
+  applicationId: string,
+  status: "APPROVED" | "DECLINED",
+): Promise<"not_found" | "conflict" | ManagePostingApplicationDetail> {
+  const result = await db.transaction(async (tx) => {
+    const [current] = await tx
+      .select({
+        id: launchpadApplication.id,
+        status: launchpadApplication.status,
+      })
+      .from(launchpadApplication)
+      .innerJoin(launchpad, eq(launchpad.id, launchpadApplication.launchpadId))
+      .where(
+        and(
+          eq(launchpadApplication.id, applicationId),
+          eq(launchpadApplication.launchpadId, postingId),
+          eq(launchpad.createdBy, userId),
+        ),
+      )
+      .limit(1);
+
+    if (!current) {
+      return "not_found" as const;
+    }
+
+    if (current.status !== "SUBMITTED" && current.status !== "UNDER_REVIEW") {
+      return "conflict" as const;
+    }
+
+    await tx
+      .update(launchpadApplication)
+      .set({ status, updatedAt: sql`now()` })
+      .where(eq(launchpadApplication.id, applicationId));
+
+    await tx.insert(launchpadApplicationLog).values({
+      launchpadApplicationId: applicationId,
+      status,
+      declinedBy: status === "DECLINED" ? "POSTER" : null,
+      createdBy: userId,
+    });
+
+    return "updated" as const;
+  });
+
+  if (result !== "updated") {
+    return result;
+  }
+
+  const detail = await findProjectManagePostingApplication(
+    userId,
+    postingId,
+    applicationId,
+  );
+
+  return detail ?? "not_found";
+}
+
+export async function updateManagePostingApplication(
+  userId: string,
+  params: GetManagePostingApplicationParam,
+  input: ManagePostingApplicationAction,
+): Promise<"not_found" | "conflict" | ManagePostingApplicationDetail> {
+  const status = input.action === "accept" ? "APPROVED" : "DECLINED";
+
+  if (params.sourceType === "volunteer") {
+    return updateVolunteerManagePostingApplication(
+      userId,
+      params.postingId,
+      params.applicationId,
+      status,
+    );
+  }
+
+  return updateProjectManagePostingApplication(
+    userId,
+    params.postingId,
+    params.applicationId,
+    status,
+  );
 }
 
 export async function findManagePostingDetail(

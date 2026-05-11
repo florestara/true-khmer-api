@@ -36,6 +36,8 @@ export const launchpadApplicationLogSchema = z
   .object({
     id: z.string(),
     status: launchpadApplicationStatusSchema,
+    declinedBy: z.enum(["POSTER", "APPLICANT"]).nullable(),
+    createdBy: z.string(),
     createdAt: z.string(),
   })
   .openapi("LaunchpadApplicationLog");

@@ -3,16 +3,22 @@ import type { AppBindings } from "../../../lib/types";
 import { requireAccessToken } from "../../../middlewares/auth.middleware";
 import { authProtectedErrorResponseSchema } from "../../auth/auth.schema";
 import {
+  getManagePostingApplicationParamSchema,
   getManagePostingDetailParamSchema,
   getManagePostingDetailQuerySchema,
   getManagePostingsQuerySchema,
+  managePostingApplicationActionResponseSchema,
+  managePostingApplicationActionSchema,
+  managePostingApplicationDetailResponseSchema,
   managePostingDetailResponseSchema,
   managePostingsErrorResponseSchema,
   managePostingsResponseSchema,
 } from "./manage-posting.schema";
 import {
+  handleGetManagePostingApplication,
   handleGetManagePostingDetail,
   handleGetManagePostings,
+  handleUpdateManagePostingApplication,
 } from "./manage-posting.service";
 
 export const managePostingRouter = new OpenAPIHono<AppBindings>();
@@ -117,9 +123,141 @@ const getManagePostingDetailRoute = createRoute({
   },
 });
 
+const getManagePostingApplicationRoute = createRoute({
+  method: "get",
+  path: "/{sourceType}/{postingId}/{applicationId}",
+  tags: ["Workspace"],
+  middleware: [requireAccessToken],
+  security: [{ BearerAuth: [] }],
+  request: {
+    params: getManagePostingApplicationParamSchema,
+  },
+  responses: {
+    200: {
+      description: "Authenticated posting owner's application detail",
+      content: {
+        "application/json": {
+          schema: managePostingApplicationDetailResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: "Unauthorized",
+      content: {
+        "application/json": {
+          schema: authProtectedErrorResponseSchema,
+        },
+      },
+    },
+    403: {
+      description: "Onboarding required",
+      content: {
+        "application/json": {
+          schema: authProtectedErrorResponseSchema,
+        },
+      },
+    },
+    404: {
+      description: "Application not found",
+      content: {
+        "application/json": {
+          schema: managePostingsErrorResponseSchema,
+        },
+      },
+    },
+    500: {
+      description: "Internal server error",
+      content: {
+        "application/json": {
+          schema: managePostingsErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+const updateManagePostingApplicationRoute = createRoute({
+  method: "post",
+  path: "/{sourceType}/{postingId}/{applicationId}",
+  tags: ["Workspace"],
+  middleware: [requireAccessToken],
+  security: [{ BearerAuth: [] }],
+  request: {
+    params: getManagePostingApplicationParamSchema,
+    body: {
+      content: {
+        "application/json": {
+          schema: managePostingApplicationActionSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Application review action completed",
+      content: {
+        "application/json": {
+          schema: managePostingApplicationActionResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: "Unauthorized",
+      content: {
+        "application/json": {
+          schema: authProtectedErrorResponseSchema,
+        },
+      },
+    },
+    403: {
+      description: "Onboarding required",
+      content: {
+        "application/json": {
+          schema: authProtectedErrorResponseSchema,
+        },
+      },
+    },
+    404: {
+      description: "Application not found",
+      content: {
+        "application/json": {
+          schema: managePostingsErrorResponseSchema,
+        },
+      },
+    },
+    409: {
+      description: "Application is no longer pending review",
+      content: {
+        "application/json": {
+          schema: managePostingsErrorResponseSchema,
+        },
+      },
+    },
+    500: {
+      description: "Internal server error",
+      content: {
+        "application/json": {
+          schema: managePostingsErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
 managePostingRouter.openapi(getManagePostingsRoute, async (c) => {
   const query = c.req.valid("query");
   return (await handleGetManagePostings(c, query)) as any;
+});
+
+managePostingRouter.openapi(getManagePostingApplicationRoute, async (c) => {
+  const params = c.req.valid("param");
+  return (await handleGetManagePostingApplication(c, params)) as any;
+});
+
+managePostingRouter.openapi(updateManagePostingApplicationRoute, async (c) => {
+  const params = c.req.valid("param");
+  const data = c.req.valid("json");
+  return (await handleUpdateManagePostingApplication(c, params, data)) as any;
 });
 
 managePostingRouter.openapi(getManagePostingDetailRoute, async (c) => {

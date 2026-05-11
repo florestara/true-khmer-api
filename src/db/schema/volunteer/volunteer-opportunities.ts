@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import {
   check,
   foreignKey,
@@ -15,6 +15,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { city } from "../onboarding";
 import { user } from "../user";
+import { applicationDeclinedByEnum } from "../application";
 import { volunteerCategory } from "./volunteer-categories";
 
 export const volunteerOpportunityStatus = pgEnum("volunteer_opportunity_status", [
@@ -247,4 +248,53 @@ export const volunteerApplication = pgTable(
     ),
     index("volunteer_application_status_idx").using("btree", table.status),
   ],
+);
+
+export const volunteerApplicationLog = pgTable(
+  "volunteer_application_log",
+  {
+    id: uuid("id").defaultRandom().primaryKey().notNull(),
+    volunteerApplicationId: uuid("volunteer_application_id")
+      .notNull()
+      .references(() => volunteerApplication.id, {
+        onDelete: "cascade",
+      }),
+    status: volunteerApplicationStatus("status")
+      .default("SUBMITTED")
+      .notNull(),
+    declinedBy: applicationDeclinedByEnum("declined_by"),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("volunteer_application_log_application_id_idx").using(
+      "btree",
+      table.volunteerApplicationId,
+    ),
+    index("volunteer_application_log_created_by_idx").using(
+      "btree",
+      table.createdBy,
+    ),
+  ],
+);
+
+export const volunteerApplicationRelations = relations(
+  volunteerApplication,
+  ({ many }) => ({
+    logs: many(volunteerApplicationLog),
+  }),
+);
+
+export const volunteerApplicationLogRelations = relations(
+  volunteerApplicationLog,
+  ({ one }) => ({
+    application: one(volunteerApplication, {
+      fields: [volunteerApplicationLog.volunteerApplicationId],
+      references: [volunteerApplication.id],
+    }),
+  }),
 );
