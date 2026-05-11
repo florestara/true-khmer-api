@@ -32,6 +32,22 @@ export const getMyApplicationsQuerySchema = z
   })
   .openapi("GetMyApplicationsQuery");
 
+export const myApplicationSourceParamSchema = z
+  .enum(["volunteer", "projects"])
+  .openapi("MyApplicationSourceParam");
+
+export const myApplicationStatusActionSchema = z
+  .enum(["confirm", "decline", "withdraw"])
+  .openapi("MyApplicationStatusAction");
+
+export const changeMyApplicationStatusParamSchema = z
+  .object({
+    sourceType: myApplicationSourceParamSchema,
+    applicationId: z.string().uuid(),
+    statusAction: myApplicationStatusActionSchema,
+  })
+  .openapi("ChangeMyApplicationStatusParam");
+
 export const myApplicationItemSchema = z
   .object({
     id: z.string(),
@@ -67,6 +83,13 @@ export const myApplicationsResponseSchema = z
   })
   .openapi("MyApplicationsResponse");
 
+export const myApplicationStatusActionResponseSchema = z
+  .object({
+    ok: z.literal(true),
+    application: myApplicationItemSchema,
+  })
+  .openapi("MyApplicationStatusActionResponse");
+
 export const myApplicationsErrorResponseSchema = z
   .object({
     ok: z.literal(false),
@@ -76,4 +99,7 @@ export const myApplicationsErrorResponseSchema = z
 
 export type GetMyApplicationsQuery = z.infer<
   typeof getMyApplicationsQuerySchema
+>;
+export type ChangeMyApplicationStatusParam = z.infer<
+  typeof changeMyApplicationStatusParamSchema
 >;
