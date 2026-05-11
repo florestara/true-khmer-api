@@ -39,6 +39,19 @@ type MyApplicationItem = {
   } | null;
 };
 
+function mapReference(
+  reference: { id: string | null; name: string | null } | null,
+) {
+  if (!reference?.id || !reference.name) {
+    return null;
+  }
+
+  return {
+    id: reference.id,
+    name: reference.name,
+  };
+}
+
 function mapVolunteerApplication(
   application: MySpaceVolunteerApplication,
 ): MyApplicationItem {
@@ -71,8 +84,8 @@ function mapProjectApplication(
     deadline: application.deadline,
     status: application.status,
     opportunity: application.opportunity,
-    category: application.category,
-    location: application.location,
+    category: mapReference(application.category),
+    location: mapReference(application.location),
   };
 }
 
