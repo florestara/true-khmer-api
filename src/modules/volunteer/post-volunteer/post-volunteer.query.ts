@@ -197,6 +197,7 @@ export type VolunteerApplicationDetail = {
   relevantExperience: string;
   supportingDocuments: VolunteerSupportingDocument[];
   status: VolunteerApplicationRow["status"];
+  archived: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -517,6 +518,7 @@ function hydrateVolunteerApplication(
     supportingDocuments:
       application.supportingDocuments as VolunteerSupportingDocument[],
     status: application.status,
+    archived: application.archived,
     createdAt: application.createdAt,
     updatedAt: application.updatedAt,
   };
