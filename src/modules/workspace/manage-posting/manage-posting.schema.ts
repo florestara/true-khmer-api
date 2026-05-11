@@ -62,6 +62,17 @@ export const getManagePostingApplicationParamSchema = z
   })
   .openapi("GetManagePostingApplicationParam");
 
+export const managePostingStatusActionSchema = z
+  .enum(["under_review", "approve", "decline"])
+  .openapi("ManagePostingStatusAction");
+
+export const changeManagePostingApplicationStatusParamSchema =
+  getManagePostingApplicationParamSchema
+    .extend({
+      statusAction: managePostingStatusActionSchema,
+    })
+    .openapi("ChangeManagePostingApplicationStatusParam");
+
 export const getManagePostingDetailQuerySchema = z
   .object({
     range: managePostingApplicantRangeSchema.default("all_time"),
@@ -95,12 +106,6 @@ export const managePostingApplicantStatusSchema = z
     "WITHDRAWN",
   ])
   .openapi("ManagePostingApplicantStatus");
-
-export const managePostingApplicationActionSchema = z
-  .object({
-    type: z.enum(["under_review", "approve", "decline"]),
-  })
-  .openapi("ManagePostingApplicationAction");
 
 export const managePostingItemSchema = z
   .object({
@@ -251,11 +256,14 @@ export type GetManagePostingDetailParam = z.infer<
 export type GetManagePostingApplicationParam = z.infer<
   typeof getManagePostingApplicationParamSchema
 >;
+export type ChangeManagePostingApplicationStatusParam = z.infer<
+  typeof changeManagePostingApplicationStatusParamSchema
+>;
 export type GetManagePostingDetailQuery = z.infer<
   typeof getManagePostingDetailQuerySchema
 >;
 export type ManagePostingFilter = z.infer<typeof managePostingFilterSchema>;
 export type ManagePostingStatus = z.infer<typeof managePostingStatusSchema>;
-export type ManagePostingApplicationAction = z.infer<
-  typeof managePostingApplicationActionSchema
+export type ManagePostingStatusAction = z.infer<
+  typeof managePostingStatusActionSchema
 >;

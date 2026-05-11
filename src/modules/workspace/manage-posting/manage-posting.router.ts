@@ -3,12 +3,12 @@ import type { AppBindings } from "../../../lib/types";
 import { requireAccessToken } from "../../../middlewares/auth.middleware";
 import { authProtectedErrorResponseSchema } from "../../auth/auth.schema";
 import {
+  changeManagePostingApplicationStatusParamSchema,
   getManagePostingApplicationParamSchema,
   getManagePostingDetailParamSchema,
   getManagePostingDetailQuerySchema,
   getManagePostingsQuerySchema,
   managePostingApplicationActionResponseSchema,
-  managePostingApplicationActionSchema,
   managePostingApplicationDetailResponseSchema,
   managePostingDetailResponseSchema,
   managePostingsErrorResponseSchema,
@@ -178,19 +178,12 @@ const getManagePostingApplicationRoute = createRoute({
 
 const updateManagePostingApplicationRoute = createRoute({
   method: "post",
-  path: "/{sourceType}/{postingId}/{applicationId}",
+  path: "/{sourceType}/{postingId}/{applicationId}/change-status/{statusAction}",
   tags: ["Workspace"],
   middleware: [requireAccessToken],
   security: [{ BearerAuth: [] }],
   request: {
-    params: getManagePostingApplicationParamSchema,
-    body: {
-      content: {
-        "application/json": {
-          schema: managePostingApplicationActionSchema,
-        },
-      },
-    },
+    params: changeManagePostingApplicationStatusParamSchema,
   },
   responses: {
     200: {
@@ -256,8 +249,7 @@ managePostingRouter.openapi(getManagePostingApplicationRoute, async (c) => {
 
 managePostingRouter.openapi(updateManagePostingApplicationRoute, async (c) => {
   const params = c.req.valid("param");
-  const data = c.req.valid("json");
-  return (await handleUpdateManagePostingApplication(c, params, data)) as any;
+  return (await handleUpdateManagePostingApplication(c, params)) as any;
 });
 
 managePostingRouter.openapi(getManagePostingDetailRoute, async (c) => {

@@ -17,12 +17,13 @@ import {
   type PagePagination,
 } from "../../../utils/page-pagination.helper";
 import type {
+  ChangeManagePostingApplicationStatusParam,
   GetManagePostingApplicationParam,
   GetManagePostingDetailParam,
   GetManagePostingDetailQuery,
   GetManagePostingsQuery,
-  ManagePostingApplicationAction,
   ManagePostingFilter,
+  ManagePostingStatusAction,
   ManagePostingStatus,
 } from "./manage-posting.schema";
 
@@ -115,13 +116,13 @@ const POSTER_LOCKED_APPLICATION_STATUSES = new Set<ManagePostingApplicantStatus>
 );
 
 function getPosterApplicationStatusChange(
-  input: ManagePostingApplicationAction,
+  statusAction: ManagePostingStatusAction,
 ): PosterApplicationStatusChange {
-  if (input.type === "under_review") {
+  if (statusAction === "under_review") {
     return "UNDER_REVIEW";
   }
 
-  return input.type === "approve" ? "APPROVED" : "DECLINED";
+  return statusAction === "approve" ? "APPROVED" : "DECLINED";
 }
 
 function buildPosterStatusLogSequence(
@@ -883,10 +884,9 @@ async function updateProjectManagePostingApplication(
 
 export async function updateManagePostingApplication(
   userId: string,
-  params: GetManagePostingApplicationParam,
-  input: ManagePostingApplicationAction,
+  params: ChangeManagePostingApplicationStatusParam,
 ): Promise<"not_found" | "conflict" | ManagePostingApplicationDetail> {
-  const status = getPosterApplicationStatusChange(input);
+  const status = getPosterApplicationStatusChange(params.statusAction);
 
   if (params.sourceType === "volunteer") {
     return updateVolunteerManagePostingApplication(

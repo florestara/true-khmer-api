@@ -7,11 +7,11 @@ import {
   updateManagePostingApplication,
 } from "./manage-posting.query";
 import type {
+  ChangeManagePostingApplicationStatusParam,
   GetManagePostingApplicationParam,
   GetManagePostingDetailParam,
   GetManagePostingDetailQuery,
   GetManagePostingsQuery,
-  ManagePostingApplicationAction,
 } from "./manage-posting.schema";
 
 export async function handleGetManagePostings(
@@ -105,8 +105,7 @@ export async function handleGetManagePostingApplication(
 
 export async function handleUpdateManagePostingApplication(
   c: Context,
-  params: GetManagePostingApplicationParam,
-  data: ManagePostingApplicationAction,
+  params: ChangeManagePostingApplicationStatusParam,
 ) {
   const authResult = getAuthUserId(c);
   if (!authResult.ok) {
@@ -117,7 +116,6 @@ export async function handleUpdateManagePostingApplication(
     const result = await updateManagePostingApplication(
       authResult.userId,
       params,
-      data,
     );
 
     if (result === "not_found") {
