@@ -128,7 +128,7 @@ export async function handleUpdateManagePostingApplication(
       return c.json(
         {
           ok: false,
-          error: "Application is no longer pending review",
+          error: "Application can no longer be changed by poster",
         },
         409,
       );

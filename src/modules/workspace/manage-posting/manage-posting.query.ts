@@ -108,6 +108,37 @@ type ManagePostingApplicationDetail = {
   applicant: ManagePostingApplicant;
 };
 
+type PosterApplicationStatusChange = "UNDER_REVIEW" | "APPROVED" | "DECLINED";
+
+const POSTER_LOCKED_APPLICATION_STATUSES = new Set<ManagePostingApplicantStatus>(
+  ["CONFIRMED", "DECLINED", "COMPLETED", "WITHDRAWN"],
+);
+
+function getPosterApplicationStatusChange(
+  input: ManagePostingApplicationAction,
+): PosterApplicationStatusChange {
+  if (input.type === "under_review") {
+    return "UNDER_REVIEW";
+  }
+
+  return input.type === "approve" ? "APPROVED" : "DECLINED";
+}
+
+function buildPosterStatusLogSequence(
+  currentStatus: ManagePostingApplicantStatus,
+  nextStatus: PosterApplicationStatusChange,
+): PosterApplicationStatusChange[] {
+  if (currentStatus === nextStatus) {
+    return [];
+  }
+
+  if (currentStatus === "SUBMITTED" && nextStatus !== "UNDER_REVIEW") {
+    return ["UNDER_REVIEW", nextStatus];
+  }
+
+  return [nextStatus];
+}
+
 type VolunteerPostingRow = {
   id: string;
   title: string;
@@ -719,7 +750,7 @@ async function updateVolunteerManagePostingApplication(
   userId: string,
   postingId: string,
   applicationId: string,
-  status: "APPROVED" | "DECLINED",
+  status: PosterApplicationStatusChange,
 ): Promise<"not_found" | "conflict" | ManagePostingApplicationDetail> {
   const result = await db.transaction(async (tx) => {
     const [current] = await tx
@@ -745,8 +776,13 @@ async function updateVolunteerManagePostingApplication(
       return "not_found" as const;
     }
 
-    if (current.status !== "SUBMITTED" && current.status !== "UNDER_REVIEW") {
+    if (POSTER_LOCKED_APPLICATION_STATUSES.has(current.status)) {
       return "conflict" as const;
+    }
+
+    const statusLogs = buildPosterStatusLogSequence(current.status, status);
+    if (statusLogs.length === 0) {
+      return "updated" as const;
     }
 
     await tx
@@ -754,12 +790,14 @@ async function updateVolunteerManagePostingApplication(
       .set({ status, updatedAt: sql`now()` })
       .where(eq(volunteerApplication.id, applicationId));
 
-    await tx.insert(volunteerApplicationLog).values({
-      volunteerApplicationId: applicationId,
-      status,
-      declinedBy: status === "DECLINED" ? "POSTER" : null,
-      createdBy: userId,
-    });
+    await tx.insert(volunteerApplicationLog).values(
+      statusLogs.map((logStatus) => ({
+        volunteerApplicationId: applicationId,
+        status: logStatus,
+        declinedBy: logStatus === "DECLINED" ? ("POSTER" as const) : null,
+        createdBy: userId,
+      })),
+    );
 
     return "updated" as const;
   });
@@ -781,7 +819,7 @@ async function updateProjectManagePostingApplication(
   userId: string,
   postingId: string,
   applicationId: string,
-  status: "APPROVED" | "DECLINED",
+  status: PosterApplicationStatusChange,
 ): Promise<"not_found" | "conflict" | ManagePostingApplicationDetail> {
   const result = await db.transaction(async (tx) => {
     const [current] = await tx
@@ -804,8 +842,13 @@ async function updateProjectManagePostingApplication(
       return "not_found" as const;
     }
 
-    if (current.status !== "SUBMITTED" && current.status !== "UNDER_REVIEW") {
+    if (POSTER_LOCKED_APPLICATION_STATUSES.has(current.status)) {
       return "conflict" as const;
+    }
+
+    const statusLogs = buildPosterStatusLogSequence(current.status, status);
+    if (statusLogs.length === 0) {
+      return "updated" as const;
     }
 
     await tx
@@ -813,12 +856,14 @@ async function updateProjectManagePostingApplication(
       .set({ status, updatedAt: sql`now()` })
       .where(eq(launchpadApplication.id, applicationId));
 
-    await tx.insert(launchpadApplicationLog).values({
-      launchpadApplicationId: applicationId,
-      status,
-      declinedBy: status === "DECLINED" ? "POSTER" : null,
-      createdBy: userId,
-    });
+    await tx.insert(launchpadApplicationLog).values(
+      statusLogs.map((logStatus) => ({
+        launchpadApplicationId: applicationId,
+        status: logStatus,
+        declinedBy: logStatus === "DECLINED" ? ("POSTER" as const) : null,
+        createdBy: userId,
+      })),
+    );
 
     return "updated" as const;
   });
@@ -841,7 +886,7 @@ export async function updateManagePostingApplication(
   params: GetManagePostingApplicationParam,
   input: ManagePostingApplicationAction,
 ): Promise<"not_found" | "conflict" | ManagePostingApplicationDetail> {
-  const status = input.action === "accept" ? "APPROVED" : "DECLINED";
+  const status = getPosterApplicationStatusChange(input);
 
   if (params.sourceType === "volunteer") {
     return updateVolunteerManagePostingApplication(

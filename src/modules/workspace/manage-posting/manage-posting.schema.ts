@@ -98,7 +98,7 @@ export const managePostingApplicantStatusSchema = z
 
 export const managePostingApplicationActionSchema = z
   .object({
-    action: z.enum(["accept", "decline"]),
+    type: z.enum(["under_review", "approve", "decline"]),
   })
   .openapi("ManagePostingApplicationAction");
 
