@@ -786,10 +786,20 @@ async function updateVolunteerManagePostingApplication(
       return "updated" as const;
     }
 
-    await tx
+    const [updated] = await tx
       .update(volunteerApplication)
       .set({ status, updatedAt: sql`now()` })
-      .where(eq(volunteerApplication.id, applicationId));
+      .where(
+        and(
+          eq(volunteerApplication.id, applicationId),
+          eq(volunteerApplication.status, current.status),
+        ),
+      )
+      .returning({ id: volunteerApplication.id });
+
+    if (!updated) {
+      return "conflict" as const;
+    }
 
     await tx.insert(volunteerApplicationLog).values(
       statusLogs.map((logStatus) => ({
@@ -852,10 +862,20 @@ async function updateProjectManagePostingApplication(
       return "updated" as const;
     }
 
-    await tx
+    const [updated] = await tx
       .update(launchpadApplication)
       .set({ status, updatedAt: sql`now()` })
-      .where(eq(launchpadApplication.id, applicationId));
+      .where(
+        and(
+          eq(launchpadApplication.id, applicationId),
+          eq(launchpadApplication.status, current.status),
+        ),
+      )
+      .returning({ id: launchpadApplication.id });
+
+    if (!updated) {
+      return "conflict" as const;
+    }
 
     await tx.insert(launchpadApplicationLog).values(
       statusLogs.map((logStatus) => ({
