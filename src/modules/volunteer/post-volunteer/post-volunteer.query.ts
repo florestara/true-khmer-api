@@ -144,6 +144,7 @@ export type VolunteerOpportunityListItem = {
   applicationDeadline: string;
   applicationCount: number;
   capacity: number;
+  totalView: number;
   coverImageKey: string;
   createdAt: string;
   viewerSave: boolean;
@@ -162,6 +163,7 @@ export type VolunteerOpportunityDetail = {
   applicationDeadline: string;
   applicationCount: number;
   capacity: number;
+  totalView: number;
   coverImageKey: string;
   benefits: string[];
   status: VolunteerOpportunityRow["status"];
@@ -513,6 +515,7 @@ function hydrateVolunteerOpportunityListItem(
     applicationDeadline: row.opportunity.applicationDeadline,
     applicationCount: toInteger(row.applicationCount),
     capacity: toInteger(row.capacity),
+    totalView: toInteger(row.opportunity.totalView),
     coverImageKey: row.opportunity.coverImageKey,
     createdAt: row.opportunity.createdAt,
     viewerSave: row.viewerSave,
@@ -600,6 +603,7 @@ function hydrateVolunteerOpportunityDetail(
     applicationDeadline: opportunity.applicationDeadline,
     applicationCount,
     capacity,
+    totalView: toInteger(opportunity.totalView),
     coverImageKey: opportunity.coverImageKey,
     benefits: opportunity.benefits as string[],
     status: opportunity.status,
@@ -1190,6 +1194,17 @@ export async function getVolunteerOpportunities(
     opportunities,
     pagination,
   };
+}
+
+export async function incrementVolunteerOpportunityViewCount(
+  opportunityId: string,
+): Promise<void> {
+  await db
+    .update(volunteerOpportunity)
+    .set({
+      totalView: sql`${volunteerOpportunity.totalView} + 1`,
+    })
+    .where(eq(volunteerOpportunity.id, opportunityId));
 }
 
 export async function getSavedVolunteerOpportunities(
