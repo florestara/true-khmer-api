@@ -1198,13 +1198,20 @@ export async function getVolunteerOpportunities(
 
 export async function incrementVolunteerOpportunityViewCount(
   opportunityId: string,
-): Promise<void> {
-  await db
+): Promise<number> {
+  const [updatedOpportunity] = await db
     .update(volunteerOpportunity)
     .set({
       totalView: sql`${volunteerOpportunity.totalView} + 1`,
     })
-    .where(eq(volunteerOpportunity.id, opportunityId));
+    .where(eq(volunteerOpportunity.id, opportunityId))
+    .returning({ totalView: volunteerOpportunity.totalView });
+
+  if (!updatedOpportunity) {
+    throw new Error("Volunteer opportunity view count update returned no rows");
+  }
+
+  return toInteger(updatedOpportunity.totalView);
 }
 
 export async function getSavedVolunteerOpportunities(

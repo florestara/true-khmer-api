@@ -289,8 +289,9 @@ export async function handleGetVolunteerOpportunity(
     }
 
     try {
-      await incrementVolunteerOpportunityViewCount(params.opportunityId);
-      opportunity.totalView += 1;
+      opportunity.totalView = await incrementVolunteerOpportunityViewCount(
+        params.opportunityId,
+      );
     } catch (error) {
       console.warn("Failed to increment volunteer opportunity view count", {
         error,
