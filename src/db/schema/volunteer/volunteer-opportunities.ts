@@ -1,5 +1,6 @@
 import { relations, sql } from "drizzle-orm";
 import {
+  boolean,
   check,
   foreignKey,
   index,
@@ -211,6 +212,7 @@ export const volunteerApplication = pgTable(
     status: volunteerApplicationStatus("status")
       .default("SUBMITTED")
       .notNull(),
+    archived: boolean("archived").default(false).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
       .defaultNow()
       .notNull(),

@@ -39,6 +39,10 @@ type MyApplicationItem = {
   } | null;
 };
 
+type MyApplicationRecord = MyApplicationItem & {
+  archived: boolean;
+};
+
 function mapReference(
   reference: { id: string | null; name: string | null } | null,
 ) {
@@ -54,7 +58,7 @@ function mapReference(
 
 function mapVolunteerApplication(
   application: MySpaceVolunteerApplication,
-): MyApplicationItem {
+): MyApplicationRecord {
   return {
     id: application.id,
     sourceType: "VOLUNTEER",
@@ -63,6 +67,7 @@ function mapVolunteerApplication(
     appliedAt: application.createdAt,
     deadline: application.opportunity.applicationDeadline,
     status: application.status,
+    archived: application.archived,
     opportunity: {
       id: application.opportunity.id,
       title: application.opportunity.title,
@@ -74,7 +79,7 @@ function mapVolunteerApplication(
 
 function mapProjectApplication(
   application: MySpaceProjectApplication,
-): MyApplicationItem {
+): MyApplicationRecord {
   return {
     id: application.id,
     sourceType: "PROJECT",
@@ -83,29 +88,82 @@ function mapProjectApplication(
     appliedAt: application.appliedAt,
     deadline: application.deadline,
     status: application.status,
+    archived: application.archived,
     opportunity: application.opportunity,
     category: mapReference(application.category),
     location: mapReference(application.location),
   };
 }
 
-function buildSummary(applications: MyApplicationItem[]) {
+function buildSummary(applications: MyApplicationRecord[]) {
   return applications.reduce(
     (summary, application) => {
+      if (application.archived) {
+        summary.ARCHIVED += 1;
+        return summary;
+      }
+
+      if (
+        application.status === "SUBMITTED" ||
+        application.status === "UNDER_REVIEW"
+      ) {
+        summary.PENDING += 1;
+        return summary;
+      }
+
+      if (application.status === "CONFIRMED") {
+        summary.ACTIVE += 1;
+        return summary;
+      }
+
       summary[application.status] += 1;
 
       return summary;
     },
     {
-      SUBMITTED: 0,
-      UNDER_REVIEW: 0,
+      PENDING: 0,
       APPROVED: 0,
       DECLINED: 0,
-      CONFIRMED: 0,
+      ACTIVE: 0,
       COMPLETED: 0,
       WITHDRAWN: 0,
+      ARCHIVED: 0,
     },
   );
+}
+
+function matchesFilter(
+  application: MyApplicationRecord,
+  filter: GetMyApplicationsQuery["filter"],
+) {
+  if (filter === "all") {
+    return true;
+  }
+
+  if (filter === "archived") {
+    return application.archived;
+  }
+
+  if (application.archived) {
+    return false;
+  }
+
+  if (filter === "pending") {
+    return (
+      application.status === "SUBMITTED" ||
+      application.status === "UNDER_REVIEW"
+    );
+  }
+
+  if (filter === "active") {
+    return application.status === "CONFIRMED";
+  }
+
+  if (filter === "approved") {
+    return application.status === "APPROVED";
+  }
+
+  return application.status === "COMPLETED";
 }
 
 export async function handleGetMyApplications(
@@ -133,11 +191,17 @@ export async function handleGetMyApplications(
       (left, right) =>
         Date.parse(right.appliedAt) - Date.parse(left.appliedAt),
     );
+    const filteredApplications = applications.filter((application) =>
+      matchesFilter(application, query.filter),
+    );
+    const responseApplications = filteredApplications.map(
+      ({ archived, ...application }) => application,
+    );
 
     return c.json(
       {
         ok: true,
-        applications,
+        applications: responseApplications,
         summary: buildSummary(applications),
       },
       200,

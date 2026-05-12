@@ -1,5 +1,6 @@
 import { relations, sql } from "drizzle-orm";
 import {
+  boolean,
   index,
   jsonb,
   pgEnum,
@@ -45,6 +46,7 @@ const launchpadApplication = pgTable(
     status: launchpadApplicationStatusEnum("status")
       .default("SUBMITTED")
       .notNull(),
+    archived: boolean("archived").default(false).notNull(),
     documentKeys: jsonb("document_keys")
       .$type<string[]>()
       .notNull()

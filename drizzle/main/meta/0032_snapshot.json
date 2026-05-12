@@ -1,6 +1,6 @@
 {
-  "id": "0c2fdd4d-3aa7-4192-9f6b-cadddc698d3d",
-  "prevId": "4d08406d-175b-4eb6-bad6-0c0edd08b185",
+  "id": "03443904-8bd4-4971-9cc0-9b028e0177db",
+  "prevId": "0c2fdd4d-3aa7-4192-9f6b-cadddc698d3d",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -3732,6 +3732,13 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
+        },
+        "total_view": {
+          "name": "total_view",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
         },
         "status": {
           "name": "status",

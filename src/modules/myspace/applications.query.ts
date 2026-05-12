@@ -29,6 +29,7 @@ export async function findProjectApplicationsByApplicantId(applicantId: string) 
       appliedAt: launchpadApplication.createdAt,
       deadline: launchpad.deadline,
       status: launchpadApplication.status,
+      archived: launchpadApplication.archived,
       opportunity: {
         id: launchpad.id,
         title: launchpad.name,
