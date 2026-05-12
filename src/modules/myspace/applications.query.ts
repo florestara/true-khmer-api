@@ -102,6 +102,19 @@ function buildApplicationTimeline(
   );
 }
 
+function normalizeNullableReference(
+  reference: { id: string | null; name: string | null } | null,
+) {
+  if (!reference?.id || !reference.name) {
+    return null;
+  }
+
+  return {
+    id: reference.id,
+    name: reference.name,
+  };
+}
+
 export async function findMyVolunteerApplicationDetail(
   applicantId: string,
   applicationId: string,
@@ -180,7 +193,7 @@ export async function findMyVolunteerApplicationDetail(
       })
       .from(volunteerApplicationLog)
       .where(eq(volunteerApplicationLog.volunteerApplicationId, applicationId))
-      .orderBy(desc(volunteerApplicationLog.createdAt)),
+      .orderBy(asc(volunteerApplicationLog.createdAt)),
   ]);
 
   return {
@@ -292,7 +305,7 @@ export async function findMyProjectApplicationDetail(
     })
     .from(launchpadApplicationLog)
     .where(eq(launchpadApplicationLog.launchpadApplicationId, applicationId))
-    .orderBy(desc(launchpadApplicationLog.createdAt));
+    .orderBy(asc(launchpadApplicationLog.createdAt));
 
   return {
     id: row.application.id,
@@ -307,8 +320,8 @@ export async function findMyProjectApplicationDetail(
       id: row.opportunity.id,
       title: row.opportunity.name,
       overview: row.opportunity.description,
-      category: row.category,
-      location: row.location,
+      category: normalizeNullableReference(row.category),
+      location: normalizeNullableReference(row.location),
       durationLabel: null,
       commitmentLabel: null,
       impactRewardPoints: null,
