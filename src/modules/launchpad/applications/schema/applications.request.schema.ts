@@ -53,7 +53,7 @@ export const createLaunchpadApplicationSchema = z
     motivation: z
       .string()
       .trim()
-      .min(10, "motivation must be at least 10 characters")
+      .min(5, "motivation must be at least 5 characters")
       .max(2000, "motivation must be at most 2000 characters"),
     portfolio: z
       .string()
