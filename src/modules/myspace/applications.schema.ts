@@ -29,6 +29,9 @@ export const myApplicationStatusGroupSchema = z
 export const getMyApplicationsQuerySchema = z
   .object({
     type: z.enum(["all", "volunteer", "projects"]).default("all"),
+    filter: z
+      .enum(["all", "pending", "approved", "active", "completed", "archived"])
+      .default("all"),
   })
   .openapi("GetMyApplicationsQuery");
 
@@ -49,13 +52,13 @@ export const myApplicationItemSchema = z
 
 export const myApplicationsSummarySchema = z
   .object({
-    SUBMITTED: z.number().int().nonnegative(),
-    UNDER_REVIEW: z.number().int().nonnegative(),
+    PENDING: z.number().int().nonnegative(),
     APPROVED: z.number().int().nonnegative(),
     DECLINED: z.number().int().nonnegative(),
-    CONFIRMED: z.number().int().nonnegative(),
+    ACTIVE: z.number().int().nonnegative(),
     COMPLETED: z.number().int().nonnegative(),
     WITHDRAWN: z.number().int().nonnegative(),
+    ARCHIVED: z.number().int().nonnegative(),
   })
   .openapi("MyApplicationsSummary");
 
