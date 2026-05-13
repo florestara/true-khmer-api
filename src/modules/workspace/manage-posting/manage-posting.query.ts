@@ -146,6 +146,7 @@ type VolunteerPostingRow = {
   description: string | null;
   imageKey: string | null;
   rawStatus: "DRAFT" | "PUBLISHED" | "ARCHIVED" | "CLOSED";
+  totalView: number;
   applicantCount: number;
   capacity: number;
   deadline: string;
@@ -299,6 +300,7 @@ async function findVolunteerManagePostings(
       description: volunteerOpportunity.overview,
       imageKey: volunteerOpportunity.coverImageKey,
       rawStatus: volunteerOpportunity.status,
+      totalView: volunteerOpportunity.totalView,
       applicantCount: sql<number>`coalesce(${confirmedApplications.applicantCount}, 0)`,
       capacity: sql<number>`coalesce(${roleCapacities.capacity}, 0)`,
       deadline: volunteerOpportunity.applicationDeadline,
@@ -337,7 +339,7 @@ async function findVolunteerManagePostings(
       }),
       applicantCount,
       capacity,
-      views: 0,
+      views: toInteger(row.totalView),
       deadline: row.deadline,
       createdAt: row.createdAt,
     };
@@ -582,7 +584,7 @@ function buildManagePostingDetail(
     posting,
     stats: {
       pending: statuses.SUBMITTED,
-      totalApplicants: statuses.CONFIRMED,
+      totalApplicants: applicants.length - statuses.WITHDRAWN,
       recruited: statuses.CONFIRMED,
       capacity: posting.capacity,
       statuses,

@@ -17,6 +17,13 @@ export const volunteerCategoryResponseSchema = z
   })
   .openapi("VolunteerCategoryResponse");
 
+export const volunteerCategoryWithOpportunityCountResponseSchema =
+  volunteerCategoryResponseSchema
+    .extend({
+      opportunityCount: z.number().int().nonnegative(),
+    })
+    .openapi("VolunteerCategoryWithOpportunityCountResponse");
+
 export const volunteerOperationErrorResponseSchema = z
   .object({
     ok: z.literal(false),
@@ -43,7 +50,7 @@ export const volunteerValidationErrorResponseSchema =
 export const getVolunteerCategoriesResponseSchema = z
   .object({
     ok: z.literal(true),
-    categories: z.array(volunteerCategoryResponseSchema),
+    categories: z.array(volunteerCategoryWithOpportunityCountResponseSchema),
   })
   .openapi("GetVolunteerCategoriesResponse");
 

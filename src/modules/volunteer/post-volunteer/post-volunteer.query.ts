@@ -4,6 +4,7 @@ import {
   desc,
   eq,
   exists,
+  getTableColumns,
   ilike,
   inArray,
   isNotNull,
@@ -59,6 +60,9 @@ const ACTIVE_VOLUNTEER_APPLICATION_STATUSES = [
 
 type VolunteerCategoryRow = typeof volunteerCategory.$inferSelect;
 type VolunteerCategoryInsert = typeof volunteerCategory.$inferInsert;
+type VolunteerCategoryWithOpportunityCountRow = VolunteerCategoryRow & {
+  opportunityCount: number;
+};
 type VolunteerLocationRow = {
   id: string;
   name: string;
@@ -140,6 +144,7 @@ export type VolunteerOpportunityListItem = {
   applicationDeadline: string;
   applicationCount: number;
   capacity: number;
+  totalView: number;
   coverImageKey: string;
   createdAt: string;
   viewerSave: boolean;
@@ -158,6 +163,7 @@ export type VolunteerOpportunityDetail = {
   applicationDeadline: string;
   applicationCount: number;
   capacity: number;
+  totalView: number;
   coverImageKey: string;
   benefits: string[];
   status: VolunteerOpportunityRow["status"];
@@ -263,11 +269,36 @@ function toInteger(value: unknown, fallback = 0): number {
 }
 
 export async function getVolunteerCategories(): Promise<
-  VolunteerCategoryRow[]
+  VolunteerCategoryWithOpportunityCountRow[]
 > {
+  const opportunityCounts = db
+    .select({
+      categoryId: volunteerOpportunity.categoryId,
+      opportunityCount: sql<number>`count(*)::int`.as("opportunity_count"),
+    })
+    .from(volunteerOpportunity)
+    .where(
+      and(
+        eq(volunteerOpportunity.status, "PUBLISHED"),
+        isNotNull(volunteerOpportunity.publishedAt),
+      ),
+    )
+    .groupBy(volunteerOpportunity.categoryId)
+    .as("volunteer_category_opportunity_counts");
+
   return db
-    .select()
+    .select({
+      ...getTableColumns(volunteerCategory),
+      opportunityCount:
+        sql<number>`coalesce(${opportunityCounts.opportunityCount}, 0)::int`.as(
+          "opportunityCount",
+        ),
+    })
     .from(volunteerCategory)
+    .leftJoin(
+      opportunityCounts,
+      eq(opportunityCounts.categoryId, volunteerCategory.id),
+    )
     .where(eq(volunteerCategory.status, "ACTIVE"))
     .orderBy(volunteerCategory.displayOrder, volunteerCategory.name);
 }
@@ -485,6 +516,7 @@ function hydrateVolunteerOpportunityListItem(
     applicationDeadline: row.opportunity.applicationDeadline,
     applicationCount: toInteger(row.applicationCount),
     capacity: toInteger(row.capacity),
+    totalView: toInteger(row.opportunity.totalView),
     coverImageKey: row.opportunity.coverImageKey,
     createdAt: row.opportunity.createdAt,
     viewerSave: row.viewerSave,
@@ -573,6 +605,7 @@ function hydrateVolunteerOpportunityDetail(
     applicationDeadline: opportunity.applicationDeadline,
     applicationCount,
     capacity,
+    totalView: toInteger(opportunity.totalView),
     coverImageKey: opportunity.coverImageKey,
     benefits: opportunity.benefits as string[],
     status: opportunity.status,
@@ -1163,6 +1196,24 @@ export async function getVolunteerOpportunities(
     opportunities,
     pagination,
   };
+}
+
+export async function incrementVolunteerOpportunityViewCount(
+  opportunityId: string,
+): Promise<number> {
+  const [updatedOpportunity] = await db
+    .update(volunteerOpportunity)
+    .set({
+      totalView: sql`${volunteerOpportunity.totalView} + 1`,
+    })
+    .where(eq(volunteerOpportunity.id, opportunityId))
+    .returning({ totalView: volunteerOpportunity.totalView });
+
+  if (!updatedOpportunity) {
+    throw new Error("Volunteer opportunity view count update returned no rows");
+  }
+
+  return toInteger(updatedOpportunity.totalView);
 }
 
 export async function getSavedVolunteerOpportunities(

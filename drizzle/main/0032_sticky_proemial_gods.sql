@@ -1,0 +1,1 @@
+ALTER TABLE "volunteer_opportunity" ADD COLUMN "total_view" integer DEFAULT 0 NOT NULL;
