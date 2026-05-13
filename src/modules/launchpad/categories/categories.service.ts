@@ -16,7 +16,7 @@ function formatCategory(category: LaunchpadCategoryRow) {
     iconKey: category?.iconKey,
     displayOrder: category?.displayOrder,
     status: category?.status,
-    roleCount: category?.totalRoles,
+    totalLaunchpad: category?.totalLaunchpad,
     createdBy: category?.createdBy,
     updatedBy: category?.updatedBy,
     createdAt: category?.createdAt,

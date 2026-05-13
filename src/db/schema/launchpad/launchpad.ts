@@ -5,7 +5,6 @@ import {
   pgTable,
   text,
   timestamp,
-  uniqueIndex,
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
@@ -59,10 +58,6 @@ export const launchpad = pgTable(
   (table) => [
     index("launchpad_category_id_idx").using("btree", table.categoryId),
     index("launchpad_city_id_idx").using("btree", table.cityId),
-    uniqueIndex("launchpad_name_unique_idx").using(
-      "btree",
-      sql`lower(${table.name})`,
-    ),
   ],
 );
 
