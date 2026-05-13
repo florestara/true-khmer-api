@@ -582,7 +582,7 @@ function buildManagePostingDetail(
     posting,
     stats: {
       pending: statuses.SUBMITTED,
-      totalApplicants: statuses.CONFIRMED,
+      totalApplicants: applicants.length - statuses.WITHDRAWN,
       recruited: statuses.CONFIRMED,
       capacity: posting.capacity,
       statuses,
