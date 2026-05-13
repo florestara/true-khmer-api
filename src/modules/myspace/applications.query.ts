@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../../db";
 import {
   city,
@@ -515,26 +515,31 @@ export async function updateMyApplicationStatus(
   );
 }
 
-function canArchiveApplicationStatus(
-  status: string,
-): status is TerminalApplicationStatus {
-  return ARCHIVABLE_APPLICATION_STATUSES.includes(
-    status as TerminalApplicationStatus,
-  );
-}
-
 async function updateVolunteerApplicationArchived(
   applicantId: string,
   applicationId: string,
   archived: boolean,
 ) {
   return db.transaction(async (tx) => {
+    const [updated] = await tx
+      .update(volunteerApplication)
+      .set({ archived, updatedAt: sql`now()` })
+      .where(
+        and(
+          eq(volunteerApplication.id, applicationId),
+          eq(volunteerApplication.applicantId, applicantId),
+          inArray(volunteerApplication.status, ARCHIVABLE_APPLICATION_STATUSES),
+          eq(volunteerApplication.archived, !archived),
+        ),
+      )
+      .returning({ id: volunteerApplication.id });
+
+    if (updated) {
+      return "updated" as const;
+    }
+
     const [current] = await tx
-      .select({
-        id: volunteerApplication.id,
-        status: volunteerApplication.status,
-        archived: volunteerApplication.archived,
-      })
+      .select({ id: volunteerApplication.id })
       .from(volunteerApplication)
       .where(
         and(
@@ -544,35 +549,7 @@ async function updateVolunteerApplicationArchived(
       )
       .limit(1);
 
-    if (!current) {
-      return "not_found" as const;
-    }
-
-    if (!canArchiveApplicationStatus(current.status)) {
-      return "conflict" as const;
-    }
-
-    if (current.archived === archived) {
-      return "updated" as const;
-    }
-
-    const [updated] = await tx
-      .update(volunteerApplication)
-      .set({ archived, updatedAt: sql`now()` })
-      .where(
-        and(
-          eq(volunteerApplication.id, applicationId),
-          eq(volunteerApplication.applicantId, applicantId),
-          eq(volunteerApplication.status, current.status),
-        ),
-      )
-      .returning({ id: volunteerApplication.id });
-
-    if (!updated) {
-      return "conflict" as const;
-    }
-
-    return "updated" as const;
+    return current ? ("conflict" as const) : ("not_found" as const);
   });
 }
 
@@ -582,12 +559,25 @@ async function updateProjectApplicationArchived(
   archived: boolean,
 ) {
   return db.transaction(async (tx) => {
+    const [updated] = await tx
+      .update(launchpadApplication)
+      .set({ archived, updatedAt: sql`now()` })
+      .where(
+        and(
+          eq(launchpadApplication.id, applicationId),
+          eq(launchpadApplication.createdBy, applicantId),
+          inArray(launchpadApplication.status, ARCHIVABLE_APPLICATION_STATUSES),
+          eq(launchpadApplication.archived, !archived),
+        ),
+      )
+      .returning({ id: launchpadApplication.id });
+
+    if (updated) {
+      return "updated" as const;
+    }
+
     const [current] = await tx
-      .select({
-        id: launchpadApplication.id,
-        status: launchpadApplication.status,
-        archived: launchpadApplication.archived,
-      })
+      .select({ id: launchpadApplication.id })
       .from(launchpadApplication)
       .where(
         and(
@@ -597,35 +587,7 @@ async function updateProjectApplicationArchived(
       )
       .limit(1);
 
-    if (!current) {
-      return "not_found" as const;
-    }
-
-    if (!canArchiveApplicationStatus(current.status)) {
-      return "conflict" as const;
-    }
-
-    if (current.archived === archived) {
-      return "updated" as const;
-    }
-
-    const [updated] = await tx
-      .update(launchpadApplication)
-      .set({ archived, updatedAt: sql`now()` })
-      .where(
-        and(
-          eq(launchpadApplication.id, applicationId),
-          eq(launchpadApplication.createdBy, applicantId),
-          eq(launchpadApplication.status, current.status),
-        ),
-      )
-      .returning({ id: launchpadApplication.id });
-
-    if (!updated) {
-      return "conflict" as const;
-    }
-
-    return "updated" as const;
+    return current ? ("conflict" as const) : ("not_found" as const);
   });
 }
 
