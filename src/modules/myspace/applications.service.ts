@@ -3,11 +3,13 @@ import { getAuthUserId } from "../auth/utils/get-auth";
 import {
   findMyProjectApplications,
   findMyVolunteerApplications,
+  updateMyApplicationArchived,
   updateMyApplicationStatus,
   type MySpaceProjectApplication,
   type MySpaceVolunteerApplication,
 } from "./applications.query";
 import type {
+  ChangeMyApplicationArchiveParam,
   ChangeMyApplicationStatusParam,
   GetMyApplicationsQuery,
 } from "./applications.schema";
@@ -140,16 +142,16 @@ function matchesFilter(
   application: MyApplicationRecord,
   filter: GetMyApplicationsQuery["filter"],
 ) {
-  if (filter === "all") {
-    return true;
-  }
-
   if (filter === "archived") {
     return application.archived;
   }
 
   if (application.archived) {
     return false;
+  }
+
+  if (filter === "all") {
+    return true;
   }
 
   if (filter === "pending") {
@@ -267,6 +269,62 @@ export async function handleChangeMyApplicationStatus(
     );
   } catch (error) {
     console.error("Failed to change my application status", error);
+    return c.json({ ok: false, error: "Internal server error" }, 500);
+  }
+}
+
+export async function handleChangeMyApplicationArchived(
+  c: Context,
+  params: ChangeMyApplicationArchiveParam,
+) {
+  const authResult = getAuthUserId(c);
+  if (!authResult.ok) {
+    return authResult.response;
+  }
+
+  try {
+    const result = await updateMyApplicationArchived(authResult.userId, params);
+
+    if (result === "not_found") {
+      return c.json({ ok: false, error: "Application not found" }, 404);
+    }
+
+    if (result === "conflict") {
+      return c.json(
+        {
+          ok: false,
+          error:
+            "Only declined, withdrawn, and completed applications can be archived",
+        },
+        409,
+      );
+    }
+
+    const applications =
+      params.sourceType === "volunteer"
+        ? (await findMyVolunteerApplications(authResult.userId)).map(
+            mapVolunteerApplication,
+          )
+        : (await findMyProjectApplications(authResult.userId)).map(
+            mapProjectApplication,
+          );
+    const application = applications.find(
+      (item) => item.id === params.applicationId,
+    );
+
+    if (!application) {
+      return c.json({ ok: false, error: "Application not found" }, 404);
+    }
+
+    return c.json(
+      {
+        ok: true,
+        application,
+      },
+      200,
+    );
+  } catch (error) {
+    console.error("Failed to change my application archived state", error);
     return c.json({ ok: false, error: "Internal server error" }, 500);
   }
 }

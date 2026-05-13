@@ -10,7 +10,10 @@ import {
   volunteerApplication,
   volunteerApplicationLog,
 } from "../../db/schema";
-import type { ChangeMyApplicationStatusParam } from "./applications.schema";
+import type {
+  ChangeMyApplicationArchiveParam,
+  ChangeMyApplicationStatusParam,
+} from "./applications.schema";
 import { findVolunteerApplicationsByApplicantId } from "../volunteer/post-volunteer/post-volunteer.query";
 
 export type MySpaceVolunteerApplication =
@@ -65,6 +68,13 @@ export async function findMyProjectApplications(userId: string) {
 
 type MyApplicationStatusAction = ChangeMyApplicationStatusParam["statusAction"];
 type ApplicantStatusChange = "CONFIRMED" | "DECLINED" | "WITHDRAWN";
+type TerminalApplicationStatus = "DECLINED" | "COMPLETED" | "WITHDRAWN";
+
+const ARCHIVABLE_APPLICATION_STATUSES = [
+  "DECLINED",
+  "COMPLETED",
+  "WITHDRAWN",
+] as const satisfies readonly TerminalApplicationStatus[];
 
 function getApplicantStatusChange(
   statusAction: MyApplicationStatusAction,
@@ -121,6 +131,7 @@ async function updateVolunteerApplicationStatus(
       .where(
         and(
           eq(volunteerApplication.id, applicationId),
+          eq(volunteerApplication.applicantId, applicantId),
           eq(volunteerApplication.status, current.status),
         ),
       )
@@ -175,6 +186,7 @@ async function updateProjectApplicationStatus(
       .where(
         and(
           eq(launchpadApplication.id, applicationId),
+          eq(launchpadApplication.createdBy, applicantId),
           eq(launchpadApplication.status, current.status),
         ),
       )
@@ -213,5 +225,140 @@ export async function updateMyApplicationStatus(
     applicantId,
     params.applicationId,
     nextStatus,
+  );
+}
+
+function canArchiveApplicationStatus(
+  status: string,
+): status is TerminalApplicationStatus {
+  return ARCHIVABLE_APPLICATION_STATUSES.includes(
+    status as TerminalApplicationStatus,
+  );
+}
+
+async function updateVolunteerApplicationArchived(
+  applicantId: string,
+  applicationId: string,
+  archived: boolean,
+) {
+  return db.transaction(async (tx) => {
+    const [current] = await tx
+      .select({
+        id: volunteerApplication.id,
+        status: volunteerApplication.status,
+        archived: volunteerApplication.archived,
+      })
+      .from(volunteerApplication)
+      .where(
+        and(
+          eq(volunteerApplication.id, applicationId),
+          eq(volunteerApplication.applicantId, applicantId),
+        ),
+      )
+      .limit(1);
+
+    if (!current) {
+      return "not_found" as const;
+    }
+
+    if (!canArchiveApplicationStatus(current.status)) {
+      return "conflict" as const;
+    }
+
+    if (current.archived === archived) {
+      return "updated" as const;
+    }
+
+    const [updated] = await tx
+      .update(volunteerApplication)
+      .set({ archived, updatedAt: sql`now()` })
+      .where(
+        and(
+          eq(volunteerApplication.id, applicationId),
+          eq(volunteerApplication.applicantId, applicantId),
+          eq(volunteerApplication.status, current.status),
+        ),
+      )
+      .returning({ id: volunteerApplication.id });
+
+    if (!updated) {
+      return "conflict" as const;
+    }
+
+    return "updated" as const;
+  });
+}
+
+async function updateProjectApplicationArchived(
+  applicantId: string,
+  applicationId: string,
+  archived: boolean,
+) {
+  return db.transaction(async (tx) => {
+    const [current] = await tx
+      .select({
+        id: launchpadApplication.id,
+        status: launchpadApplication.status,
+        archived: launchpadApplication.archived,
+      })
+      .from(launchpadApplication)
+      .where(
+        and(
+          eq(launchpadApplication.id, applicationId),
+          eq(launchpadApplication.createdBy, applicantId),
+        ),
+      )
+      .limit(1);
+
+    if (!current) {
+      return "not_found" as const;
+    }
+
+    if (!canArchiveApplicationStatus(current.status)) {
+      return "conflict" as const;
+    }
+
+    if (current.archived === archived) {
+      return "updated" as const;
+    }
+
+    const [updated] = await tx
+      .update(launchpadApplication)
+      .set({ archived, updatedAt: sql`now()` })
+      .where(
+        and(
+          eq(launchpadApplication.id, applicationId),
+          eq(launchpadApplication.createdBy, applicantId),
+          eq(launchpadApplication.status, current.status),
+        ),
+      )
+      .returning({ id: launchpadApplication.id });
+
+    if (!updated) {
+      return "conflict" as const;
+    }
+
+    return "updated" as const;
+  });
+}
+
+export async function updateMyApplicationArchived(
+  applicantId: string,
+  params: ChangeMyApplicationArchiveParam,
+) {
+  const archived = params.archiveAction === "archive";
+
+  if (params.sourceType === "volunteer") {
+    return updateVolunteerApplicationArchived(
+      applicantId,
+      params.applicationId,
+      archived,
+    );
+  }
+
+  return updateProjectApplicationArchived(
+    applicantId,
+    params.applicationId,
+    archived,
   );
 }
