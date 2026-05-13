@@ -67,6 +67,7 @@ export const volunteerOpportunity = pgTable(
     contactEmail: varchar("contact_email", { length: 320 }).notNull(),
     contactPhone: varchar("contact_phone", { length: 40 }),
     contactWebsiteUrl: text("contact_website_url"),
+    totalView: integer("total_view").notNull().default(0),
     status: volunteerOpportunityStatus("status")
       .default("PUBLISHED")
       .notNull(),

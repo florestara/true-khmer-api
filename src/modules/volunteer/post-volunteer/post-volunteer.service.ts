@@ -18,6 +18,7 @@ import {
   getVolunteerOpportunityById,
   getVolunteerLocations,
   getVolunteerOpportunities,
+  incrementVolunteerOpportunityViewCount,
   saveVolunteerOpportunityForUser,
   unsaveVolunteerOpportunityForUser,
 } from "./post-volunteer.query";
@@ -285,6 +286,17 @@ export async function handleGetVolunteerOpportunity(
 
     if (!opportunity) {
       return c.json({ ok: false, error: "Volunteer opportunity not found" }, 404);
+    }
+
+    try {
+      opportunity.totalView = await incrementVolunteerOpportunityViewCount(
+        params.opportunityId,
+      );
+    } catch (error) {
+      console.warn("Failed to increment volunteer opportunity view count", {
+        error,
+        opportunityId: params.opportunityId,
+      });
     }
 
     const responseOpportunity = isPublic
