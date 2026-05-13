@@ -3,10 +3,14 @@ import { getAuthUserId } from "../auth/utils/get-auth";
 import {
   findMyProjectApplications,
   findMyVolunteerApplications,
+  updateMyApplicationStatus,
   type MySpaceProjectApplication,
   type MySpaceVolunteerApplication,
 } from "./applications.query";
-import type { GetMyApplicationsQuery } from "./applications.schema";
+import type {
+  ChangeMyApplicationStatusParam,
+  GetMyApplicationsQuery,
+} from "./applications.schema";
 
 type MyApplicationStatus =
   | "SUBMITTED"
@@ -208,6 +212,61 @@ export async function handleGetMyApplications(
     );
   } catch (error) {
     console.error("Failed to get my applications", error);
+    return c.json({ ok: false, error: "Internal server error" }, 500);
+  }
+}
+
+export async function handleChangeMyApplicationStatus(
+  c: Context,
+  params: ChangeMyApplicationStatusParam,
+) {
+  const authResult = getAuthUserId(c);
+  if (!authResult.ok) {
+    return authResult.response;
+  }
+
+  try {
+    const result = await updateMyApplicationStatus(authResult.userId, params);
+
+    if (result === "not_found") {
+      return c.json({ ok: false, error: "Application not found" }, 404);
+    }
+
+    if (result === "conflict") {
+      return c.json(
+        {
+          ok: false,
+          error: "Application status cannot be changed with this action",
+        },
+        409,
+      );
+    }
+
+    const applications =
+      params.sourceType === "volunteer"
+        ? (await findMyVolunteerApplications(authResult.userId)).map(
+            mapVolunteerApplication,
+          )
+        : (await findMyProjectApplications(authResult.userId)).map(
+            mapProjectApplication,
+          );
+    const application = applications.find(
+      (item) => item.id === params.applicationId,
+    );
+
+    if (!application) {
+      return c.json({ ok: false, error: "Application not found" }, 404);
+    }
+
+    return c.json(
+      {
+        ok: true,
+        application,
+      },
+      200,
+    );
+  } catch (error) {
+    console.error("Failed to change my application status", error);
     return c.json({ ok: false, error: "Internal server error" }, 500);
   }
 }
