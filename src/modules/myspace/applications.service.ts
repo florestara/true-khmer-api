@@ -1,7 +1,9 @@
 import type { Context } from "hono";
 import { getAuthUserId } from "../auth/utils/get-auth";
 import {
+  findMyProjectApplicationDetail,
   findMyProjectApplications,
+  findMyVolunteerApplicationDetail,
   findMyVolunteerApplications,
   updateMyApplicationArchived,
   updateMyApplicationStatus,
@@ -11,6 +13,7 @@ import {
 import type {
   ChangeMyApplicationArchiveParam,
   ChangeMyApplicationStatusParam,
+  GetMyApplicationDetailParam,
   GetMyApplicationsQuery,
 } from "./applications.schema";
 
@@ -214,6 +217,44 @@ export async function handleGetMyApplications(
     );
   } catch (error) {
     console.error("Failed to get my applications", error);
+    return c.json({ ok: false, error: "Internal server error" }, 500);
+  }
+}
+
+export async function handleGetMyApplicationDetail(
+  c: Context,
+  params: GetMyApplicationDetailParam,
+) {
+  const authResult = getAuthUserId(c);
+  if (!authResult.ok) {
+    return authResult.response;
+  }
+
+  try {
+    const application =
+      params.sourceType === "volunteer"
+        ? await findMyVolunteerApplicationDetail(
+            authResult.userId,
+            params.applicationId,
+          )
+        : await findMyProjectApplicationDetail(
+            authResult.userId,
+            params.applicationId,
+          );
+
+    if (!application) {
+      return c.json({ ok: false, error: "Application not found" }, 404);
+    }
+
+    return c.json(
+      {
+        ok: true,
+        application,
+      },
+      200,
+    );
+  } catch (error) {
+    console.error("Failed to get my application detail", error);
     return c.json({ ok: false, error: "Internal server error" }, 500);
   }
 }
