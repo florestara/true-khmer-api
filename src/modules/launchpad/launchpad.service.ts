@@ -19,7 +19,6 @@ import {
   incrementLaunchpadViewCount,
 } from "./launchpad.query";
 import { recordRecentActivityQuietly } from "../recent-activity/recent-activity.service";
-import { awardPoints } from "../points/points.service";
 
 function quoteActivityText(value: string) {
   return `'${value}'`;
@@ -138,15 +137,6 @@ export async function handleCreateLaunchpad(
         cityId: created.city?.id ?? null,
       },
     });
-
-    awardPoints({
-      userId: authResult.userId,
-      actionKey: "launchpad_completion_proposer",
-      referenceType: "create_launchpad",
-      referenceId: created.id,
-    }).catch((err) =>
-      console.error("Failed to award points for launchpad", err),
-    );
 
     return c.json({ ok: true, launchpad: created }, 201);
   } catch (error) {

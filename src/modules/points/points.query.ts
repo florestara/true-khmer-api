@@ -10,11 +10,17 @@ import {
   tier,
   forumQuestion,
   forumAnswer,
+  launchpad,
+  launchpadApplication,
+  launchpadRole,
 } from "../../db/schema";
 import { tierHistory } from "../../db/schema/point_system/point-systems";
 
 export type ActionType =
   (typeof pointTransactionsActionType.enumValues)[number];
+type PointPool = "active" | "legacy" | "tier";
+type PointMode = "action" | "support";
+const EARNING_POOLS: PointPool[] = ["active", "legacy", "tier"];
 
 export async function getPointSystemByKey(key: string) {
   const [row] = await db
@@ -40,10 +46,57 @@ export async function countUserTransactionsToday(
       and(
         eq(pointTransactions.userId, userId),
         eq(pointTransactions.actionType, actionType),
+        eq(pointTransactions.pool, "active"),
         gte(pointTransactions.createdAt, startOfDay.toISOString()),
       ),
     );
   return result?.count ?? 0;
+}
+
+export async function hasPointTransactionForReference(
+  userId: string,
+  actionType: ActionType,
+  referenceType: string,
+  referenceId: string,
+  txOrDb: Parameters<Parameters<typeof db.transaction>[0]>[0] | typeof db = db,
+) {
+  const [row] = await txOrDb
+    .select({ id: pointTransactions.id })
+    .from(pointTransactions)
+    .where(
+      and(
+        eq(pointTransactions.userId, userId),
+        eq(pointTransactions.actionType, actionType),
+        eq(pointTransactions.referenceType, referenceType),
+        eq(pointTransactions.referenceId, referenceId),
+        eq(pointTransactions.pool, "active"),
+      ),
+    )
+    .limit(1);
+
+  return Boolean(row);
+}
+
+export async function hasPointActionForReference(
+  actionType: ActionType,
+  referenceType: string,
+  referenceId: string,
+  txOrDb: Parameters<Parameters<typeof db.transaction>[0]>[0] | typeof db = db,
+) {
+  const [row] = await txOrDb
+    .select({ id: pointTransactions.id })
+    .from(pointTransactions)
+    .where(
+      and(
+        eq(pointTransactions.actionType, actionType),
+        eq(pointTransactions.referenceType, referenceType),
+        eq(pointTransactions.referenceId, referenceId),
+        eq(pointTransactions.pool, "active"),
+      ),
+    )
+    .limit(1);
+
+  return Boolean(row);
 }
 
 export async function insertPointTransaction(data: {
@@ -52,11 +105,27 @@ export async function insertPointTransaction(data: {
   points: number;
   referenceType?: string;
   referenceId?: string;
-  pool?: "active" | "legacy" | "tier";
-  mode?: "action" | "support";
+  pool?: PointPool;
+  mode?: PointMode;
   maxPerDay?: number;
+  dedupeByReference?: boolean;
 }) {
   return await db.transaction(async (tx) => {
+    if (
+      data.dedupeByReference &&
+      data.referenceType &&
+      data.referenceId &&
+      (await hasPointTransactionForReference(
+        data.userId,
+        data.actionType,
+        data.referenceType,
+        data.referenceId,
+        tx,
+      ))
+    ) {
+      return null;
+    }
+
     // Enforce daily cap inside the transaction to prevent races
     if (data.maxPerDay && data.maxPerDay > 0) {
       const todayCount = await countUserTransactionsToday(
@@ -69,18 +138,27 @@ export async function insertPointTransaction(data: {
       }
     }
 
-    const [row] = await tx
+    const pools = data.pool ? [data.pool] : EARNING_POOLS;
+    const rows = await tx
       .insert(pointTransactions)
-      .values({
+      .values(pools.map((pool) => ({
         userId: data.userId,
         actionType: data.actionType,
         points: data.points,
         referenceType: data.referenceType ?? null,
         referenceId: data.referenceId ?? null,
-        pool: data.pool ?? "active",
+        pool,
         mode: data.mode ?? "action",
-      })
+      })))
       .returning();
+
+    const row =
+      rows.find((transaction) => transaction.pool === "active") ?? rows[0];
+    const shouldUpdateProgress =
+      data.actionType !== "redemption_deduction" && pools.includes("legacy");
+    if (!row || !shouldUpdateProgress) {
+      return row ?? null;
+    }
 
     await tx
       .insert(userProgress)
@@ -141,7 +219,7 @@ export async function insertPointTransaction(data: {
         .where(eq(userProgress.userId, data.userId));
 
       if (isUpgrade) {
-        await tx
+        const [insertedHistory] = await tx
           .insert(tierHistory)
           .values({
             userId: data.userId,
@@ -150,7 +228,41 @@ export async function insertPointTransaction(data: {
           })
           .onConflictDoNothing({
             target: [tierHistory.userId, tierHistory.tierId],
-          });
+          })
+          .returning({ id: tierHistory.id });
+
+        if (insertedHistory && progress.currentTierId) {
+          const [bonusConfig] = await tx
+            .select({
+              value: pointSystems.value,
+              mode: pointSystems.mode,
+            })
+            .from(pointSystems)
+            .where(eq(pointSystems.key, "tier_advancement_bonus"))
+            .limit(1);
+
+          if (bonusConfig) {
+            await tx.insert(pointTransactions).values(
+              EARNING_POOLS.map((pool) => ({
+                userId: data.userId,
+                actionType: "tier_advancement_bonus" as const,
+                points: bonusConfig.value,
+                referenceType: "tier",
+                referenceId: qualifiedTier.id,
+                pool,
+                mode: bonusConfig.mode,
+              })),
+            );
+
+            await tx
+              .update(userProgress)
+              .set({
+                totalPoints: sql`${userProgress.totalPoints} + ${bonusConfig.value}`,
+                updatedAt: new Date(),
+              })
+              .where(eq(userProgress.userId, data.userId));
+          }
+        }
       }
     }
 
@@ -199,6 +311,7 @@ export async function getHighestAwardedMilestone(
         eq(pointTransactions.actionType, actionType),
         eq(pointTransactions.referenceType, referenceType),
         eq(pointTransactions.referenceId, referenceId),
+        eq(pointTransactions.pool, "active"),
       ),
     );
   // Each row represents one milestone (10, 20, 30, ...), so count * 10 = highest milestone
@@ -221,4 +334,48 @@ export async function isUsersFirstQuestion(
     .orderBy(forumQuestion.createdAt)
     .limit(1);
   return earliest?.id === questionId;
+}
+
+export async function getLaunchpadValidationSnapshot(launchpadId: string) {
+  const [project] = await db
+    .select({
+      id: launchpad.id,
+      proposerId: launchpad.createdBy,
+    })
+    .from(launchpad)
+    .where(eq(launchpad.id, launchpadId))
+    .limit(1);
+
+  if (!project) {
+    return null;
+  }
+
+  const [[capacityResult], confirmedParticipants] = await Promise.all([
+    db
+      .select({
+        capacity: sql<number>`coalesce(sum(${launchpadRole.capacity}), 0)::int`,
+      })
+      .from(launchpadRole)
+      .where(eq(launchpadRole.launchpadId, launchpadId)),
+    db
+      .select({
+        userId: launchpadApplication.createdBy,
+      })
+      .from(launchpadApplication)
+      .where(
+        and(
+          eq(launchpadApplication.launchpadId, launchpadId),
+          eq(launchpadApplication.status, "CONFIRMED"),
+        ),
+      ),
+  ]);
+
+  return {
+    launchpadId: project.id,
+    proposerId: project.proposerId,
+    capacity: Number(capacityResult?.capacity ?? 0),
+    participantIds: Array.from(
+      new Set(confirmedParticipants.map((participant) => participant.userId)),
+    ),
+  };
 }

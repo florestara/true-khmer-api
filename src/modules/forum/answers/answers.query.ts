@@ -94,7 +94,12 @@ type AnswersByQuestionResult = {
 };
 const ANSWER_SCORE_SQL = sql<number>`${forumAnswer.upvoteCount} - ${forumAnswer.downvoteCount}`;
 export type MarkBestAnswerResult =
-  | { kind: "Marked"; answer: ForumAnswerWithViewerVote }
+  | {
+      kind: "Marked";
+      answer: ForumAnswerWithViewerVote;
+      selectionChanged: boolean;
+      previousBestAnswer: { id: string; authorId: string } | null;
+    }
   | { kind: "NotFound" }
   | { kind: "AnswerNotPublished" }
   | { kind: "QuestionInvalid" };
@@ -719,6 +724,22 @@ export async function markBestAnswer(
       throw new BestAnswerSelectionForbiddenError();
     }
 
+    const previousBestAnswerId =
+      question.bestAnswerId && question.bestAnswerId !== answer.id
+        ? question.bestAnswerId
+        : null;
+    const selectionChanged = question.bestAnswerId !== answer.id;
+    const [previousBestAnswer] = previousBestAnswerId
+      ? await tx
+          .select({
+            id: forumAnswer.id,
+            authorId: forumAnswer.authorId,
+          })
+          .from(forumAnswer)
+          .where(eq(forumAnswer.id, previousBestAnswerId))
+          .limit(1)
+      : [];
+
     const [updatedQuestion] = await tx
       .update(forumQuestion)
       .set({
@@ -751,6 +772,8 @@ export async function markBestAnswer(
     return {
       kind: "Marked",
       answer: stripBestAnswerFlag(hydrateAnswer(markedRows[0])),
+      selectionChanged,
+      previousBestAnswer: previousBestAnswer ?? null,
     };
   });
 }
