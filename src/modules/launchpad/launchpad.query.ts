@@ -2,7 +2,7 @@ import { sql, eq, and, ilike } from "drizzle-orm";
 import { db } from "../../db";
 import {
   LAUNCHPAD_ADVISORY_LOCK_NAMESPACE,
-  LAUNCHPAD_CATEGORY_TOTAL_ROLES_LOCK_KEY,
+  LAUNCHPAD_CATEGORY_TOTAL_LAUNCHPAD_LOCK_KEY,
 } from "./lib/constants";
 import {
   CreateLaunchpadRequestInput,
@@ -175,15 +175,15 @@ function buildLaunchpadOrderBy(sortBy: GetLaunchpadQueryListInput["sortBy"]) {
   }
 }
 
-async function updateCategoryTotalRolesCount(
+async function updateCategoryTotalLaunchpadCount(
   txOrDb: Parameters<Parameters<typeof db.transaction>[0]>[0] | typeof db,
   categoryId: string,
-  roleCount: number,
+  launchpadCount: number,
 ): Promise<void> {
   await txOrDb
     .update(launchpadCategory)
     .set({
-      totalRoles: sql`${launchpadCategory.totalRoles} + ${roleCount}`,
+      totalLaunchpad: sql`${launchpadCategory.totalLaunchpad} + ${launchpadCount}`,
     })
     .where(eq(launchpadCategory.id, categoryId));
 }
@@ -205,7 +205,7 @@ export async function createLaunchpad(
 ): Promise<LaunchpadDetail> {
   return db.transaction(async (tx) => {
     await tx.execute(
-      sql`select pg_advisory_xact_lock(${LAUNCHPAD_ADVISORY_LOCK_NAMESPACE}, ${LAUNCHPAD_CATEGORY_TOTAL_ROLES_LOCK_KEY})`,
+      sql`select pg_advisory_xact_lock(${LAUNCHPAD_ADVISORY_LOCK_NAMESPACE}, ${LAUNCHPAD_CATEGORY_TOTAL_LAUNCHPAD_LOCK_KEY})`,
     );
 
     const fieldToInsert: launchpadInsert = {
@@ -242,7 +242,7 @@ export async function createLaunchpad(
       .values(roleData)
       .returning();
 
-    await updateCategoryTotalRolesCount(tx, data.categoryId, data.role.length);
+    await updateCategoryTotalLaunchpadCount(tx, data.categoryId, 1);
 
     const [category] = await tx
       .select()

@@ -8,7 +8,7 @@ export const launchpadCategoryResponseSchema = z
     iconKey: z.string(),
     displayOrder: z.number(),
     status: z.enum(["ACTIVE", "ARCHIVED", "HIDDEN"]),
-    roleCount: z.number(),
+    totalLaunchpad: z.number(),
     createdBy: z.string(),
     updatedBy: z.string().nullable(),
     createdAt: z.string(),
