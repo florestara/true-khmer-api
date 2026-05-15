@@ -31,6 +31,11 @@ export const getManagePostingsQuerySchema = z
       .min(1, "limit must be between 1 and 50")
       .max(MAX_MANAGE_POSTINGS_PAGE_SIZE, "limit must be between 1 and 50")
       .default(DEFAULT_MANAGE_POSTINGS_PAGE_SIZE),
+    search: z
+      .string()
+      .trim()
+      .max(300, "search must be <= 300 characters")
+      .optional(),
   })
   .openapi("GetManagePostingsQuery");
 
