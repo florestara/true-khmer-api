@@ -4,8 +4,6 @@ import { awardPoints } from "../points/points.service";
 import {
   ONBOARDING_COMPLETE_STEP,
   ONBOARDING_CONTRIBUTIONS_STEP,
-  ONBOARDING_INTERESTS_STEP,
-  ONBOARDING_PROFILE_STEP,
 } from "./constants";
 import type {
   OnboardingContributionsStepPayload,
@@ -175,16 +173,6 @@ export async function handleSaveInterestsStep(
     return c.json({ ok: false, error: "User not found" }, 404);
   }
 
-  if (existingUser.onboardingStep < ONBOARDING_PROFILE_STEP) {
-    return c.json(
-      {
-        ok: false,
-        error: "Profile step must be completed before saving interests",
-      },
-      400,
-    );
-  }
-
   const result = await replaceUserInterests(authResult.userId, payload);
   if (!result.ok) {
     return c.json({ ok: false, error: result.error }, 400);
@@ -208,16 +196,6 @@ export async function handleSaveContributionsStep(
     return c.json({ ok: false, error: "User not found" }, 404);
   }
 
-  if (existingUser.onboardingStep < ONBOARDING_INTERESTS_STEP) {
-    return c.json(
-      {
-        ok: false,
-        error: "Interests step must be completed before saving contributions",
-      },
-      400,
-    );
-  }
-
   await replaceUserContributions(authResult.userId, payload);
 
   const state = await getOnboardingState(authResult.userId);
@@ -239,7 +217,7 @@ export async function handleCompleteOnboarding(c: Context) {
       {
         ok: false,
         error:
-          "Onboarding steps 1–3 must be completed before finishing onboarding",
+          "Contributions step must be completed before finishing onboarding",
       },
       400,
     );
