@@ -10,9 +10,6 @@ import {
   tier,
   forumQuestion,
   forumAnswer,
-  launchpad,
-  launchpadApplication,
-  launchpadRole,
 } from "../../db/schema";
 import { tierHistory } from "../../db/schema/point_system/point-systems";
 
@@ -334,48 +331,4 @@ export async function isUsersFirstQuestion(
     .orderBy(forumQuestion.createdAt)
     .limit(1);
   return earliest?.id === questionId;
-}
-
-export async function getLaunchpadValidationSnapshot(launchpadId: string) {
-  const [project] = await db
-    .select({
-      id: launchpad.id,
-      proposerId: launchpad.createdBy,
-    })
-    .from(launchpad)
-    .where(eq(launchpad.id, launchpadId))
-    .limit(1);
-
-  if (!project) {
-    return null;
-  }
-
-  const [[capacityResult], confirmedParticipants] = await Promise.all([
-    db
-      .select({
-        capacity: sql<number>`coalesce(sum(${launchpadRole.capacity}), 0)::int`,
-      })
-      .from(launchpadRole)
-      .where(eq(launchpadRole.launchpadId, launchpadId)),
-    db
-      .select({
-        userId: launchpadApplication.createdBy,
-      })
-      .from(launchpadApplication)
-      .where(
-        and(
-          eq(launchpadApplication.launchpadId, launchpadId),
-          eq(launchpadApplication.status, "CONFIRMED"),
-        ),
-      ),
-  ]);
-
-  return {
-    launchpadId: project.id,
-    proposerId: project.proposerId,
-    capacity: Number(capacityResult?.capacity ?? 0),
-    participantIds: Array.from(
-      new Set(confirmedParticipants.map((participant) => participant.userId)),
-    ),
-  };
 }

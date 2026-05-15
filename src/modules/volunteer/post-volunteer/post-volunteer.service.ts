@@ -34,7 +34,6 @@ import type {
 } from "./post-volunteer.schema";
 import { recordRecentActivityQuietly } from "../../recent-activity/recent-activity.service";
 import type { VolunteerSupportingDocument } from "./post-volunteer.query";
-import { awardPoints } from "../../points/points.service";
 
 const VOLUNTEER_CATEGORY_SLUG_UNIQUE_INDEX =
   "volunteer_category_slug_unique_idx";
@@ -660,15 +659,6 @@ export async function handleCreateVolunteerOpportunity(
         locationId: opportunity.location.id,
       },
     });
-
-    awardPoints({
-      userId: authResult.userId,
-      actionKey: "volunteer_opportunity_posted",
-      referenceType: "volunteer_opportunity",
-      referenceId: opportunity.id,
-    }).catch((err) =>
-      console.error("Failed to award volunteer opportunity points", err),
-    );
 
     return c.json({ ok: true, opportunity }, 201);
   } catch (error) {

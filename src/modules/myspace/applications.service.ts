@@ -16,10 +16,6 @@ import type {
   GetMyApplicationDetailParam,
   GetMyApplicationsQuery,
 } from "./applications.schema";
-import {
-  awardLaunchpadValidationPoints,
-  awardPoints,
-} from "../points/points.service";
 
 type MyApplicationStatus =
   | "SUBMITTED"
@@ -303,29 +299,6 @@ export async function handleChangeMyApplicationStatus(
 
     if (!application) {
       return c.json({ ok: false, error: "Application not found" }, 404);
-    }
-
-    if (
-      params.statusAction === "confirm" &&
-      application.status === "CONFIRMED" &&
-      application.opportunity
-    ) {
-      if (params.sourceType === "volunteer") {
-        awardPoints({
-          userId: authResult.userId,
-          actionKey: "volunteer_registered",
-          referenceType: "volunteer_opportunity",
-          referenceId: application.opportunity.id,
-        }).catch((err) =>
-          console.error("Failed to award volunteer registration points", err),
-        );
-      } else {
-        awardLaunchpadValidationPoints({
-          launchpadId: application.opportunity.id,
-        }).catch((err) =>
-          console.error("Failed to award launchpad validation points", err),
-        );
-      }
     }
 
     return c.json(

@@ -1,11 +1,11 @@
 import {
   getPointSystemByKey,
-  insertPointTransaction,
   getForumQuestionById,
   isUsersFirstQuestion,
   countUserAnswersInThread,
   getHighestAwardedMilestone,
-  getLaunchpadValidationSnapshot,
+  hasPointActionForReference,
+  insertPointTransaction,
 } from "./points.query";
 import type { ActionType } from "./points.query";
 
@@ -124,92 +124,29 @@ export async function awardForumUpvotePoints(params: {
   });
 }
 
-export async function transferForumBestAnswerPoints(params: {
+export async function awardForumBestAnswerPoints(params: {
   answerAuthorId: string;
-  answerId: string;
   questionAuthorId: string;
   questionId: string;
-  selectionChanged: boolean;
-  previousBestAnswer?: {
-    id: string;
-    authorId: string;
-  } | null;
 }) {
-  if (!params.selectionChanged) {
+  if (params.answerAuthorId === params.questionAuthorId) {
     return null;
   }
 
-  const config = await getPointSystemByKey("forum_best_answer");
-  if (!config) {
-    console.warn("Point system config not found for key: forum_best_answer");
+  const alreadyAwarded = await hasPointActionForReference(
+    "forum_best_answer",
+    "forum_question",
+    params.questionId,
+  );
+
+  if (alreadyAwarded) {
     return null;
   }
 
-  const transactions = [];
-
-  if (
-    params.previousBestAnswer &&
-    params.previousBestAnswer.authorId !== params.questionAuthorId
-  ) {
-    transactions.push(
-      insertPointTransaction({
-        userId: params.previousBestAnswer.authorId,
-        actionType: "forum_best_answer",
-        points: -config.value,
-        referenceType: "forum_answer",
-        referenceId: params.previousBestAnswer.id,
-        mode: config.mode,
-        dedupeByReference: false,
-      }),
-    );
-  }
-
-  if (params.answerAuthorId !== params.questionAuthorId) {
-    transactions.push(
-      insertPointTransaction({
-        userId: params.answerAuthorId,
-        actionType: "forum_best_answer",
-        points: config.value,
-        referenceType: "forum_answer",
-        referenceId: params.answerId,
-        mode: config.mode,
-        maxPerDay: config.maxPerDay,
-        dedupeByReference: false,
-      }),
-    );
-  }
-
-  return Promise.all(transactions);
-}
-
-export async function awardLaunchpadValidationPoints(params: {
-  launchpadId: string;
-}) {
-  const snapshot = await getLaunchpadValidationSnapshot(params.launchpadId);
-  if (!snapshot || snapshot.capacity <= 0) {
-    return;
-  }
-
-  if (snapshot.participantIds.length < snapshot.capacity) {
-    return;
-  }
-
-  await Promise.all([
-    awardPoints({
-      userId: snapshot.proposerId,
-      actionKey: "launchpad_project_validated_proposer",
-      referenceType: "launchpad",
-      referenceId: snapshot.launchpadId,
-    }),
-    ...snapshot.participantIds
-      .filter((participantId) => participantId !== snapshot.proposerId)
-      .map((participantId) =>
-        awardPoints({
-          userId: participantId,
-          actionKey: "launchpad_project_validated_participant",
-          referenceType: "launchpad",
-          referenceId: snapshot.launchpadId,
-        }),
-      ),
-  ]);
+  return awardPoints({
+    userId: params.answerAuthorId,
+    actionKey: "forum_best_answer",
+    referenceType: "forum_question",
+    referenceId: params.questionId,
+  });
 }

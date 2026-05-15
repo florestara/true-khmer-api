@@ -27,7 +27,7 @@ import { getAuthUserId } from "../../../modules/auth/utils/get-auth";
 import {
   awardForumParticipationPoints,
   awardForumUpvotePoints,
-  transferForumBestAnswerPoints,
+  awardForumBestAnswerPoints,
 } from "../../points/points.service";
 import {
   recordRecentActivityQuietly,
@@ -324,13 +324,10 @@ export async function handleMarkBestAnswer(
       );
     }
 
-    transferForumBestAnswerPoints({
+    awardForumBestAnswerPoints({
       answerAuthorId: markedAnswer.answer.author.id,
-      answerId: markedAnswer.answer.id,
       questionAuthorId: authResult.userId,
       questionId: markedAnswer.answer.questionId,
-      selectionChanged: markedAnswer.selectionChanged,
-      previousBestAnswer: markedAnswer.previousBestAnswer,
     }).catch((err) =>
       console.error("Failed to award forum best answer points", err),
     );
