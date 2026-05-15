@@ -3,15 +3,18 @@ import type { AppBindings } from "../../lib/types";
 import { requireAccessToken } from "../../middlewares/auth.middleware";
 import { authProtectedErrorResponseSchema } from "../auth/auth.schema";
 import {
+  changeMyApplicationArchiveParamSchema,
   changeMyApplicationStatusParamSchema,
   getMyApplicationDetailParamSchema,
   getMyApplicationsQuerySchema,
+  myApplicationArchiveActionResponseSchema,
   myApplicationDetailResponseSchema,
   myApplicationStatusActionResponseSchema,
   myApplicationsErrorResponseSchema,
   myApplicationsResponseSchema,
 } from "./applications.schema";
 import {
+  handleChangeMyApplicationArchived,
   handleChangeMyApplicationStatus,
   handleGetMyApplicationDetail,
   handleGetMyApplications,
@@ -178,6 +181,68 @@ const changeMyApplicationStatusRoute = createRoute({
   },
 });
 
+const changeMyApplicationArchiveRoute = createRoute({
+  method: "post",
+  path: "/{sourceType}/{applicationId}/archive/{archiveAction}",
+  tags: ["My Applications"],
+  middleware: [requireAccessToken],
+  security: [{ BearerAuth: [] }],
+  request: {
+    params: changeMyApplicationArchiveParamSchema,
+  },
+  responses: {
+    200: {
+      description: "Application archived state changed",
+      content: {
+        "application/json": {
+          schema: myApplicationArchiveActionResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: "Unauthorized",
+      content: {
+        "application/json": {
+          schema: authProtectedErrorResponseSchema,
+        },
+      },
+    },
+    403: {
+      description: "Onboarding required",
+      content: {
+        "application/json": {
+          schema: authProtectedErrorResponseSchema,
+        },
+      },
+    },
+    404: {
+      description: "Application not found",
+      content: {
+        "application/json": {
+          schema: myApplicationsErrorResponseSchema,
+        },
+      },
+    },
+    409: {
+      description:
+        "Only declined, withdrawn, and completed applications can be archived",
+      content: {
+        "application/json": {
+          schema: myApplicationsErrorResponseSchema,
+        },
+      },
+    },
+    500: {
+      description: "Internal server error",
+      content: {
+        "application/json": {
+          schema: myApplicationsErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
 myApplicationsRouter.openapi(getMyApplicationsRoute, async (c) => {
   const query = c.req.valid("query");
   return (await handleGetMyApplications(c, query)) as any;
@@ -191,4 +256,9 @@ myApplicationsRouter.openapi(getMyApplicationDetailRoute, async (c) => {
 myApplicationsRouter.openapi(changeMyApplicationStatusRoute, async (c) => {
   const params = c.req.valid("param");
   return (await handleChangeMyApplicationStatus(c, params)) as any;
+});
+
+myApplicationsRouter.openapi(changeMyApplicationArchiveRoute, async (c) => {
+  const params = c.req.valid("param");
+  return (await handleChangeMyApplicationArchived(c, params)) as any;
 });

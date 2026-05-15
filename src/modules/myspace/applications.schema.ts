@@ -43,6 +43,10 @@ export const myApplicationStatusActionSchema = z
   .enum(["confirm", "decline", "withdraw"])
   .openapi("MyApplicationStatusAction");
 
+export const myApplicationArchiveActionSchema = z
+  .enum(["archive", "unarchive"])
+  .openapi("MyApplicationArchiveAction");
+
 export const changeMyApplicationStatusParamSchema = z
   .object({
     sourceType: myApplicationSourceParamSchema,
@@ -50,6 +54,14 @@ export const changeMyApplicationStatusParamSchema = z
     statusAction: myApplicationStatusActionSchema,
   })
   .openapi("ChangeMyApplicationStatusParam");
+
+export const changeMyApplicationArchiveParamSchema = z
+  .object({
+    sourceType: myApplicationSourceParamSchema,
+    applicationId: z.string().uuid(),
+    archiveAction: myApplicationArchiveActionSchema,
+  })
+  .openapi("ChangeMyApplicationArchiveParam");
 
 export const getMyApplicationDetailParamSchema = z
   .object({
@@ -159,6 +171,15 @@ export const myApplicationStatusActionResponseSchema = z
   })
   .openapi("MyApplicationStatusActionResponse");
 
+export const myApplicationArchiveActionResponseSchema = z
+  .object({
+    ok: z.literal(true),
+    application: myApplicationItemSchema.extend({
+      archived: z.boolean(),
+    }),
+  })
+  .openapi("MyApplicationArchiveActionResponse");
+
 export const myApplicationsErrorResponseSchema = z
   .object({
     ok: z.literal(false),
@@ -174,4 +195,7 @@ export type GetMyApplicationDetailParam = z.infer<
 >;
 export type ChangeMyApplicationStatusParam = z.infer<
   typeof changeMyApplicationStatusParamSchema
+>;
+export type ChangeMyApplicationArchiveParam = z.infer<
+  typeof changeMyApplicationArchiveParamSchema
 >;
