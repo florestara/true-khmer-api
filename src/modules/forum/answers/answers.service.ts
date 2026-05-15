@@ -323,6 +323,13 @@ export async function handleMarkBestAnswer(
       );
     }
 
+    if (markedAnswer.kind === "BestAnswerAlreadySelected") {
+      return c.json(
+        { ok: false, error: "Best answer has already been selected" },
+        409,
+      );
+    }
+
     const question = await findQuestionById(markedAnswer.answer.questionId);
     recordRecentActivityQuietly({
       userId: authResult.userId,
