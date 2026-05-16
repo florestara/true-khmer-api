@@ -9,14 +9,14 @@ import {
   updateMyApplicationStatus,
   type MySpaceProjectApplication,
   type MySpaceVolunteerApplication,
-} from "./applications.query";
+} from "./my-application.query";
 import { awardPoints } from "../points/points.service";
 import type {
   ChangeMyApplicationArchiveParam,
   ChangeMyApplicationStatusParam,
   GetMyApplicationDetailParam,
   GetMyApplicationsQuery,
-} from "./applications.schema";
+} from "./schema/my-application.request.schema";
 
 type MyApplicationStatus =
   | "SUBMITTED"

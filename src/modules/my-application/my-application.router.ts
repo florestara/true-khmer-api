@@ -7,18 +7,20 @@ import {
   changeMyApplicationStatusParamSchema,
   getMyApplicationDetailParamSchema,
   getMyApplicationsQuerySchema,
+} from "./schema/my-application.request.schema";
+import {
   myApplicationArchiveActionResponseSchema,
   myApplicationDetailResponseSchema,
   myApplicationStatusActionResponseSchema,
   myApplicationsErrorResponseSchema,
   myApplicationsResponseSchema,
-} from "./applications.schema";
+} from "./schema/my-application.response.schema";
 import {
   handleChangeMyApplicationArchived,
   handleChangeMyApplicationStatus,
   handleGetMyApplicationDetail,
   handleGetMyApplications,
-} from "./applications.service";
+} from "./my-application.service";
 
 export const myApplicationsRouter = new OpenAPIHono<AppBindings>();
 
