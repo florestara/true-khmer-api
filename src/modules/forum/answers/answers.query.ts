@@ -97,6 +97,7 @@ export type MarkBestAnswerResult =
   | { kind: "Marked"; answer: ForumAnswerWithViewerVote }
   | { kind: "NotFound" }
   | { kind: "AnswerNotPublished" }
+  | { kind: "BestAnswerAlreadySelected" }
   | { kind: "QuestionInvalid" };
 
 function toInteger(value: unknown, fallback = 0): number {
@@ -604,8 +605,6 @@ export async function softDeleteAnswer(
     }
 
     let totalDeletedCount = 1;
-    const deletedAnswerIds = [deletedAnswer.id];
-
     if (deletedAnswer.replyTo) {
       await tx
         .update(forumAnswer)
@@ -638,7 +637,6 @@ export async function softDeleteAnswer(
         .returning({ id: forumAnswer.id });
 
       totalDeletedCount += deletedReplies.length;
-      deletedAnswerIds.push(...deletedReplies.map((answer) => answer.id));
     }
 
     await tx
@@ -648,20 +646,6 @@ export async function softDeleteAnswer(
         updatedAt: sql`now()`,
       })
       .where(eq(forumQuestion.id, deletedAnswer.questionId));
-
-    await tx
-      .update(forumQuestion)
-      .set({
-        bestAnswerId: null,
-        bestAnswerSelectedAt: null,
-        updatedAt: sql`now()`,
-      })
-      .where(
-        and(
-          eq(forumQuestion.id, deletedAnswer.questionId),
-          inArray(forumQuestion.bestAnswerId, deletedAnswerIds),
-        ),
-      );
 
     return deletedAnswer;
   });
@@ -717,6 +701,10 @@ export async function markBestAnswer(
 
     if (question.authorId !== questionAuthorId) {
       throw new BestAnswerSelectionForbiddenError();
+    }
+
+    if (question.bestAnswerId) {
+      return { kind: "BestAnswerAlreadySelected" };
     }
 
     const [updatedQuestion] = await tx
