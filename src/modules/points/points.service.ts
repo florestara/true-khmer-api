@@ -1,10 +1,11 @@
 import {
   getPointSystemByKey,
-  insertPointTransaction,
   getForumQuestionById,
   isUsersFirstQuestion,
   countUserAnswersInThread,
   getHighestAwardedMilestone,
+  hasPointActionForReference,
+  insertPointTransaction,
 } from "./points.query";
 import type { ActionType } from "./points.query";
 
@@ -13,6 +14,8 @@ export async function awardPoints(params: {
   actionKey: ActionType;
   referenceType?: string;
   referenceId?: string;
+  mode?: "action" | "support";
+  dedupeByReference?: boolean;
 }) {
   const config = await getPointSystemByKey(params.actionKey);
   if (!config) {
@@ -26,8 +29,11 @@ export async function awardPoints(params: {
     points: config.value,
     referenceType: params.referenceType,
     referenceId: params.referenceId,
-    mode: config.mode,
+    mode: params.mode ?? config.mode,
     maxPerDay: config.maxPerDay,
+    dedupeByReference:
+      params.dedupeByReference ??
+      Boolean(params.referenceType && params.referenceId),
   });
 
   return transaction;
@@ -114,5 +120,33 @@ export async function awardForumUpvotePoints(params: {
     actionKey,
     referenceType: params.contentType,
     referenceId: params.contentId,
+    dedupeByReference: false,
+  });
+}
+
+export async function awardForumBestAnswerPoints(params: {
+  answerAuthorId: string;
+  questionAuthorId: string;
+  questionId: string;
+}) {
+  if (params.answerAuthorId === params.questionAuthorId) {
+    return null;
+  }
+
+  const alreadyAwarded = await hasPointActionForReference(
+    "forum_best_answer",
+    "forum_question",
+    params.questionId,
+  );
+
+  if (alreadyAwarded) {
+    return null;
+  }
+
+  return awardPoints({
+    userId: params.answerAuthorId,
+    actionKey: "forum_best_answer",
+    referenceType: "forum_question",
+    referenceId: params.questionId,
   });
 }

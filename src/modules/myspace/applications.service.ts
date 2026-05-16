@@ -10,6 +10,7 @@ import {
   type MySpaceProjectApplication,
   type MySpaceVolunteerApplication,
 } from "./applications.query";
+import { awardPoints } from "../points/points.service";
 import type {
   ChangeMyApplicationArchiveParam,
   ChangeMyApplicationStatusParam,
@@ -282,6 +283,17 @@ export async function handleChangeMyApplicationStatus(
           error: "Application status cannot be changed with this action",
         },
         409,
+      );
+    }
+
+    if (params.sourceType === "volunteer" && params.statusAction === "confirm") {
+      awardPoints({
+        userId: authResult.userId,
+        actionKey: "volunteer_registered",
+        referenceType: "volunteer_application",
+        referenceId: params.applicationId,
+      }).catch((err) =>
+        console.error("Failed to award volunteer registration points", err),
       );
     }
 
