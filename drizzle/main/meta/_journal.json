@@ -232,6 +232,20 @@
       "when": 1778571921425,
       "tag": "0032_sticky_proemial_gods",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1778681408251,
+      "tag": "0033_organic_patriot",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1778682185529,
+      "tag": "0034_eminent_slyde",
+      "breakpoints": true
     }
   ]
 }

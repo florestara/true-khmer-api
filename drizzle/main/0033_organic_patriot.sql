@@ -1,0 +1,1 @@
+ALTER TABLE "launchpad_category" RENAME COLUMN "total_roles" TO "total_launchpad";

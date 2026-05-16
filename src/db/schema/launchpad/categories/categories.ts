@@ -25,7 +25,7 @@ export const launchpadCategory = pgTable(
     iconKey: varchar("icon_key", { length: 100 }),
     displayOrder: integer("display_order").default(0).notNull(),
     status: launchpadCategoryStatus("status").default("ACTIVE").notNull(),
-    totalRoles: integer("total_roles").default(0).notNull(),
+    totalLaunchpad: integer("total_launchpad").default(0).notNull(),
     createdBy: uuid("created_by").notNull(),
     updatedBy: uuid("updated_by"),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })

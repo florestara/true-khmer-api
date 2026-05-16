@@ -268,6 +268,17 @@ function matchesFilter(
   return filter === "all" || status.toLowerCase() === filter;
 }
 
+function matchesPostingTitleSearch(
+  posting: ManagePostingItem,
+  search: string | undefined,
+): boolean {
+  if (!search) {
+    return true;
+  }
+
+  return posting.title.toLowerCase().includes(search.toLowerCase());
+}
+
 async function findVolunteerManagePostings(
   userId: string,
 ): Promise<ManagePostingItem[]> {
@@ -953,7 +964,11 @@ export async function findManagePostings(
   ]);
 
   const postings = [...volunteerPostings, ...projectPostings]
-    .filter((posting) => matchesFilter(posting.status, query.filter))
+    .filter(
+      (posting) =>
+        matchesFilter(posting.status, query.filter) &&
+        matchesPostingTitleSearch(posting, query.search),
+    )
     .sort((left, right) => {
       const createdAtDelta =
         Date.parse(right.createdAt) - Date.parse(left.createdAt);
