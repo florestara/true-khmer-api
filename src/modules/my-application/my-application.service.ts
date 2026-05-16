@@ -35,6 +35,7 @@ type MyApplicationItem = {
   appliedAt: string;
   deadline: string | null;
   status: MyApplicationStatus;
+  filled: boolean;
   opportunity: {
     id: string;
     title: string;
@@ -77,6 +78,7 @@ function mapVolunteerApplication(
     appliedAt: application.createdAt,
     deadline: application.opportunity.applicationDeadline,
     status: application.status,
+    filled: application.opportunity.filled,
     archived: application.archived,
     opportunity: {
       id: application.opportunity.id,
@@ -98,6 +100,7 @@ function mapProjectApplication(
     appliedAt: application.appliedAt,
     deadline: application.deadline,
     status: application.status,
+    filled: false,
     archived: application.archived,
     opportunity: application.opportunity,
     category: mapReference(application.category),

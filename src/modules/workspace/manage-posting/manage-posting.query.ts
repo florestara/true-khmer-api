@@ -44,6 +44,7 @@ export type ManagePostingItem = {
   description: string | null;
   imageKey: string | null;
   status: ManagePostingStatus;
+  filled: boolean;
   applicantCount: number;
   capacity: number;
   views: number;
@@ -145,7 +146,8 @@ type VolunteerPostingRow = {
   title: string;
   description: string | null;
   imageKey: string | null;
-  rawStatus: "DRAFT" | "PUBLISHED" | "ARCHIVED" | "CLOSED";
+  rawStatus: "DRAFT" | "ACTIVE" | "CLOSED" | "COMPLETED";
+  filled: boolean;
   totalView: number;
   applicantCount: number;
   capacity: number;
@@ -236,36 +238,36 @@ function matchesApplicantSearch(
 
 function derivePostingStatus(input: {
   rawStatus?: VolunteerPostingRow["rawStatus"];
-  applicantCount: number;
-  capacity: number;
   deadline: string | null;
   now: Date;
 }): ManagePostingStatus {
-  if (input.rawStatus === "DRAFT") {
-    return "DRAFT";
+  if (input.rawStatus && input.rawStatus !== "ACTIVE") {
+    return input.rawStatus;
   }
 
   if (
-    input.rawStatus === "ARCHIVED" ||
-    input.rawStatus === "CLOSED" ||
-    (input.deadline !== null &&
-      new Date(input.deadline).getTime() < input.now.getTime())
+    input.deadline !== null &&
+    new Date(input.deadline).getTime() <= input.now.getTime()
   ) {
-    return "ENDED";
-  }
-
-  if (input.capacity > 0 && input.applicantCount >= input.capacity) {
-    return "FILLED";
+    return "CLOSED";
   }
 
   return "ACTIVE";
 }
 
 function matchesFilter(
-  status: ManagePostingStatus,
+  posting: ManagePostingItem,
   filter: ManagePostingFilter,
 ): boolean {
-  return filter === "all" || status.toLowerCase() === filter;
+  if (filter === "all") {
+    return true;
+  }
+
+  if (filter === "filled") {
+    return posting.filled;
+  }
+
+  return posting.status.toLowerCase() === filter;
 }
 
 function matchesPostingTitleSearch(
@@ -311,6 +313,7 @@ async function findVolunteerManagePostings(
       description: volunteerOpportunity.overview,
       imageKey: volunteerOpportunity.coverImageKey,
       rawStatus: volunteerOpportunity.status,
+      filled: volunteerOpportunity.filled,
       totalView: volunteerOpportunity.totalView,
       applicantCount: sql<number>`coalesce(${confirmedApplications.applicantCount}, 0)`,
       capacity: sql<number>`coalesce(${roleCapacities.capacity}, 0)`,
@@ -343,11 +346,10 @@ async function findVolunteerManagePostings(
       imageKey: row.imageKey,
       status: derivePostingStatus({
         rawStatus: row.rawStatus,
-        applicantCount,
-        capacity,
         deadline: row.deadline,
         now,
       }),
+      filled: row.filled,
       applicantCount,
       capacity,
       views: toInteger(row.totalView),
@@ -416,11 +418,10 @@ async function findProjectManagePostings(
       description: row.description,
       imageKey: row.imageKey,
       status: derivePostingStatus({
-        applicantCount,
-        capacity,
         deadline: row.deadline,
         now,
       }),
+      filled: false,
       applicantCount,
       capacity,
       views: toInteger(row.totalView),
@@ -966,7 +967,7 @@ export async function findManagePostings(
   const postings = [...volunteerPostings, ...projectPostings]
     .filter(
       (posting) =>
-        matchesFilter(posting.status, query.filter) &&
+        matchesFilter(posting, query.filter) &&
         matchesPostingTitleSearch(posting, query.search),
     )
     .sort((left, right) => {

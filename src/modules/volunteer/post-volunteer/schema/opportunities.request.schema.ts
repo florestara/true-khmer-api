@@ -28,6 +28,54 @@ function normalizeOptionalText(value: string | null | undefined) {
   return normalized.length > 0 ? normalized : null;
 }
 
+function normalizeOptionalDate(value: string | null | undefined) {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    const [year, month, day] = trimmed.split("-").map(Number);
+    const parsed = new Date(Date.UTC(year, month - 1, day));
+
+    if (
+      parsed.getUTCFullYear() === year &&
+      parsed.getUTCMonth() === month - 1 &&
+      parsed.getUTCDate() === day
+    ) {
+      return trimmed;
+    }
+
+    return null;
+  }
+
+  const parsed = new Date(trimmed);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return parsed.toISOString().slice(0, 10);
+}
+
+function optionalDateSchema(fieldName: string) {
+  return z.string().nullish().transform((value, ctx) => {
+    const normalized = normalizeOptionalDate(value);
+    if (value != null && value.trim().length > 0 && !normalized) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `${fieldName} must be a valid ISO date`,
+      });
+      return z.NEVER;
+    }
+
+    return normalized;
+  });
+}
+
 function normalizeStringList(values: string[] | null | undefined) {
   if (!values) {
     return [];
@@ -382,14 +430,8 @@ const createVolunteerOpportunityBaseSchema = z
         (value) => value === null || value.length <= 5000,
         "communityImpact must be <= 5000 characters",
       ),
-    durationLabel: z
-      .string()
-      .nullish()
-      .transform((value) => normalizeOptionalText(value))
-      .refine(
-        (value) => value === null || value.length <= 120,
-        "durationLabel must be <= 120 characters",
-      ),
+    startDate: optionalDateSchema("startDate"),
+    endDate: optionalDateSchema("endDate"),
     commitmentLabel: z
       .string()
       .nullish()
@@ -397,6 +439,14 @@ const createVolunteerOpportunityBaseSchema = z
       .refine(
         (value) => value === null || value.length <= 120,
         "commitmentLabel must be <= 120 characters",
+      ),
+    commitmentDescription: z
+      .string()
+      .nullish()
+      .transform((value) => normalizeOptionalText(value))
+      .refine(
+        (value) => value === null || value.length <= 2000,
+        "commitmentDescription must be <= 2000 characters",
       ),
     applicationDeadline: z
       .string()
@@ -430,6 +480,15 @@ const createVolunteerOpportunityBaseSchema = z
       .array(volunteerOpportunityRoleSchema)
       .min(1, "roles must contain at least 1 role")
       .max(20, "roles must contain at most 20 roles"),
+  })
+  .superRefine((value, ctx) => {
+    if (value.startDate && value.endDate && value.endDate < value.startDate) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["endDate"],
+        message: "endDate must be on or after startDate",
+      });
+    }
   })
   .openapi("CreateVolunteerOpportunityPayload");
 

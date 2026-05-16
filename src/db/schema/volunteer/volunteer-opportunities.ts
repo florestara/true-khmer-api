@@ -2,6 +2,7 @@ import { relations, sql } from "drizzle-orm";
 import {
   boolean,
   check,
+  date,
   foreignKey,
   index,
   integer,
@@ -21,9 +22,9 @@ import { volunteerCategory } from "./volunteer-categories";
 
 export const volunteerOpportunityStatus = pgEnum("volunteer_opportunity_status", [
   "DRAFT",
-  "PUBLISHED",
-  "ARCHIVED",
+  "ACTIVE",
   "CLOSED",
+  "COMPLETED",
 ]);
 
 export const volunteerApplicationStatus = pgEnum("volunteer_application_status", [
@@ -49,8 +50,10 @@ export const volunteerOpportunity = pgTable(
     title: varchar("title", { length: 255 }).notNull(),
     overview: text("overview").notNull(),
     communityImpact: text("community_impact"),
-    durationLabel: varchar("duration_label", { length: 120 }),
+    startDate: date("start_date", { mode: "string" }),
+    endDate: date("end_date", { mode: "string" }),
     commitmentLabel: varchar("commitment_label", { length: 120 }),
+    commitmentDescription: text("commitment_description"),
     applicationDeadline: timestamp("application_deadline", {
       withTimezone: true,
       mode: "string",
@@ -68,8 +71,9 @@ export const volunteerOpportunity = pgTable(
     contactPhone: varchar("contact_phone", { length: 40 }),
     contactWebsiteUrl: text("contact_website_url"),
     totalView: integer("total_view").notNull().default(0),
+    filled: boolean("filled").default(false).notNull(),
     status: volunteerOpportunityStatus("status")
-      .default("PUBLISHED")
+      .default("ACTIVE")
       .notNull(),
     publishedAt: timestamp("published_at", {
       withTimezone: true,

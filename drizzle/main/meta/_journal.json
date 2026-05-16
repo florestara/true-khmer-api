@@ -246,6 +246,20 @@
       "when": 1778682185529,
       "tag": "0034_eminent_slyde",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1778896650220,
+      "tag": "0035_wealthy_wolfpack",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1778904470059,
+      "tag": "0036_dry_purifiers",
+      "breakpoints": true
     }
   ]
 }

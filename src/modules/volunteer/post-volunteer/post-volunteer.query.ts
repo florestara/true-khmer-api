@@ -68,6 +68,7 @@ type VolunteerLocationRow = {
   name: string;
 };
 type VolunteerOpportunityRow = typeof volunteerOpportunity.$inferSelect;
+type VolunteerOpportunityStatus = VolunteerOpportunityRow["status"];
 type VolunteerApplicationRow = typeof volunteerApplication.$inferSelect;
 type VolunteerOpportunitySaveInsert =
   typeof volunteerOpportunitySave.$inferInsert;
@@ -139,11 +140,14 @@ export type VolunteerOpportunityListItem = {
   id: string;
   title: string;
   overview: string;
-  durationLabel: string | null;
+  startDate: string | null;
+  endDate: string | null;
   commitmentLabel: string | null;
+  commitmentDescription: string | null;
   applicationDeadline: string;
   applicationCount: number;
   capacity: number;
+  filled: boolean;
   totalView: number;
   coverImageKey: string;
   createdAt: string;
@@ -158,15 +162,18 @@ export type VolunteerOpportunityDetail = {
   title: string;
   overview: string;
   communityImpact: string | null;
-  durationLabel: string | null;
+  startDate: string | null;
+  endDate: string | null;
   commitmentLabel: string | null;
+  commitmentDescription: string | null;
   applicationDeadline: string;
   applicationCount: number;
   capacity: number;
+  filled: boolean;
   totalView: number;
   coverImageKey: string;
   benefits: string[];
-  status: VolunteerOpportunityRow["status"];
+  status: VolunteerOpportunityStatus;
   publishedAt: string | null;
   organizer: VolunteerOrganizer;
   createdBy: string;
@@ -191,7 +198,8 @@ export type VolunteerApplicationDetail = {
     title: string;
     coverImageKey: string;
     applicationDeadline: string;
-    status: VolunteerOpportunityRow["status"];
+    status: VolunteerOpportunityStatus;
+    filled: boolean;
     category: VolunteerReference;
     location: VolunteerReference;
   };
@@ -224,7 +232,7 @@ type VolunteerApplicationTarget = {
   roleTitle: string;
   createdBy: string;
   applicationDeadline: string;
-  status: VolunteerOpportunityRow["status"];
+  status: VolunteerOpportunityStatus;
   publishedAt: string | null;
 };
 type VolunteerApplicationOpportunityTarget = Omit<
@@ -268,6 +276,17 @@ function toInteger(value: unknown, fallback = 0): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function resolveVolunteerOpportunityStatus(
+  status: VolunteerOpportunityStatus,
+  applicationDeadline: string,
+): VolunteerOpportunityStatus {
+  if (status === "ACTIVE" && Date.parse(applicationDeadline) <= Date.now()) {
+    return "CLOSED";
+  }
+
+  return status;
+}
+
 export async function getVolunteerCategories(): Promise<
   VolunteerCategoryWithOpportunityCountRow[]
 > {
@@ -279,7 +298,8 @@ export async function getVolunteerCategories(): Promise<
     .from(volunteerOpportunity)
     .where(
       and(
-        eq(volunteerOpportunity.status, "PUBLISHED"),
+        eq(volunteerOpportunity.status, "ACTIVE"),
+        sql`${volunteerOpportunity.applicationDeadline} > now()`,
         isNotNull(volunteerOpportunity.publishedAt),
       ),
     )
@@ -511,11 +531,14 @@ function hydrateVolunteerOpportunityListItem(
     id: row.opportunity.id,
     title: row.opportunity.title,
     overview: row.opportunity.overview,
-    durationLabel: row.opportunity.durationLabel,
+    startDate: row.opportunity.startDate,
+    endDate: row.opportunity.endDate,
     commitmentLabel: row.opportunity.commitmentLabel,
+    commitmentDescription: row.opportunity.commitmentDescription,
     applicationDeadline: row.opportunity.applicationDeadline,
     applicationCount: toInteger(row.applicationCount),
     capacity: toInteger(row.capacity),
+    filled: row.opportunity.filled,
     totalView: toInteger(row.opportunity.totalView),
     coverImageKey: row.opportunity.coverImageKey,
     createdAt: row.opportunity.createdAt,
@@ -533,14 +556,21 @@ function hydrateVolunteerApplication(
     title: string;
     coverImageKey: string;
     applicationDeadline: string;
-    status: VolunteerOpportunityRow["status"];
+    status: VolunteerOpportunityStatus;
+    filled: boolean;
     category: VolunteerReference;
     location: VolunteerReference;
   },
 ): VolunteerApplicationDetail {
   return {
     id: application.id,
-    opportunity,
+    opportunity: {
+      ...opportunity,
+      status: resolveVolunteerOpportunityStatus(
+        opportunity.status,
+        opportunity.applicationDeadline,
+      ),
+    },
     role: {
       id: application.roleId,
       title: roleTitle,
@@ -600,15 +630,21 @@ function hydrateVolunteerOpportunityDetail(
     title: opportunity.title,
     overview: opportunity.overview,
     communityImpact: opportunity.communityImpact,
-    durationLabel: opportunity.durationLabel,
+    startDate: opportunity.startDate,
+    endDate: opportunity.endDate,
     commitmentLabel: opportunity.commitmentLabel,
+    commitmentDescription: opportunity.commitmentDescription,
     applicationDeadline: opportunity.applicationDeadline,
     applicationCount,
     capacity,
+    filled: opportunity.filled,
     totalView: toInteger(opportunity.totalView),
     coverImageKey: opportunity.coverImageKey,
     benefits: opportunity.benefits as string[],
-    status: opportunity.status,
+    status: resolveVolunteerOpportunityStatus(
+      opportunity.status,
+      opportunity.applicationDeadline,
+    ),
     publishedAt: opportunity.publishedAt,
     organizer: {
       ...organizer,
@@ -669,9 +705,10 @@ function buildVolunteerOpportunitiesWhereClause({
   "categoryId" | "locationId" | "search" | "cursor"
 >) {
   const filters: SQL<unknown>[] = [
-    eq(volunteerOpportunity.status, "PUBLISHED"),
+    eq(volunteerOpportunity.status, "ACTIVE"),
     eq(volunteerCategory.status, "ACTIVE"),
     eq(city.isActive, true),
+    sql`${volunteerOpportunity.applicationDeadline} > now()`,
     isNotNull(volunteerOpportunity.publishedAt),
   ];
 
@@ -689,7 +726,6 @@ function buildVolunteerOpportunitiesWhereClause({
       ilike(volunteerOpportunity.title, searchPattern),
       ilike(volunteerOpportunity.overview, searchPattern),
       ilike(volunteerOpportunity.communityImpact, searchPattern),
-      ilike(volunteerOpportunity.durationLabel, searchPattern),
       ilike(volunteerOpportunity.commitmentLabel, searchPattern),
       buildJsonbTextSearch(volunteerOpportunity.benefits, searchPattern),
       ilike(volunteerOpportunity.contactEmail, searchPattern),
@@ -1063,7 +1099,8 @@ async function getVolunteerOrganizersByUserIds(
     .where(
       and(
         inArray(volunteerOpportunity.createdBy, uniqueUserIds),
-        eq(volunteerOpportunity.status, "PUBLISHED"),
+        eq(volunteerOpportunity.status, "ACTIVE"),
+        sql`${volunteerOpportunity.applicationDeadline} > now()`,
         isNotNull(volunteerOpportunity.publishedAt),
       ),
     )
@@ -1223,7 +1260,8 @@ export async function getSavedVolunteerOpportunities(
   const cursorFilter = buildSavedVolunteerOpportunitiesCursorFilter(cursor);
   const filters: SQL<unknown>[] = [
     eq(volunteerOpportunitySaveList.saverId, userId),
-    eq(volunteerOpportunity.status, "PUBLISHED"),
+    eq(volunteerOpportunity.status, "ACTIVE"),
+    sql`${volunteerOpportunity.applicationDeadline} > now()`,
     eq(volunteerCategory.status, "ACTIVE"),
     eq(city.isActive, true),
     eq(country.isActive, true),
@@ -1282,7 +1320,8 @@ export async function getSavedVolunteerOpportunities(
     .where(
       and(
         eq(volunteerOpportunitySaveList.saverId, userId),
-        eq(volunteerOpportunity.status, "PUBLISHED"),
+        eq(volunteerOpportunity.status, "ACTIVE"),
+        sql`${volunteerOpportunity.applicationDeadline} > now()`,
         eq(volunteerCategory.status, "ACTIVE"),
         eq(city.isActive, true),
         eq(country.isActive, true),
@@ -1354,7 +1393,8 @@ export async function getVolunteerOpportunityById(
     .where(
       and(
         eq(volunteerOpportunity.id, opportunityId),
-        eq(volunteerOpportunity.status, "PUBLISHED"),
+        eq(volunteerOpportunity.status, "ACTIVE"),
+        sql`${volunteerOpportunity.applicationDeadline} > now()`,
         eq(volunteerCategory.status, "ACTIVE"),
         eq(city.isActive, true),
         eq(country.isActive, true),
@@ -1387,7 +1427,8 @@ export async function createVolunteerOpportunity(
         title: data.title,
         overview: data.overview,
         communityImpact: data.communityImpact,
-        durationLabel: data.durationLabel,
+        startDate: data.startDate,
+        endDate: data.endDate,
         commitmentLabel: data.commitmentLabel,
         applicationDeadline: data.applicationDeadline,
         coverImageKey: data.coverImageKey,
@@ -1396,7 +1437,8 @@ export async function createVolunteerOpportunity(
         contactTelegramUsername: data.contact.telegramUsername,
         contactPhone: data.contact.phone,
         contactWebsiteUrl: data.contact.websiteUrl,
-        status: "PUBLISHED",
+        commitmentDescription: data.commitmentDescription,
+        status: "ACTIVE",
         publishedAt: new Date().toISOString(),
         createdBy: data.createdBy,
       })
@@ -1511,7 +1553,8 @@ export async function createVolunteerApplication(
       title: data.opportunityTitle,
       coverImageKey: data.coverImageKey,
       applicationDeadline: data.applicationDeadline,
-      status: "PUBLISHED",
+      status: "ACTIVE",
+      filled: false,
       category: data.category,
       location: data.location,
     });
@@ -1530,6 +1573,7 @@ export async function findVolunteerApplicationsByApplicantId(
       coverImageKey: volunteerOpportunity.coverImageKey,
       applicationDeadline: volunteerOpportunity.applicationDeadline,
       opportunityStatus: volunteerOpportunity.status,
+      filled: volunteerOpportunity.filled,
       categoryId: volunteerCategory.id,
       categoryName: volunteerCategory.name,
       cityId: city.id,
@@ -1556,6 +1600,7 @@ export async function findVolunteerApplicationsByApplicantId(
       coverImageKey: row.coverImageKey,
       applicationDeadline: row.applicationDeadline,
       status: row.opportunityStatus,
+      filled: row.filled,
       category: {
         id: row.categoryId,
         name: row.categoryName,
@@ -1589,7 +1634,8 @@ export async function saveVolunteerOpportunityForUser(
       .where(
         and(
           eq(volunteerOpportunity.id, opportunityId),
-          eq(volunteerOpportunity.status, "PUBLISHED"),
+          eq(volunteerOpportunity.status, "ACTIVE"),
+          sql`${volunteerOpportunity.applicationDeadline} > now()`,
           eq(volunteerCategory.status, "ACTIVE"),
           eq(city.isActive, true),
           eq(country.isActive, true),
