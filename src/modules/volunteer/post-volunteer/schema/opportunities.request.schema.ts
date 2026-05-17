@@ -28,51 +28,26 @@ function normalizeOptionalText(value: string | null | undefined) {
   return normalized.length > 0 ? normalized : null;
 }
 
-function normalizeOptionalDate(value: string | null | undefined) {
-  if (value === undefined || value === null) {
-    return null;
-  }
-
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return null;
-  }
-
-  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-    const [year, month, day] = trimmed.split("-").map(Number);
-    const parsed = new Date(Date.UTC(year, month - 1, day));
-
-    if (
-      parsed.getUTCFullYear() === year &&
-      parsed.getUTCMonth() === month - 1 &&
-      parsed.getUTCDate() === day
-    ) {
-      return trimmed;
+function optionalDateTimeSchema(fieldName: string) {
+  return z.string().nullish().transform((value, ctx) => {
+    if (value === undefined || value === null) {
+      return null;
     }
 
-    return null;
-  }
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
 
-  const parsed = new Date(trimmed);
-  if (Number.isNaN(parsed.getTime())) {
-    return null;
-  }
-
-  return parsed.toISOString().slice(0, 10);
-}
-
-function optionalDateSchema(fieldName: string) {
-  return z.string().nullish().transform((value, ctx) => {
-    const normalized = normalizeOptionalDate(value);
-    if (value != null && value.trim().length > 0 && !normalized) {
+    if (!z.iso.datetime().safeParse(trimmed).success) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: `${fieldName} must be a valid ISO date`,
+        message: `${fieldName} must be a valid ISO datetime`,
       });
       return z.NEVER;
     }
 
-    return normalized;
+    return trimmed;
   });
 }
 
@@ -430,8 +405,8 @@ const createVolunteerOpportunityBaseSchema = z
         (value) => value === null || value.length <= 5000,
         "communityImpact must be <= 5000 characters",
       ),
-    startDate: optionalDateSchema("startDate"),
-    endDate: optionalDateSchema("endDate"),
+    startDate: optionalDateTimeSchema("startDate"),
+    endDate: optionalDateTimeSchema("endDate"),
     commitmentLabel: z
       .string()
       .nullish()
@@ -482,7 +457,11 @@ const createVolunteerOpportunityBaseSchema = z
       .max(20, "roles must contain at most 20 roles"),
   })
   .superRefine((value, ctx) => {
-    if (value.startDate && value.endDate && value.endDate < value.startDate) {
+    if (
+      value.startDate &&
+      value.endDate &&
+      Date.parse(value.endDate) < Date.parse(value.startDate)
+    ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["endDate"],

@@ -2,7 +2,6 @@ import { relations, sql } from "drizzle-orm";
 import {
   boolean,
   check,
-  date,
   foreignKey,
   index,
   integer,
@@ -50,8 +49,14 @@ export const volunteerOpportunity = pgTable(
     title: varchar("title", { length: 255 }).notNull(),
     overview: text("overview").notNull(),
     communityImpact: text("community_impact"),
-    startDate: date("start_date", { mode: "string" }),
-    endDate: date("end_date", { mode: "string" }),
+    startDate: timestamp("start_date", {
+      withTimezone: true,
+      mode: "string",
+    }),
+    endDate: timestamp("end_date", {
+      withTimezone: true,
+      mode: "string",
+    }),
     commitmentLabel: varchar("commitment_label", { length: 120 }),
     commitmentDescription: text("commitment_description"),
     applicationDeadline: timestamp("application_deadline", {

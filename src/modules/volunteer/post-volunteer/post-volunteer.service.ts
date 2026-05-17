@@ -514,7 +514,7 @@ export async function handleCreateVolunteerApplication(
     }
 
     if (target.roleConfirmedCount >= target.roleCapacity) {
-      return c.json({ ok: false, error: "Volunteer role is already filled" }, 400);
+      return c.json({ ok: false, error: "Volunteer role is already filled" }, 409);
     }
 
     const normalizedSupportingDocuments = normalizeOwnedSupportingDocumentKeys(
