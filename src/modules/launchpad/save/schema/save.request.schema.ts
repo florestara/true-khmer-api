@@ -18,7 +18,7 @@ const normalizeSavedLaunchpadsCursorTimestamp = (value: string) => {
 };
 
 const savedLaunchpadsPageCursorSchema = z.object({
-  savedAt: z.string().min(1),
+  savedAt: z.string().datetime({ offset: true }),
   launchpadId: z.string().regex(FORUM_UUID_RE),
 });
 
@@ -61,22 +61,25 @@ export const getSavedLaunchpadsQuerySchema = z
       .min(1, "limit must be between 1 and 50")
       .max(MAX_LAUNCHPADS_PAGE_SIZE, "limit must be between 1 and 50")
       .default(DEFAULT_LAUNCHPADS_PAGE_SIZE),
-    cursor: z.string().optional().transform((value, ctx) => {
-      if (value === undefined) {
-        return undefined;
-      }
+    cursor: z
+      .string()
+      .optional()
+      .transform((value, ctx) => {
+        if (value === undefined) {
+          return undefined;
+        }
 
-      const cursor = decodeSavedLaunchpadsPageCursor(value);
-      if (!cursor) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "cursor must be a valid pagination cursor",
-        });
-        return z.NEVER;
-      }
+        const cursor = decodeSavedLaunchpadsPageCursor(value);
+        if (!cursor) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "cursor must be a valid pagination cursor",
+          });
+          return z.NEVER;
+        }
 
-      return cursor;
-    }),
+        return cursor;
+      }),
   })
   .transform((value) => ({
     limit: value.limit,

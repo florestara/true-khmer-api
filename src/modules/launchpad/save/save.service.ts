@@ -12,6 +12,14 @@ import type {
 import { recordRecentActivityQuietly } from "../../recent-activity/recent-activity.service";
 
 function quoteActivityText(value: string) {
+  if (value.includes("'") && value.includes('"')) {
+    return value;
+  }
+
+  if (value.includes("'")) {
+    return `"${value}"`;
+  }
+
   return `'${value}'`;
 }
 
