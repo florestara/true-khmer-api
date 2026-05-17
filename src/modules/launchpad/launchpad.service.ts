@@ -212,8 +212,15 @@ export async function handleFindLaunchpads(
   c: Context,
   query: GetLaunchpadQueryListInput,
 ) {
+  let viewerId: string | undefined;
+  const authResult = getAuthUserId(c);
+
+  if (authResult.ok) {
+    viewerId = authResult.userId;
+  }
+
   try {
-    const result = await findLaunchpads(query);
+    const result = await findLaunchpads(query, viewerId);
     return c.json({ ok: true, ...result }, 200);
   } catch (error) {
     console.error("Failed to find launchpads", { error });

@@ -23,6 +23,7 @@ export type RecentActivityType =
   | "volunteer_opportunity_saved"
   | "volunteer_application_submitted"
   | "launchpad_created"
+  | "launchpad_saved"
   | "launchpad_application_submitted";
 
 export type RecentActivityTargetType =
