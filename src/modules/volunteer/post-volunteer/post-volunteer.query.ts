@@ -230,6 +230,8 @@ type VolunteerApplicationTarget = {
   cityName: string;
   roleId: string;
   roleTitle: string;
+  roleCapacity: number;
+  roleConfirmedCount: number;
   createdBy: string;
   applicationDeadline: string;
   status: VolunteerOpportunityStatus;
@@ -237,7 +239,7 @@ type VolunteerApplicationTarget = {
 };
 type VolunteerApplicationOpportunityTarget = Omit<
   VolunteerApplicationTarget,
-  "roleId" | "roleTitle"
+  "roleId" | "roleTitle" | "roleCapacity" | "roleConfirmedCount"
 >;
 
 const CAMBODIA_NORMALIZED_NAME = env.VOLUNTEER_COUNTRY_NORMALIZED_NAME;
@@ -474,6 +476,13 @@ export async function findVolunteerApplicationTargetByRoleId(
       cityName: city.name,
       roleId: volunteerRole.id,
       roleTitle: volunteerRole.title,
+      roleCapacity: volunteerRole.capacity,
+      roleConfirmedCount: sql<number>`(
+        select count(*)::int
+        from ${volunteerApplication}
+        where ${volunteerApplication.roleId} = ${volunteerRole.id}
+          and ${volunteerApplication.status} = 'CONFIRMED'
+      )`,
       opportunityOverview: volunteerOpportunity.overview,
       createdBy: volunteerOpportunity.createdBy,
       applicationDeadline: volunteerOpportunity.applicationDeadline,

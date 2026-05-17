@@ -111,6 +111,11 @@ type ManagePostingApplicationDetail = {
 };
 
 type PosterApplicationStatusChange = "UNDER_REVIEW" | "APPROVED" | "DECLINED";
+type ManagePostingApplicationUpdateResult =
+  | "not_found"
+  | "conflict"
+  | "role_filled"
+  | ManagePostingApplicationDetail;
 
 const POSTER_LOCKED_APPLICATION_STATUSES = new Set<ManagePostingApplicantStatus>(
   ["CONFIRMED", "DECLINED", "COMPLETED", "WITHDRAWN"],
@@ -163,6 +168,7 @@ type ProjectPostingRow = {
   totalView: number;
   applicantCount: number;
   capacity: number;
+  filled: boolean;
   deadline: string | null;
   createdAt: string;
 };
@@ -384,6 +390,32 @@ async function findProjectManagePostings(
     .groupBy(launchpadRole.launchpadId)
     .as("launchpad_role_capacities");
 
+  const confirmedApplicationsByRole = db
+    .select({
+      launchpadRoleId: launchpadApplication.launchpadRoleId,
+      confirmedCount: sql<number>`count(*)::int`.as("confirmed_count"),
+    })
+    .from(launchpadApplication)
+    .where(eq(launchpadApplication.status, "CONFIRMED"))
+    .groupBy(launchpadApplication.launchpadRoleId)
+    .as("confirmed_launchpad_applications_by_role");
+
+  const filledLaunchpads = db
+    .select({
+      launchpadId: launchpadRole.launchpadId,
+      filled:
+        sql<boolean>`bool_and(coalesce(${confirmedApplicationsByRole.confirmedCount}, 0) >= ${launchpadRole.capacity})`.as(
+          "filled",
+        ),
+    })
+    .from(launchpadRole)
+    .leftJoin(
+      confirmedApplicationsByRole,
+      eq(confirmedApplicationsByRole.launchpadRoleId, launchpadRole.id),
+    )
+    .groupBy(launchpadRole.launchpadId)
+    .as("filled_launchpads");
+
   const rows: ProjectPostingRow[] = await db
     .select({
       id: launchpad.id,
@@ -393,6 +425,7 @@ async function findProjectManagePostings(
       totalView: launchpad.totalView,
       applicantCount: sql<number>`coalesce(${confirmedApplications.applicantCount}, 0)`,
       capacity: sql<number>`coalesce(${roleCapacities.capacity}, 0)`,
+      filled: sql<boolean>`coalesce(${filledLaunchpads.filled}, false)`,
       deadline: launchpad.deadline,
       createdAt: launchpad.createdAt,
     })
@@ -402,6 +435,7 @@ async function findProjectManagePostings(
       eq(confirmedApplications.launchpadId, launchpad.id),
     )
     .leftJoin(roleCapacities, eq(roleCapacities.launchpadId, launchpad.id))
+    .leftJoin(filledLaunchpads, eq(filledLaunchpads.launchpadId, launchpad.id))
     .where(eq(launchpad.createdBy, userId))
     .orderBy(desc(launchpad.createdAt));
 
@@ -421,7 +455,7 @@ async function findProjectManagePostings(
         deadline: row.deadline,
         now,
       }),
-      filled: false,
+      filled: row.filled,
       applicantCount,
       capacity,
       views: toInteger(row.totalView),
@@ -766,12 +800,13 @@ async function updateVolunteerManagePostingApplication(
   postingId: string,
   applicationId: string,
   status: PosterApplicationStatusChange,
-): Promise<"not_found" | "conflict" | ManagePostingApplicationDetail> {
+): Promise<ManagePostingApplicationUpdateResult> {
   const result = await db.transaction(async (tx) => {
     const [current] = await tx
       .select({
         id: volunteerApplication.id,
         status: volunteerApplication.status,
+        roleId: volunteerApplication.roleId,
       })
       .from(volunteerApplication)
       .innerJoin(
@@ -798,6 +833,37 @@ async function updateVolunteerManagePostingApplication(
     const statusLogs = buildPosterStatusLogSequence(current.status, status);
     if (statusLogs.length === 0) {
       return "updated" as const;
+    }
+
+    if (status === "APPROVED") {
+      const [role] = await tx
+        .select({
+          capacity: volunteerRole.capacity,
+        })
+        .from(volunteerRole)
+        .where(eq(volunteerRole.id, current.roleId))
+        .for("update");
+
+      if (!role) {
+        return "not_found" as const;
+      }
+
+      const [reservedRow] = await tx
+        .select({
+          count: sql<number>`count(*)::int`,
+        })
+        .from(volunteerApplication)
+        .where(
+          and(
+            eq(volunteerApplication.roleId, current.roleId),
+            sql`${volunteerApplication.status} in ('APPROVED', 'CONFIRMED')`,
+          ),
+        );
+      const reservedCount = toInteger(reservedRow?.count);
+
+      if (reservedCount >= role.capacity) {
+        return "role_filled" as const;
+      }
     }
 
     const [updated] = await tx
@@ -845,12 +911,13 @@ async function updateProjectManagePostingApplication(
   postingId: string,
   applicationId: string,
   status: PosterApplicationStatusChange,
-): Promise<"not_found" | "conflict" | ManagePostingApplicationDetail> {
+): Promise<ManagePostingApplicationUpdateResult> {
   const result = await db.transaction(async (tx) => {
     const [current] = await tx
       .select({
         id: launchpadApplication.id,
         status: launchpadApplication.status,
+        launchpadRoleId: launchpadApplication.launchpadRoleId,
       })
       .from(launchpadApplication)
       .innerJoin(launchpad, eq(launchpad.id, launchpadApplication.launchpadId))
@@ -874,6 +941,37 @@ async function updateProjectManagePostingApplication(
     const statusLogs = buildPosterStatusLogSequence(current.status, status);
     if (statusLogs.length === 0) {
       return "updated" as const;
+    }
+
+    if (status === "APPROVED") {
+      const [role] = await tx
+        .select({
+          capacity: launchpadRole.capacity,
+        })
+        .from(launchpadRole)
+        .where(eq(launchpadRole.id, current.launchpadRoleId))
+        .for("update");
+
+      if (!role) {
+        return "not_found" as const;
+      }
+
+      const [reservedRow] = await tx
+        .select({
+          count: sql<number>`count(*)::int`,
+        })
+        .from(launchpadApplication)
+        .where(
+          and(
+            eq(launchpadApplication.launchpadRoleId, current.launchpadRoleId),
+            sql`${launchpadApplication.status} in ('APPROVED', 'CONFIRMED')`,
+          ),
+        );
+      const reservedCount = toInteger(reservedRow?.count);
+
+      if (reservedCount >= role.capacity) {
+        return "role_filled" as const;
+      }
     }
 
     const [updated] = await tx
@@ -919,7 +1017,7 @@ async function updateProjectManagePostingApplication(
 export async function updateManagePostingApplication(
   userId: string,
   params: ChangeManagePostingApplicationStatusParam,
-): Promise<"not_found" | "conflict" | ManagePostingApplicationDetail> {
+): Promise<ManagePostingApplicationUpdateResult> {
   const status = getPosterApplicationStatusChange(params.statusAction);
 
   if (params.sourceType === "volunteer") {

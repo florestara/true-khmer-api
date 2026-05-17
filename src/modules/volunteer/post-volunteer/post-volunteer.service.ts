@@ -513,6 +513,10 @@ export async function handleCreateVolunteerApplication(
       throw new Error("Volunteer application target missing after validation");
     }
 
+    if (target.roleConfirmedCount >= target.roleCapacity) {
+      return c.json({ ok: false, error: "Volunteer role is already filled" }, 400);
+    }
+
     const normalizedSupportingDocuments = normalizeOwnedSupportingDocumentKeys(
       target.opportunityId,
       authResult.userId,

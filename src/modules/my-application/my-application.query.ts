@@ -429,6 +429,7 @@ async function updateVolunteerApplicationStatus(
       .select({
         id: volunteerApplication.id,
         status: volunteerApplication.status,
+        opportunityId: volunteerApplication.opportunityId,
       })
       .from(volunteerApplication)
       .where(
@@ -469,6 +470,40 @@ async function updateVolunteerApplicationStatus(
       declinedBy: nextStatus === "DECLINED" ? "APPLICANT" : null,
       createdBy: applicantId,
     });
+
+    if (nextStatus === "CONFIRMED") {
+      await tx
+        .select({ id: volunteerOpportunity.id })
+        .from(volunteerOpportunity)
+        .where(eq(volunteerOpportunity.id, current.opportunityId))
+        .for("update");
+
+      const roleFilledRows = await tx
+        .select({
+          capacity: volunteerRole.capacity,
+          confirmedCount: sql<number>`(
+            select count(*)::int
+            from ${volunteerApplication}
+            where ${volunteerApplication.roleId} = ${volunteerRole.id}
+              and ${volunteerApplication.status} = 'CONFIRMED'
+          )`,
+        })
+        .from(volunteerRole)
+        .where(eq(volunteerRole.opportunityId, current.opportunityId));
+      const filled =
+        roleFilledRows.length > 0 &&
+        roleFilledRows.every(
+          (role) => Number(role.confirmedCount ?? 0) >= role.capacity,
+        );
+
+      await tx
+        .update(volunteerOpportunity)
+        .set({
+          filled,
+          updatedAt: sql`now()`,
+        })
+        .where(eq(volunteerOpportunity.id, current.opportunityId));
+    }
 
     return "updated" as const;
   });
