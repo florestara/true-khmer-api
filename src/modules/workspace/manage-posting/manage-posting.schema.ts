@@ -150,7 +150,6 @@ export const managePostingsResponseSchema = z
 
 export const managePostingApplicantSchema = z
   .object({
-    id: z.string(),
     candidate: z.object({
       id: z.string(),
       name: z.string(),
