@@ -427,15 +427,7 @@ function matchesApplicantSearch(
   }
 
   const normalizedSearch = search.toLowerCase();
-  return [
-    applicant.candidate.name,
-    applicant.candidate.email,
-    applicant.role.title,
-    applicant.role.description,
-    ...applicant.roles.flatMap((role) => [role.title, role.description]),
-    applicant.contact.phoneNumber,
-    applicant.contact.telegramUsername,
-  ].some((value) => value?.toLowerCase().includes(normalizedSearch));
+  return applicant.candidate.name.toLowerCase().includes(normalizedSearch);
 }
 
 function derivePostingStatus(input: {
