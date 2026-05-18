@@ -11,6 +11,7 @@ const MIN_VOLUNTEER_APPLICATION_DOCUMENT_COUNT = 1;
 const MAX_VOLUNTEER_APPLICATION_DOCUMENT_COUNT = 3;
 const MAX_VOLUNTEER_OPPORTUNITIES_PAGE_SIZE = 50;
 const DEFAULT_VOLUNTEER_OPPORTUNITIES_PAGE_SIZE = 10;
+const VOLUNTEER_COMMITMENT_LABELS = ["Light", "Regular", "Intensive"] as const;
 
 export const VOLUNTEER_COVER_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 export const VOLUNTEER_APPLICATION_DOCUMENT_MAX_BYTES = 10 * 1024 * 1024;
@@ -26,6 +27,37 @@ function normalizeOptionalText(value: string | null | undefined) {
 
   const normalized = normalizeText(value);
   return normalized.length > 0 ? normalized : null;
+}
+
+function isVolunteerCommitmentLabel(
+  value: string,
+): value is (typeof VOLUNTEER_COMMITMENT_LABELS)[number] {
+  return VOLUNTEER_COMMITMENT_LABELS.includes(
+    value as (typeof VOLUNTEER_COMMITMENT_LABELS)[number],
+  );
+}
+
+function optionalDateTimeSchema(fieldName: string) {
+  return z.string().nullish().transform((value, ctx) => {
+    if (value === undefined || value === null) {
+      return null;
+    }
+
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+
+    if (!z.iso.datetime().safeParse(trimmed).success) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `${fieldName} must be a valid ISO datetime`,
+      });
+      return z.NEVER;
+    }
+
+    return trimmed;
+  });
 }
 
 function normalizeStringList(values: string[] | null | undefined) {
@@ -232,17 +264,9 @@ const volunteerOpportunityRoleSchema = z
     commitmentLabel: z
       .string()
       .transform((value) => normalizeText(value))
-      .pipe(
-        z
-          .string()
-          .min(
-            1,
-            "roles[].commitmentLabel is required and must be 1..120 characters",
-          )
-          .max(
-            120,
-            "roles[].commitmentLabel is required and must be 1..120 characters",
-          ),
+      .refine(
+        (value) => isVolunteerCommitmentLabel(value),
+        `roles[].commitmentLabel must be one of: ${VOLUNTEER_COMMITMENT_LABELS.join(", ")}`,
       ),
     capacity: z
       .number()
@@ -382,21 +406,23 @@ const createVolunteerOpportunityBaseSchema = z
         (value) => value === null || value.length <= 5000,
         "communityImpact must be <= 5000 characters",
       ),
-    durationLabel: z
-      .string()
-      .nullish()
-      .transform((value) => normalizeOptionalText(value))
-      .refine(
-        (value) => value === null || value.length <= 120,
-        "durationLabel must be <= 120 characters",
-      ),
+    startDate: optionalDateTimeSchema("startDate"),
+    endDate: optionalDateTimeSchema("endDate"),
     commitmentLabel: z
       .string()
       .nullish()
       .transform((value) => normalizeOptionalText(value))
       .refine(
-        (value) => value === null || value.length <= 120,
-        "commitmentLabel must be <= 120 characters",
+        (value) => value === null || isVolunteerCommitmentLabel(value),
+        `commitmentLabel must be one of: ${VOLUNTEER_COMMITMENT_LABELS.join(", ")}`,
+      ),
+    commitmentDescription: z
+      .string()
+      .nullish()
+      .transform((value) => normalizeOptionalText(value))
+      .refine(
+        (value) => value === null || value.length <= 2000,
+        "commitmentDescription must be <= 2000 characters",
       ),
     applicationDeadline: z
       .string()
@@ -431,6 +457,19 @@ const createVolunteerOpportunityBaseSchema = z
       .min(1, "roles must contain at least 1 role")
       .max(20, "roles must contain at most 20 roles"),
   })
+  .superRefine((value, ctx) => {
+    if (
+      value.startDate &&
+      value.endDate &&
+      Date.parse(value.endDate) < Date.parse(value.startDate)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["endDate"],
+        message: "endDate must be on or after startDate",
+      });
+    }
+  })
   .openapi("CreateVolunteerOpportunityPayload");
 
 export const createVolunteerOpportunitySchema =
@@ -444,73 +483,119 @@ export const createVolunteerOpportunitySchema =
     })
     .openapi("CreateVolunteerOpportunityRequest");
 
-export const createVolunteerApplicationSchema = z
-  .object({
+const volunteerApplicationSupportingDocumentsSchema = z
+  .array(
+    z.object({
+      name: z
+        .string()
+        .trim()
+        .min(1, "supportingDocuments[].name is required")
+        .max(255, "supportingDocuments[].name must be <= 255 characters"),
+      key: z
+        .string()
+        .trim()
+        .min(1, "supportingDocuments[].key is required")
+        .max(600, "supportingDocuments[].key must be <= 600 characters"),
+    }),
+  )
+  .max(
+    MAX_VOLUNTEER_APPLICATION_DOCUMENT_COUNT,
+    `supportingDocuments must contain at most ${MAX_VOLUNTEER_APPLICATION_DOCUMENT_COUNT} files`,
+  )
+  .superRefine((value, ctx) => {
+    const seen = new Set<string>();
+    value.forEach((item, index) => {
+      if (seen.has(item.key)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [index],
+          message: "supportingDocuments[] must not contain duplicate keys",
+        });
+        return;
+      }
+
+      seen.add(item.key);
+    });
+  })
+  .default([]);
+
+const volunteerApplicationBaseSchema = z.object({
+  availability: z
+    .string()
+    .transform((value) => normalizeText(value))
+    .pipe(
+      z
+        .string()
+        .min(1, "availability is required and must be 1..500 characters")
+        .max(500, "availability is required and must be 1..500 characters"),
+    ),
+  relevantExperience: z
+    .string()
+    .transform((value) => normalizeText(value))
+    .pipe(
+      z
+        .string()
+        .min(1, "relevantExperience is required and must be 1..5000 characters")
+        .max(
+          5000,
+          "relevantExperience is required and must be 1..5000 characters",
+        ),
+    ),
+  supportingDocuments: volunteerApplicationSupportingDocumentsSchema,
+  topPickRoleId: z
+    .string()
+    .uuid("topPickRoleId must be a valid UUID")
+    .nullish()
+    .transform((value) => value ?? null),
+});
+
+export const createVolunteerApplicationSchema = volunteerApplicationBaseSchema
+  .extend({
     roleId: z.string().uuid("roleId must be a valid UUID"),
-    availability: z
-      .string()
-      .transform((value) => normalizeText(value))
-      .pipe(
-        z
-          .string()
-          .min(1, "availability is required and must be 1..500 characters")
-          .max(500, "availability is required and must be 1..500 characters"),
-      ),
-    relevantExperience: z
-      .string()
-      .transform((value) => normalizeText(value))
-      .pipe(
-        z
-          .string()
-          .min(
-            1,
-            "relevantExperience is required and must be 1..5000 characters",
-          )
-          .max(
-            5000,
-            "relevantExperience is required and must be 1..5000 characters",
-          ),
-      ),
-    supportingDocuments: z
-      .array(
-        z.object({
-          name: z
-            .string()
-            .trim()
-            .min(1, "supportingDocuments[].name is required")
-            .max(255, "supportingDocuments[].name must be <= 255 characters"),
-          key: z
-            .string()
-            .trim()
-            .min(1, "supportingDocuments[].key is required")
-            .max(600, "supportingDocuments[].key must be <= 600 characters"),
-        }),
-      )
-      .min(
-        MIN_VOLUNTEER_APPLICATION_DOCUMENT_COUNT,
-        `supportingDocuments must contain at least ${MIN_VOLUNTEER_APPLICATION_DOCUMENT_COUNT} files`,
-      )
-      .max(
-        MAX_VOLUNTEER_APPLICATION_DOCUMENT_COUNT,
-        `supportingDocuments must contain at most ${MAX_VOLUNTEER_APPLICATION_DOCUMENT_COUNT} files`,
-      )
+  })
+  .superRefine((value, ctx) => {
+    if (value.topPickRoleId && value.topPickRoleId !== value.roleId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["topPickRoleId"],
+        message: "topPickRoleId must match roleId",
+      });
+    }
+  })
+  .openapi("CreateVolunteerApplicationRequest");
+
+export const createVolunteerApplicationBatchSchema = volunteerApplicationBaseSchema
+  .extend({
+    roleIds: z
+      .array(z.string().uuid("roleIds[] must be a valid UUID"))
+      .min(1, "roleIds must contain at least 1 role")
+      .max(20, "roleIds must contain at most 20 roles")
       .superRefine((value, ctx) => {
         const seen = new Set<string>();
-        value.forEach((item, index) => {
-          if (seen.has(item.key)) {
+        value.forEach((roleId, index) => {
+          if (seen.has(roleId)) {
             ctx.addIssue({
               code: z.ZodIssueCode.custom,
               path: [index],
-              message: "supportingDocuments[] must not contain duplicate keys",
+              message: "roleIds[] must not contain duplicate roles",
             });
             return;
           }
 
-          seen.add(item.key);
+          seen.add(roleId);
         });
       }),
   })
-  .openapi("CreateVolunteerApplicationRequest");
+  .superRefine((value, ctx) => {
+    if (value.topPickRoleId && !value.roleIds.includes(value.topPickRoleId)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["topPickRoleId"],
+        message: "topPickRoleId must be one of roleIds",
+      });
+    }
+  })
+  .openapi("CreateVolunteerApplicationBatchRequest");
 
 export type PresignVolunteerOpportunityCoverUploadPayload = z.infer<
   typeof presignVolunteerOpportunityCoverUploadSchema
@@ -627,4 +712,8 @@ export type CreateVolunteerOpportunityBodyInput = z.infer<
 
 export type CreateVolunteerApplicationBodyInput = z.infer<
   typeof createVolunteerApplicationSchema
+>;
+
+export type CreateVolunteerApplicationBatchBodyInput = z.infer<
+  typeof createVolunteerApplicationBatchSchema
 >;

@@ -132,6 +132,27 @@ export async function handleUpdateManagePostingApplication(
       );
     }
 
+    if (result === "role_filled") {
+      return c.json(
+        {
+          ok: false,
+          error: "Role capacity has already been reached",
+        },
+        409,
+      );
+    }
+
+    if (result === "applicant_already_approved") {
+      return c.json(
+        {
+          ok: false,
+          error:
+            "Applicant already has an approved or confirmed role for this opportunity",
+        },
+        409,
+      );
+    }
+
     return c.json(
       {
         ok: true,

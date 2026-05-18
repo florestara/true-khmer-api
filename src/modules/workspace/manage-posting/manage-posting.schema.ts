@@ -13,7 +13,7 @@ export const managePostingSourceParamSchema = z
   .openapi("ManagePostingSourceParam");
 
 export const managePostingFilterSchema = z
-  .enum(["all", "active", "draft", "filled", "ended"])
+  .enum(["all", "active", "draft", "closed", "completed", "filled"])
   .openapi("ManagePostingFilter");
 
 export const getManagePostingsQuerySchema = z
@@ -97,7 +97,7 @@ export const getManagePostingDetailQuerySchema = z
   .openapi("GetManagePostingDetailQuery");
 
 export const managePostingStatusSchema = z
-  .enum(["ACTIVE", "DRAFT", "FILLED", "ENDED"])
+  .enum(["ACTIVE", "DRAFT", "PUBLISHED", "CLOSED", "COMPLETED"])
   .openapi("ManagePostingStatus");
 
 export const managePostingApplicantStatusSchema = z
@@ -120,6 +120,7 @@ export const managePostingItemSchema = z
     description: z.string().nullable(),
     imageKey: z.string().nullable(),
     status: managePostingStatusSchema,
+    filled: z.boolean(),
     applicantCount: z.number().int().nonnegative(),
     capacity: z.number().int().nonnegative(),
     views: z.number().int().nonnegative(),
@@ -162,7 +163,20 @@ export const managePostingApplicantSchema = z
     role: z.object({
       id: z.string(),
       title: z.string(),
+      description: z.string().nullable(),
     }),
+    roles: z.array(
+      z.object({
+        applicationId: z.string(),
+        id: z.string(),
+        title: z.string(),
+        description: z.string().nullable(),
+        status: managePostingApplicantStatusSchema,
+        appliedAt: z.string(),
+        updatedAt: z.string(),
+      }),
+    ),
+    topPick: z.string().nullable(),
     status: managePostingApplicantStatusSchema,
     appliedAt: z.string(),
     updatedAt: z.string(),

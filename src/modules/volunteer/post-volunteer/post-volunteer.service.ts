@@ -7,10 +7,12 @@ import {
 import { getAuthUserId } from "../../auth/utils/get-auth";
 import {
   createVolunteerApplication,
+  createVolunteerApplicationsBatch,
   createVolunteerCategory,
   createVolunteerOpportunity,
   findActiveVolunteerCategoryById,
   findVolunteerApplicationTargetByRoleId,
+  findVolunteerApplicationTargetsByRoleIds,
   findVolunteerLocationById,
   findVolunteerOpportunityApplicationTargetById,
   getSavedVolunteerOpportunities,
@@ -23,6 +25,7 @@ import {
   unsaveVolunteerOpportunityForUser,
 } from "./post-volunteer.query";
 import type {
+  CreateVolunteerApplicationBatchBodyInput,
   CreateVolunteerApplicationBodyInput,
   CreateVolunteerCategoryBodyInput,
   CreateVolunteerOpportunityBodyInput,
@@ -588,6 +591,153 @@ export async function handleCreateVolunteerApplication(
     }
 
     console.error("Failed to create volunteer application", err);
+    return c.json({ ok: false, error: "Internal server error" }, 500);
+  }
+}
+
+export async function handleCreateVolunteerApplicationBatch(
+  c: Context,
+  data: CreateVolunteerApplicationBatchBodyInput,
+) {
+  const authResult = getAuthUserId(c);
+  if (!authResult.ok) {
+    return authResult.response;
+  }
+
+  try {
+    const targets = await findVolunteerApplicationTargetsByRoleIds(data.roleIds);
+    const targetByRoleId = new Map(
+      targets.map((target) => [target.roleId, target]),
+    );
+    const orderedTargets = data.roleIds
+      .map((roleId) => targetByRoleId.get(roleId))
+      .filter((target) => target !== undefined);
+
+    if (orderedTargets.length !== data.roleIds.length) {
+      return c.json({ ok: false, error: "Volunteer role not found" }, 404);
+    }
+
+    const firstTarget = orderedTargets[0];
+    if (!firstTarget) {
+      return c.json({ ok: false, error: "Volunteer role not found" }, 404);
+    }
+
+    for (const target of orderedTargets) {
+      const targetError = resolveVolunteerApplicationTargetError(
+        target,
+        authResult.userId,
+        "Volunteer role not found",
+      );
+
+      if (targetError) {
+        return c.json(
+          { ok: false, error: targetError.error },
+          targetError.status,
+        );
+      }
+
+      if (target.opportunityId !== firstTarget.opportunityId) {
+        return c.json(
+          {
+            ok: false,
+            error: "All roleIds must belong to the same volunteer opportunity",
+          },
+          400,
+        );
+      }
+    }
+
+    const normalizedSupportingDocuments = normalizeOwnedSupportingDocumentKeys(
+      firstTarget.opportunityId,
+      authResult.userId,
+      data.supportingDocuments,
+    );
+
+    if (!normalizedSupportingDocuments) {
+      return c.json(
+        {
+          ok: false,
+          error: "Validation failed",
+          issues: [
+            {
+              path: "supportingDocuments",
+              message:
+                "supportingDocuments must belong to current user and opportunity",
+            },
+          ],
+        },
+        400,
+      );
+    }
+
+    const applications = await createVolunteerApplicationsBatch({
+      applicantId: authResult.userId,
+      opportunityId: firstTarget.opportunityId,
+      opportunityTitle: firstTarget.opportunityTitle,
+      coverImageKey: firstTarget.coverImageKey,
+      applicationDeadline: firstTarget.applicationDeadline,
+      category: {
+        id: firstTarget.categoryId,
+        name: firstTarget.categoryName,
+      },
+      location: {
+        id: firstTarget.cityId,
+        name: firstTarget.cityName,
+      },
+      roles: orderedTargets.map((target) => ({
+        roleId: target.roleId,
+        roleTitle: target.roleTitle,
+      })),
+      availability: data.availability,
+      relevantExperience: data.relevantExperience,
+      supportingDocuments: normalizedSupportingDocuments,
+      topPickRoleId: data.topPickRoleId,
+    });
+
+    const applicationByRoleId = new Map(
+      applications.map((application) => [application.role.id, application]),
+    );
+
+    for (const target of orderedTargets) {
+      const application = applicationByRoleId.get(target.roleId);
+      if (!application) {
+        continue;
+      }
+
+      recordRecentActivityQuietly({
+        userId: authResult.userId,
+        type: "volunteer_application_submitted",
+        title: `Applied to ${quoteActivityText(target.opportunityTitle)} volunteer opportunity`,
+        description: target.opportunityOverview,
+        targetType: "volunteer_opportunity",
+        targetId: target.opportunityId,
+        referenceType: "volunteer_application",
+        referenceId: application.id,
+        data: {
+          opportunityId: target.opportunityId,
+          applicationId: application.id,
+          roleId: target.roleId,
+          roleTitle: target.roleTitle,
+        },
+      });
+    }
+
+    return c.json({ ok: true, applications }, 201);
+  } catch (err) {
+    const error = getPostgresError(err);
+
+    if (
+      error?.code === POSTGRES_UNIQUE_VIOLATION &&
+      getPostgresConstraint(error) ===
+        VOLUNTEER_APPLICATION_APPLICANT_ROLE_UNIQUE_INDEX
+    ) {
+      return c.json(
+        { ok: false, error: "You have already applied to one or more roles" },
+        409,
+      );
+    }
+
+    console.error("Failed to create volunteer application batch", err);
     return c.json({ ok: false, error: "Internal server error" }, 500);
   }
 }
