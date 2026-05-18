@@ -19,7 +19,7 @@ import {
 import type {
   ChangeMyApplicationArchiveParam,
   ChangeMyApplicationStatusParam,
-} from "./applications.schema";
+} from "./schema/my-application.request.schema";
 import { findVolunteerApplicationsByApplicantId } from "../volunteer/post-volunteer/post-volunteer.query";
 
 export type MySpaceVolunteerApplication =
@@ -74,16 +74,33 @@ export async function findMyProjectApplications(userId: string) {
 
 function buildApplicationTimeline(
   logs: Array<{
-    status: "SUBMITTED" | "APPROVED" | "CONFIRMED" | "COMPLETED" | string;
+    status:
+      | "SUBMITTED"
+      | "UNDER_REVIEW"
+      | "APPROVED"
+      | "DECLINED"
+      | "CONFIRMED"
+      | "COMPLETED"
+      | string;
     createdAt: string;
+    declinedBy: "POSTER" | "APPLICANT" | null;
   }>,
 ) {
   return logs.reduce(
     (timeline, log) => {
       if (log.status === "SUBMITTED") {
         timeline.submitted ??= log.createdAt;
+      } else if (log.status === "UNDER_REVIEW") {
+        timeline.underReview ??= log.createdAt;
       } else if (log.status === "APPROVED") {
         timeline.passed ??= log.createdAt;
+      } else if (log.status === "DECLINED") {
+        if (!timeline.declined.at) {
+          timeline.declined = {
+            at: log.createdAt,
+            by: log.declinedBy,
+          };
+        }
       } else if (log.status === "CONFIRMED") {
         timeline.confirmed ??= log.createdAt;
       } else if (log.status === "COMPLETED") {
@@ -94,12 +111,22 @@ function buildApplicationTimeline(
     },
     {
       submitted: null,
+      underReview: null,
       passed: null,
+      declined: {
+        at: null,
+        by: null,
+      },
       confirmed: null,
       completed: null,
     } as {
       submitted: string | null;
+      underReview: string | null;
       passed: string | null;
+      declined: {
+        at: string | null;
+        by: "POSTER" | "APPLICANT" | null;
+      };
       confirmed: string | null;
       completed: string | null;
     },
@@ -194,6 +221,7 @@ export async function findMyVolunteerApplicationDetail(
       .select({
         status: volunteerApplicationLog.status,
         createdAt: volunteerApplicationLog.createdAt,
+        declinedBy: volunteerApplicationLog.declinedBy,
       })
       .from(volunteerApplicationLog)
       .where(eq(volunteerApplicationLog.volunteerApplicationId, applicationId))
@@ -306,6 +334,7 @@ export async function findMyProjectApplicationDetail(
     .select({
       status: launchpadApplicationLog.status,
       createdAt: launchpadApplicationLog.createdAt,
+      declinedBy: launchpadApplicationLog.declinedBy,
     })
     .from(launchpadApplicationLog)
     .where(eq(launchpadApplicationLog.launchpadApplicationId, applicationId))

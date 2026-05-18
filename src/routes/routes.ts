@@ -16,7 +16,7 @@ import { reportingRouter } from "../modules/forum/reporting/reporting.router";
 import { launchpadCategoriesRouter } from "../modules/launchpad/categories/categories.router";
 import { launchpadRouter } from "../modules/launchpad/launchpad.router";
 import { launchpadApplicationsRouter } from "../modules/launchpad/applications/applications.router";
-import { myApplicationsRouter } from "../modules/myspace/applications.router";
+import { myApplicationsRouter } from "../modules/my-application/my-application.router";
 import { myspaceRouter } from "../modules/myspace/myspace.router";
 import { managePostingRouter } from "../modules/workspace/manage-posting/manage-posting.router";
 
