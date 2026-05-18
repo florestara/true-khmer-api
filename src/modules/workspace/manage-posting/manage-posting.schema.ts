@@ -160,15 +160,10 @@ export const managePostingApplicantSchema = z
       avatarUrl: z.string().nullable(),
       avatarKey: z.string().nullable(),
     }),
-    role: z.object({
-      id: z.string(),
-      title: z.string(),
-      description: z.string().nullable(),
-    }),
     roles: z.array(
       z.object({
         applicationId: z.string(),
-        id: z.string(),
+        roleId: z.string(),
         title: z.string(),
         description: z.string().nullable(),
         status: managePostingApplicantStatusSchema,

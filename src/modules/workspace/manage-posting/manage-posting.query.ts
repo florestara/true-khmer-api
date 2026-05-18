@@ -68,14 +68,9 @@ type ManagePostingApplicant = {
     avatarUrl: string | null;
     avatarKey: string | null;
   };
-  role: {
-    id: string;
-    title: string;
-    description: string | null;
-  };
   roles: Array<{
     applicationId: string;
-    id: string;
+    roleId: string;
     title: string;
     description: string | null;
     status: ManagePostingApplicantStatus;
@@ -310,7 +305,7 @@ function buildVolunteerManagePostingApplicants(
     const roleDescription = getVolunteerRoleDescription(row.role.responsibilities);
     const roleItem = {
       applicationId: row.application.id,
-      id: row.role.id,
+      roleId: row.role.id,
       title: row.role.title,
       description: roleDescription,
       status: row.application.status,
@@ -323,11 +318,6 @@ function buildVolunteerManagePostingApplicants(
       applicantByGroup.set(groupKey, {
         id: row.application.id,
         candidate: row.candidate,
-        role: {
-          id: row.role.id,
-          title: row.role.title,
-          description: roleDescription,
-        },
         roles: [roleItem],
         topPick: row.application.topPick ? row.role.id : null,
         status: row.application.status,
@@ -365,11 +355,6 @@ function buildVolunteerManagePostingApplicants(
     if (row.application.topPick) {
       existing.topPick = row.role.id;
       existing.id = row.application.id;
-      existing.role = {
-        id: row.role.id,
-        title: row.role.title,
-        description: roleDescription,
-      };
     }
   }
 
@@ -772,11 +757,10 @@ async function findProjectManagePostingDetail(
   const applicants: ManagePostingApplicant[] = rows.map((row) => ({
     id: row.application.id,
     candidate: row.candidate,
-    role: row.role,
     roles: [
       {
         applicationId: row.application.id,
-        id: row.role.id,
+        roleId: row.role.id,
         title: row.role.title,
         description: row.role.description,
         status: row.application.status,
@@ -924,21 +908,10 @@ async function findVolunteerManagePostingApplication(
   );
 
   if (applicant) {
-    const requestedRole = applicant.roles.find(
-      (role) => role.applicationId === applicationId,
-    );
-
     return {
       applicant: {
         ...applicant,
         id: applicationId,
-        role: requestedRole
-          ? {
-              id: requestedRole.id,
-              title: requestedRole.title,
-              description: requestedRole.description,
-            }
-          : applicant.role,
       },
     };
   }
@@ -947,15 +920,10 @@ async function findVolunteerManagePostingApplication(
     applicant: {
       id: row.application.id,
       candidate: row.candidate,
-      role: {
-        id: row.role.id,
-        title: row.role.title,
-        description: getVolunteerRoleDescription(row.role.responsibilities),
-      },
       roles: [
         {
           applicationId: row.application.id,
-          id: row.role.id,
+          roleId: row.role.id,
           title: row.role.title,
           description: getVolunteerRoleDescription(row.role.responsibilities),
           status: row.application.status,
@@ -1033,11 +1001,10 @@ async function findProjectManagePostingApplication(
     applicant: {
       id: row.application.id,
       candidate: row.candidate,
-      role: row.role,
       roles: [
         {
           applicationId: row.application.id,
-          id: row.role.id,
+          roleId: row.role.id,
           title: row.role.title,
           description: row.role.description,
           status: row.application.status,
