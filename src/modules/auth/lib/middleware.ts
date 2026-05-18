@@ -123,6 +123,32 @@ export const requireAccessTokenAllowIncompleteOnboarding =
     allowIncompleteOnboarding: true,
   });
 
+export const attachAuthIfValidAccessToken = createMiddleware(
+  async (c, next) => {
+    const token = readBearerToken(c.req.header("authorization"));
+    if (!token) {
+      await next();
+      return;
+    }
+
+    const verifyResult = await verifyJwtToken(token);
+    if (!verifyResult.ok || !isAccessTokenPayload(verifyResult.payload)) {
+      await next();
+      return;
+    }
+
+    const sub = (verifyResult.payload as AuthPayload).sub;
+    if (typeof sub === "string") {
+      const userId = sub.trim();
+      if (AUTH_USER_ID_UUID_RE.test(userId)) {
+        c.set("auth", { userId } satisfies AuthContext);
+      }
+    }
+
+    await next();
+  },
+);
+
 export const requireAdmin = createMiddleware(async (c, next) => {
   const authError = await authenticateAccessToken(c);
   if (authError) {

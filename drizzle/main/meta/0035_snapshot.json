@@ -1,5 +1,5 @@
 {
-  "id": "121bd8c3-ffb3-449a-8123-09a42cfcebd0",
+  "id": "a5e6db9f-cb9c-46fc-b018-7bff4de0e787",
   "prevId": "da45b912-10be-4be1-82c8-c32d1b62dc7d",
   "version": "7",
   "dialect": "postgresql",
@@ -3672,15 +3672,9 @@
           "primaryKey": false,
           "notNull": false
         },
-        "start_date": {
-          "name": "start_date",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "end_date": {
-          "name": "end_date",
-          "type": "timestamp with time zone",
+        "duration_label": {
+          "name": "duration_label",
+          "type": "varchar(120)",
           "primaryKey": false,
           "notNull": false
         },
@@ -5096,6 +5090,124 @@
             "id"
           ],
           "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.launchpad_save": {
+      "name": "launchpad_save",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "launchpad_id": {
+          "name": "launchpad_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "saver_id": {
+          "name": "saver_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "launchpad_save_launchpad_saver_unique_idx": {
+          "name": "launchpad_save_launchpad_saver_unique_idx",
+          "columns": [
+            {
+              "expression": "launchpad_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "saver_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "launchpad_save_launchpad_idx": {
+          "name": "launchpad_save_launchpad_idx",
+          "columns": [
+            {
+              "expression": "launchpad_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "launchpad_save_saver_idx": {
+          "name": "launchpad_save_saver_idx",
+          "columns": [
+            {
+              "expression": "saver_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "launchpad_save_launchpad_id_launchpad_id_fk": {
+          "name": "launchpad_save_launchpad_id_launchpad_id_fk",
+          "tableFrom": "launchpad_save",
+          "tableTo": "launchpad",
+          "columnsFrom": [
+            "launchpad_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "launchpad_save_saver_id_user_id_fk": {
+          "name": "launchpad_save_saver_id_user_id_fk",
+          "tableFrom": "launchpad_save",
+          "tableTo": "user",
+          "columnsFrom": [
+            "saver_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
           "onUpdate": "no action"
         }
       },

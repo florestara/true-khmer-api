@@ -63,12 +63,12 @@ export const createLaunchpadApplicationSchema = z
       .max(255, "portfolio must be <= 255 characters"),
     documentKeys: z
       .array(z.string().trim().min(1).max(500))
-      .max(5, "documentKeys can have at most 5 entries")
-      .default([]),
+      .min(1, "documentKeys must have at least 1 entry")
+      .max(5, "documentKeys can have at most 5 entries"),
     documentNames: z
       .array(z.string().trim().min(1).max(255))
-      .max(5, "documentNames can have at most 5 entries")
-      .default([]),
+      .min(1, "documentNames must have at least 1 entry")
+      .max(5, "documentNames can have at most 5 entries"),
   })
   .superRefine((data, ctx) => {
     if (data.documentKeys.length !== data.documentNames.length) {
