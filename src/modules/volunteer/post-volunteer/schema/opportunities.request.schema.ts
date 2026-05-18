@@ -542,11 +542,25 @@ const volunteerApplicationBaseSchema = z.object({
         ),
     ),
   supportingDocuments: volunteerApplicationSupportingDocumentsSchema,
+  topPickRoleId: z
+    .string()
+    .uuid("topPickRoleId must be a valid UUID")
+    .nullish()
+    .transform((value) => value ?? null),
 });
 
 export const createVolunteerApplicationSchema = volunteerApplicationBaseSchema
   .extend({
     roleId: z.string().uuid("roleId must be a valid UUID"),
+  })
+  .superRefine((value, ctx) => {
+    if (value.topPickRoleId && value.topPickRoleId !== value.roleId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["topPickRoleId"],
+        message: "topPickRoleId must match roleId",
+      });
+    }
   })
   .openapi("CreateVolunteerApplicationRequest");
 
@@ -571,6 +585,15 @@ export const createVolunteerApplicationBatchSchema = volunteerApplicationBaseSch
           seen.add(roleId);
         });
       }),
+  })
+  .superRefine((value, ctx) => {
+    if (value.topPickRoleId && !value.roleIds.includes(value.topPickRoleId)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["topPickRoleId"],
+        message: "topPickRoleId must be one of roleIds",
+      });
+    }
   })
   .openapi("CreateVolunteerApplicationBatchRequest");
 

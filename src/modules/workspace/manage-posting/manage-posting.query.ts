@@ -71,7 +71,18 @@ type ManagePostingApplicant = {
   role: {
     id: string;
     title: string;
+    description: string | null;
   };
+  roles: Array<{
+    applicationId: string;
+    id: string;
+    title: string;
+    description: string | null;
+    status: ManagePostingApplicantStatus;
+    appliedAt: string;
+    updatedAt: string;
+  }>;
+  topPick: string | null;
   status: ManagePostingApplicantStatus;
   appliedAt: string;
   updatedAt: string;
@@ -115,6 +126,7 @@ type ManagePostingApplicationUpdateResult =
   | "not_found"
   | "conflict"
   | "role_filled"
+  | "applicant_already_approved"
   | ManagePostingApplicationDetail;
 
 const POSTER_LOCKED_APPLICATION_STATUSES = new Set<ManagePostingApplicantStatus>(
@@ -188,7 +200,7 @@ function toInteger(value: unknown, fallback = 0): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-function buildApplicantStatusCounts(applicants: ManagePostingApplicant[]) {
+function buildApplicantStatusCounts(statusesToCount: ManagePostingApplicantStatus[]) {
   const statuses = APPLICANT_STATUSES.reduce(
     (counts, status) => ({
       ...counts,
@@ -197,11 +209,193 @@ function buildApplicantStatusCounts(applicants: ManagePostingApplicant[]) {
     {} as Record<ManagePostingApplicantStatus, number>,
   );
 
-  for (const applicant of applicants) {
-    statuses[applicant.status] += 1;
+  for (const status of statusesToCount) {
+    statuses[status] += 1;
   }
 
   return statuses;
+}
+
+const VOLUNTEER_STATS_STATUS_PRIORITY = new Map<ManagePostingApplicantStatus, number>(
+  APPLICANT_STATUSES.map((status, index) => [status, index]),
+);
+
+function resolveVolunteerStatsStatus(
+  current: ManagePostingApplicantStatus | undefined,
+  next: ManagePostingApplicantStatus,
+): ManagePostingApplicantStatus {
+  if (!current) {
+    return next;
+  }
+
+  if (current === "CONFIRMED" || next === "CONFIRMED") {
+    return "CONFIRMED";
+  }
+
+  if (current === "APPROVED" || next === "APPROVED") {
+    return "APPROVED";
+  }
+
+  if (current === "UNDER_REVIEW" || next === "UNDER_REVIEW") {
+    return "UNDER_REVIEW";
+  }
+
+  if (current === "SUBMITTED" || next === "SUBMITTED") {
+    return "SUBMITTED";
+  }
+
+  const currentPriority = VOLUNTEER_STATS_STATUS_PRIORITY.get(current) ?? 0;
+  const nextPriority = VOLUNTEER_STATS_STATUS_PRIORITY.get(next) ?? 0;
+  return nextPriority < currentPriority ? next : current;
+}
+
+function getVolunteerStatsGroupKey(
+  postingId: string,
+  applicant: ManagePostingApplicant,
+): string {
+  const supportingDocuments = (applicant.volunteer?.supportingDocuments ?? [])
+    .map((document) => document.key)
+    .sort((left, right) => left.localeCompare(right));
+
+  return JSON.stringify({
+    applicantId: applicant.candidate.id,
+    opportunityId: postingId,
+    availability: applicant.volunteer?.availability ?? "",
+    relevantExperience: applicant.volunteer?.relevantExperience ?? "",
+    supportingDocumentKeys: supportingDocuments,
+  });
+}
+
+type VolunteerManagePostingRow = {
+  application: typeof volunteerApplication.$inferSelect;
+  role: {
+    id: string;
+    title: string;
+    responsibilities: string[];
+  };
+  candidate: ManagePostingApplicant["candidate"];
+};
+
+function getVolunteerRoleDescription(responsibilities: string[]) {
+  return responsibilities.length > 0 ? responsibilities.join("\n") : null;
+}
+
+function getVolunteerApplicationGroupKey(
+  postingId: string,
+  row: Pick<VolunteerManagePostingRow, "application">,
+): string {
+  const supportingDocuments = (
+    row.application.supportingDocuments as Array<{ name: string; key: string }>
+  )
+    .map((document) => document.key)
+    .sort((left, right) => left.localeCompare(right));
+
+  return JSON.stringify({
+    applicantId: row.application.applicantId,
+    opportunityId: postingId,
+    availability: row.application.availability,
+    relevantExperience: row.application.relevantExperience,
+    supportingDocumentKeys: supportingDocuments,
+  });
+}
+
+function buildVolunteerManagePostingApplicants(
+  postingId: string,
+  rows: VolunteerManagePostingRow[],
+): ManagePostingApplicant[] {
+  const applicantByGroup = new Map<string, ManagePostingApplicant>();
+
+  for (const row of rows) {
+    const groupKey = getVolunteerApplicationGroupKey(postingId, row);
+    const roleDescription = getVolunteerRoleDescription(row.role.responsibilities);
+    const roleItem = {
+      applicationId: row.application.id,
+      id: row.role.id,
+      title: row.role.title,
+      description: roleDescription,
+      status: row.application.status,
+      appliedAt: row.application.createdAt,
+      updatedAt: row.application.updatedAt,
+    };
+    const existing = applicantByGroup.get(groupKey);
+
+    if (!existing) {
+      applicantByGroup.set(groupKey, {
+        id: row.application.id,
+        candidate: row.candidate,
+        role: {
+          id: row.role.id,
+          title: row.role.title,
+          description: roleDescription,
+        },
+        roles: [roleItem],
+        topPick: row.application.topPick ? row.role.id : null,
+        status: row.application.status,
+        appliedAt: row.application.createdAt,
+        updatedAt: row.application.updatedAt,
+        contact: {
+          email: row.candidate.email,
+          phoneNumber: row.candidate.phoneNumber,
+          telegramUsername: row.candidate.telegramUsername,
+        },
+        volunteer: {
+          availability: row.application.availability,
+          relevantExperience: row.application.relevantExperience,
+          supportingDocuments: row.application.supportingDocuments as Array<{
+            name: string;
+            key: string;
+          }>,
+        },
+        project: null,
+      });
+      continue;
+    }
+
+    existing.roles.push(roleItem);
+    existing.status = resolveVolunteerStatsStatus(
+      existing.status,
+      row.application.status,
+    );
+    if (Date.parse(row.application.createdAt) < Date.parse(existing.appliedAt)) {
+      existing.appliedAt = row.application.createdAt;
+    }
+    if (Date.parse(row.application.updatedAt) > Date.parse(existing.updatedAt)) {
+      existing.updatedAt = row.application.updatedAt;
+    }
+    if (row.application.topPick) {
+      existing.topPick = row.role.id;
+      existing.id = row.application.id;
+      existing.role = {
+        id: row.role.id,
+        title: row.role.title,
+        description: roleDescription,
+      };
+    }
+  }
+
+  return [...applicantByGroup.values()].map((applicant) => ({
+    ...applicant,
+    roles: applicant.roles.sort(
+      (left, right) => Date.parse(left.appliedAt) - Date.parse(right.appliedAt),
+    ),
+  }));
+}
+
+function buildVolunteerStatsStatuses(
+  postingId: string,
+  applicants: ManagePostingApplicant[],
+): ManagePostingApplicantStatus[] {
+  const statusByGroup = new Map<string, ManagePostingApplicantStatus>();
+
+  for (const applicant of applicants) {
+    const groupKey = getVolunteerStatsGroupKey(postingId, applicant);
+    statusByGroup.set(
+      groupKey,
+      resolveVolunteerStatsStatus(statusByGroup.get(groupKey), applicant.status),
+    );
+  }
+
+  return [...statusByGroup.values()];
 }
 
 function matchesAppliedRange(
@@ -237,6 +431,8 @@ function matchesApplicantSearch(
     applicant.candidate.name,
     applicant.candidate.email,
     applicant.role.title,
+    applicant.role.description,
+    ...applicant.roles.flatMap((role) => [role.title, role.description]),
     applicant.contact.phoneNumber,
     applicant.contact.telegramUsername,
   ].some((value) => value?.toLowerCase().includes(normalizedSearch));
@@ -293,7 +489,10 @@ async function findVolunteerManagePostings(
   const confirmedApplications = db
     .select({
       opportunityId: volunteerApplication.opportunityId,
-      applicantCount: sql<number>`count(*)::int`.as("applicant_count"),
+      applicantCount:
+        sql<number>`count(distinct ${volunteerApplication.applicantId})::int`.as(
+          "applicant_count",
+        ),
     })
     .from(volunteerApplication)
     .where(eq(volunteerApplication.status, "CONFIRMED"))
@@ -485,6 +684,7 @@ async function findVolunteerManagePostingDetail(
       role: {
         id: volunteerRole.id,
         title: volunteerRole.title,
+        responsibilities: volunteerRole.responsibilities,
       },
       candidate: {
         id: user.id,
@@ -512,30 +712,17 @@ async function findVolunteerManagePostingDetail(
     )
     .orderBy(desc(volunteerApplication.createdAt));
 
-  const applicants: ManagePostingApplicant[] = rows.map((row) => ({
-    id: row.application.id,
-    candidate: row.candidate,
-    role: row.role,
-    status: row.application.status,
-    appliedAt: row.application.createdAt,
-    updatedAt: row.application.updatedAt,
-    contact: {
-      email: row.candidate.email,
-      phoneNumber: row.candidate.phoneNumber,
-      telegramUsername: row.candidate.telegramUsername,
-    },
-    volunteer: {
-      availability: row.application.availability,
-      relevantExperience: row.application.relevantExperience,
-      supportingDocuments: row.application.supportingDocuments as Array<{
-        name: string;
-        key: string;
-      }>,
-    },
-    project: null,
-  }));
+  const applicants = buildVolunteerManagePostingApplicants(
+    postingId,
+    rows as VolunteerManagePostingRow[],
+  );
 
-  return buildManagePostingDetail(posting, applicants, query);
+  return buildManagePostingDetail(
+    posting,
+    applicants,
+    query,
+    buildVolunteerStatsStatuses(postingId, applicants),
+  );
 }
 
 async function findProjectManagePostingDetail(
@@ -558,6 +745,7 @@ async function findProjectManagePostingDetail(
       role: {
         id: launchpadRole.id,
         title: launchpadRole.title,
+        description: launchpadRole.description,
       },
       candidate: {
         id: user.id,
@@ -589,6 +777,18 @@ async function findProjectManagePostingDetail(
     id: row.application.id,
     candidate: row.candidate,
     role: row.role,
+    roles: [
+      {
+        applicationId: row.application.id,
+        id: row.role.id,
+        title: row.role.title,
+        description: row.role.description,
+        status: row.application.status,
+        appliedAt: row.application.createdAt,
+        updatedAt: row.application.updatedAt,
+      },
+    ],
+    topPick: null,
     status: row.application.status,
     appliedAt: row.application.createdAt,
     updatedAt: row.application.updatedAt,
@@ -613,8 +813,9 @@ function buildManagePostingDetail(
   posting: ManagePostingItem,
   applicants: ManagePostingApplicant[],
   query: GetManagePostingDetailQuery,
+  statsStatuses = applicants.map((applicant) => applicant.status),
 ): ManagePostingDetail {
-  const statuses = buildApplicantStatusCounts(applicants);
+  const statuses = buildApplicantStatusCounts(statsStatuses);
   const filteredApplicants = applicants.filter(
     (applicant) =>
       matchesAppliedRange(query.range, applicant.appliedAt) &&
@@ -630,7 +831,7 @@ function buildManagePostingDetail(
     posting,
     stats: {
       pending: statuses.SUBMITTED,
-      totalApplicants: applicants.length - statuses.WITHDRAWN,
+      totalApplicants: statsStatuses.length - statuses.WITHDRAWN,
       recruited: statuses.CONFIRMED,
       capacity: posting.capacity,
       statuses,
@@ -651,6 +852,7 @@ async function findVolunteerManagePostingApplication(
       role: {
         id: volunteerRole.id,
         title: volunteerRole.title,
+        responsibilities: volunteerRole.responsibilities,
       },
       candidate: {
         id: user.id,
@@ -683,11 +885,89 @@ async function findVolunteerManagePostingApplication(
     return null;
   }
 
+  const groupRows = await db
+    .select({
+      application: volunteerApplication,
+      role: {
+        id: volunteerRole.id,
+        title: volunteerRole.title,
+        responsibilities: volunteerRole.responsibilities,
+      },
+      candidate: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        phoneNumber: user.phoneNumber,
+        telegramUsername: user.telegramUsername,
+        avatarUrl: userProfile.avatarUrl,
+        avatarKey: userProfile.avatarKey,
+      },
+    })
+    .from(volunteerApplication)
+    .innerJoin(volunteerRole, eq(volunteerRole.id, volunteerApplication.roleId))
+    .innerJoin(
+      volunteerOpportunity,
+      eq(volunteerOpportunity.id, volunteerApplication.opportunityId),
+    )
+    .innerJoin(user, eq(user.id, volunteerApplication.applicantId))
+    .leftJoin(userProfile, eq(userProfile.userId, user.id))
+    .where(
+      and(
+        eq(volunteerApplication.opportunityId, postingId),
+        eq(volunteerApplication.applicantId, row.application.applicantId),
+        eq(volunteerOpportunity.createdBy, userId),
+      ),
+    )
+    .orderBy(desc(volunteerApplication.createdAt));
+
+  const applicant = buildVolunteerManagePostingApplicants(
+    postingId,
+    groupRows as VolunteerManagePostingRow[],
+  ).find((candidate) =>
+    candidate.roles.some((role) => role.applicationId === applicationId),
+  );
+
+  if (applicant) {
+    const requestedRole = applicant.roles.find(
+      (role) => role.applicationId === applicationId,
+    );
+
+    return {
+      applicant: {
+        ...applicant,
+        id: applicationId,
+        role: requestedRole
+          ? {
+              id: requestedRole.id,
+              title: requestedRole.title,
+              description: requestedRole.description,
+            }
+          : applicant.role,
+      },
+    };
+  }
+
   return {
     applicant: {
       id: row.application.id,
       candidate: row.candidate,
-      role: row.role,
+      role: {
+        id: row.role.id,
+        title: row.role.title,
+        description: getVolunteerRoleDescription(row.role.responsibilities),
+      },
+      roles: [
+        {
+          applicationId: row.application.id,
+          id: row.role.id,
+          title: row.role.title,
+          description: getVolunteerRoleDescription(row.role.responsibilities),
+          status: row.application.status,
+          appliedAt: row.application.createdAt,
+          updatedAt: row.application.updatedAt,
+        },
+      ],
+      topPick: row.application.topPick ? row.role.id : null,
       status: row.application.status,
       appliedAt: row.application.createdAt,
       updatedAt: row.application.updatedAt,
@@ -720,6 +1000,7 @@ async function findProjectManagePostingApplication(
       role: {
         id: launchpadRole.id,
         title: launchpadRole.title,
+        description: launchpadRole.description,
       },
       candidate: {
         id: user.id,
@@ -757,6 +1038,18 @@ async function findProjectManagePostingApplication(
       id: row.application.id,
       candidate: row.candidate,
       role: row.role,
+      roles: [
+        {
+          applicationId: row.application.id,
+          id: row.role.id,
+          title: row.role.title,
+          description: row.role.description,
+          status: row.application.status,
+          appliedAt: row.application.createdAt,
+          updatedAt: row.application.updatedAt,
+        },
+      ],
+      topPick: null,
       status: row.application.status,
       appliedAt: row.application.createdAt,
       updatedAt: row.application.updatedAt,
@@ -807,6 +1100,8 @@ async function updateVolunteerManagePostingApplication(
         id: volunteerApplication.id,
         status: volunteerApplication.status,
         roleId: volunteerApplication.roleId,
+        applicantId: volunteerApplication.applicantId,
+        opportunityId: volunteerApplication.opportunityId,
       })
       .from(volunteerApplication)
       .innerJoin(
@@ -836,6 +1131,23 @@ async function updateVolunteerManagePostingApplication(
     }
 
     if (status === "APPROVED") {
+      const [existingApprovedByApplicant] = await tx
+        .select({ id: volunteerApplication.id })
+        .from(volunteerApplication)
+        .where(
+          and(
+            eq(volunteerApplication.opportunityId, current.opportunityId),
+            eq(volunteerApplication.applicantId, current.applicantId),
+            sql`${volunteerApplication.id} <> ${current.id}`,
+            sql`${volunteerApplication.status} in ('APPROVED', 'CONFIRMED')`,
+          ),
+        )
+        .limit(1);
+
+      if (existingApprovedByApplicant) {
+        return "applicant_already_approved" as const;
+      }
+
       const [role] = await tx
         .select({
           capacity: volunteerRole.capacity,

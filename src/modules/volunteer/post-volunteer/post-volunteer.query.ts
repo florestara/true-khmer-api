@@ -553,6 +553,7 @@ type CreateVolunteerApplicationInput = {
   availability: string;
   relevantExperience: string;
   supportingDocuments: VolunteerSupportingDocument[];
+  topPickRoleId: string | null;
 };
 
 type CreateVolunteerApplicationsBatchInput = Omit<
@@ -1584,6 +1585,7 @@ export async function createVolunteerApplication(
         availability: data.availability,
         relevantExperience: data.relevantExperience,
         supportingDocuments: data.supportingDocuments,
+        topPick: data.topPickRoleId === data.roleId,
         status: "SUBMITTED",
       })
       .returning();
@@ -1622,6 +1624,7 @@ export async function createVolunteerApplicationsBatch(
           availability: data.availability,
           relevantExperience: data.relevantExperience,
           supportingDocuments: data.supportingDocuments,
+          topPick: data.topPickRoleId === role.roleId,
           status: "SUBMITTED" as const,
         })),
       )

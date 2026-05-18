@@ -218,6 +218,7 @@ export const volunteerApplication = pgTable(
       .$type<Array<{ name: string; key: string }>>()
       .notNull()
       .default(sql`'[]'::jsonb`),
+    topPick: boolean("top_pick").default(false).notNull(),
     status: volunteerApplicationStatus("status")
       .default("SUBMITTED")
       .notNull(),

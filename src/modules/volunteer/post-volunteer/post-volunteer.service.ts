@@ -691,6 +691,7 @@ export async function handleCreateVolunteerApplicationBatch(
       availability: data.availability,
       relevantExperience: data.relevantExperience,
       supportingDocuments: normalizedSupportingDocuments,
+      topPickRoleId: data.topPickRoleId,
     });
 
     const applicationByRoleId = new Map(

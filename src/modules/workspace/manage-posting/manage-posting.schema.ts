@@ -163,7 +163,20 @@ export const managePostingApplicantSchema = z
     role: z.object({
       id: z.string(),
       title: z.string(),
+      description: z.string().nullable(),
     }),
+    roles: z.array(
+      z.object({
+        applicationId: z.string(),
+        id: z.string(),
+        title: z.string(),
+        description: z.string().nullable(),
+        status: managePostingApplicantStatusSchema,
+        appliedAt: z.string(),
+        updatedAt: z.string(),
+      }),
+    ),
+    topPick: z.string().nullable(),
     status: managePostingApplicantStatusSchema,
     appliedAt: z.string(),
     updatedAt: z.string(),
