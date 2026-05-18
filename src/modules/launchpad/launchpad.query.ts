@@ -1,4 +1,4 @@
-import { sql, eq, and, ilike } from "drizzle-orm";
+import { sql, eq, and, ilike, inArray } from "drizzle-orm";
 import { db } from "../../db";
 import {
   LAUNCHPAD_ADVISORY_LOCK_NAMESPACE,
@@ -14,6 +14,7 @@ import {
   launchpad,
   launchpadCategory,
   launchpadRole,
+  launchpadSave,
   user,
   userProfile,
 } from "../../db/schema";
@@ -88,6 +89,7 @@ export type LaunchpadListItem = {
     name: string;
   };
   totalRoles: number;
+  isSaved: boolean;
 };
 
 function buildLaunchpadBaseQuery() {
@@ -407,6 +409,7 @@ export async function findLaunchpadById(
 
 export async function findLaunchpads(
   params: GetLaunchpadQueryListInput,
+  viewerId?: string,
 ): Promise<{ launchpads: LaunchpadListItem[]; nextCursor: string | null }> {
   const whereClause = buildLaunchpadWhereClause(
     params.cursor,
@@ -425,6 +428,13 @@ export async function findLaunchpads(
   // Determine if there's a next page
   const hasNextPage = rows.length > params.limit;
   const launchpadRows = hasNextPage ? rows.slice(0, params.limit) : rows;
+
+  // Get saved IDs for viewer
+  const launchpadIds = launchpadRows.map((row) => row.launchpad.id);
+  const savedIds = await getSavedLaunchpadIdsByLaunchpadIds(
+    launchpadIds,
+    viewerId,
+  );
 
   // Generate next cursor if there are more results
   let nextCursor: string | null = null;
@@ -477,10 +487,33 @@ export async function findLaunchpads(
         }
       : undefined,
     totalRoles: row.totalRoles,
+    isSaved: savedIds.has(row.launchpad.id),
   }));
 
   return {
     launchpads,
     nextCursor,
   };
+}
+
+async function getSavedLaunchpadIdsByLaunchpadIds(
+  launchpadIds: string[],
+  viewerId?: string,
+): Promise<Set<string>> {
+  const uniqueIds = [...new Set(launchpadIds)];
+  if (!viewerId || uniqueIds.length === 0) {
+    return new Set();
+  }
+
+  const rows = await db
+    .select({ launchpadId: launchpadSave.launchpadId })
+    .from(launchpadSave)
+    .where(
+      and(
+        inArray(launchpadSave.launchpadId, uniqueIds),
+        eq(launchpadSave.saverId, viewerId),
+      ),
+    );
+
+  return new Set(rows.map((row) => row.launchpadId));
 }

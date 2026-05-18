@@ -1,6 +1,9 @@
 import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
 import { AppBindings } from "../../lib/types";
-import { requireAccessToken } from "../../middlewares/auth.middleware";
+import {
+  attachAuthIfValidAccessToken,
+  requireAccessToken,
+} from "../../middlewares/auth.middleware";
 import {
   createLaunchpadRequestSchema,
   getLaunchpadQueryListSchema,
@@ -27,6 +30,7 @@ import {
   handlePresignLaunchpadDocumentUpload,
   handlePresignLaunchpadLogoUpload,
 } from "./launchpad.service";
+import { saveRouter } from "./save/save.router";
 
 export const launchpadRouter = new OpenAPIHono<AppBindings>();
 
@@ -313,6 +317,7 @@ const getLaunchpadsRoute = createRoute({
   method: "get",
   path: "/",
   tags: ["Launchpad"],
+  middleware: [attachAuthIfValidAccessToken],
   request: {
     query: getLaunchpadQueryListSchema,
   },
@@ -350,6 +355,8 @@ launchpadRouter.openapi(presignlaunchpadDocumentUploadRoute, async (c) => {
   const data = c.req.valid("json");
   return handlePresignLaunchpadDocumentUpload(c, data) as any;
 });
+
+launchpadRouter.route("/", saveRouter);
 
 launchpadRouter.openapi(createLaunchpadRoute, async (c) => {
   const data = c.req.valid("json");

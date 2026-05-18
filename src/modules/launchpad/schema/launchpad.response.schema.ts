@@ -203,6 +203,7 @@ export const launchpadListItemSchema: z.ZodType<LaunchpadListItem> = z.object({
     .optional(),
   totalRoles: z.number(),
   totalView: z.number(),
+  isSaved: z.boolean(),
 });
 
 export const getLaunchpadsResponseSchema = z

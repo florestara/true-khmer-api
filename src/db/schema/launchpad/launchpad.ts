@@ -5,6 +5,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
@@ -75,4 +76,30 @@ export const launchpadRelations = relations(launchpad, ({ one, many }) => ({
     references: [user.id],
   }),
   roles: many(launchpadRole),
+  launchpadSave: many(launchpadSave),
 }));
+
+export const launchpadSave = pgTable(
+  "launchpad_save",
+  {
+    id: uuid("id").defaultRandom().primaryKey().notNull(),
+    launchpadId: uuid("launchpad_id")
+      .notNull()
+      .references(() => launchpad.id, { onDelete: "cascade" }),
+    saverId: uuid("saver_id")
+      .notNull()
+      .references(() => user.id),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("launchpad_save_launchpad_saver_unique_idx").using(
+      "btree",
+      table.launchpadId,
+      table.saverId,
+    ),
+    index("launchpad_save_launchpad_idx").using("btree", table.launchpadId),
+    index("launchpad_save_saver_idx").using("btree", table.saverId),
+  ],
+);

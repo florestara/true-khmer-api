@@ -1,4 +1,5 @@
 export {
+  attachAuthIfValidAccessToken,
   requireAccessToken,
   requireAccessTokenAllowIncompleteOnboarding,
   requireAdmin,
