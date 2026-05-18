@@ -58,7 +58,6 @@ export type ManagePostingsResult = {
 };
 
 type ManagePostingApplicant = {
-  id: string;
   candidate: {
     id: string;
     name: string;
@@ -316,7 +315,6 @@ function buildVolunteerManagePostingApplicants(
 
     if (!existing) {
       applicantByGroup.set(groupKey, {
-        id: row.application.id,
         candidate: row.candidate,
         roles: [roleItem],
         topPick: row.application.topPick ? row.role.id : null,
@@ -354,7 +352,6 @@ function buildVolunteerManagePostingApplicants(
     }
     if (row.application.topPick) {
       existing.topPick = row.role.id;
-      existing.id = row.application.id;
     }
   }
 
@@ -755,7 +752,6 @@ async function findProjectManagePostingDetail(
     .orderBy(desc(launchpadApplication.createdAt));
 
   const applicants: ManagePostingApplicant[] = rows.map((row) => ({
-    id: row.application.id,
     candidate: row.candidate,
     roles: [
       {
@@ -911,14 +907,12 @@ async function findVolunteerManagePostingApplication(
     return {
       applicant: {
         ...applicant,
-        id: applicationId,
       },
     };
   }
 
   return {
     applicant: {
-      id: row.application.id,
       candidate: row.candidate,
       roles: [
         {
@@ -999,7 +993,6 @@ async function findProjectManagePostingApplication(
 
   return {
     applicant: {
-      id: row.application.id,
       candidate: row.candidate,
       roles: [
         {
