@@ -11,6 +11,7 @@ const MIN_VOLUNTEER_APPLICATION_DOCUMENT_COUNT = 1;
 const MAX_VOLUNTEER_APPLICATION_DOCUMENT_COUNT = 3;
 const MAX_VOLUNTEER_OPPORTUNITIES_PAGE_SIZE = 50;
 const DEFAULT_VOLUNTEER_OPPORTUNITIES_PAGE_SIZE = 10;
+const VOLUNTEER_COMMITMENT_LABELS = ["Light", "Regular", "Intensive"] as const;
 
 export const VOLUNTEER_COVER_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 export const VOLUNTEER_APPLICATION_DOCUMENT_MAX_BYTES = 10 * 1024 * 1024;
@@ -26,6 +27,14 @@ function normalizeOptionalText(value: string | null | undefined) {
 
   const normalized = normalizeText(value);
   return normalized.length > 0 ? normalized : null;
+}
+
+function isVolunteerCommitmentLabel(
+  value: string,
+): value is (typeof VOLUNTEER_COMMITMENT_LABELS)[number] {
+  return VOLUNTEER_COMMITMENT_LABELS.includes(
+    value as (typeof VOLUNTEER_COMMITMENT_LABELS)[number],
+  );
 }
 
 function optionalDateTimeSchema(fieldName: string) {
@@ -255,17 +264,9 @@ const volunteerOpportunityRoleSchema = z
     commitmentLabel: z
       .string()
       .transform((value) => normalizeText(value))
-      .pipe(
-        z
-          .string()
-          .min(
-            1,
-            "roles[].commitmentLabel is required and must be 1..120 characters",
-          )
-          .max(
-            120,
-            "roles[].commitmentLabel is required and must be 1..120 characters",
-          ),
+      .refine(
+        (value) => isVolunteerCommitmentLabel(value),
+        `roles[].commitmentLabel must be one of: ${VOLUNTEER_COMMITMENT_LABELS.join(", ")}`,
       ),
     capacity: z
       .number()
@@ -412,8 +413,8 @@ const createVolunteerOpportunityBaseSchema = z
       .nullish()
       .transform((value) => normalizeOptionalText(value))
       .refine(
-        (value) => value === null || value.length <= 120,
-        "commitmentLabel must be <= 120 characters",
+        (value) => value === null || isVolunteerCommitmentLabel(value),
+        `commitmentLabel must be one of: ${VOLUNTEER_COMMITMENT_LABELS.join(", ")}`,
       ),
     commitmentDescription: z
       .string()
