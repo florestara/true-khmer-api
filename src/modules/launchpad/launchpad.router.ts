@@ -356,6 +356,8 @@ launchpadRouter.openapi(presignlaunchpadDocumentUploadRoute, async (c) => {
   return handlePresignLaunchpadDocumentUpload(c, data) as any;
 });
 
+launchpadRouter.route("/", saveRouter);
+
 launchpadRouter.openapi(createLaunchpadRoute, async (c) => {
   const data = c.req.valid("json");
   return handleCreateLaunchpad(c, data) as any;
@@ -370,5 +372,3 @@ launchpadRouter.openapi(getLaunchpadsRoute, async (c) => {
   const query = c.req.valid("query");
   return handleFindLaunchpads(c, query) as any;
 });
-
-launchpadRouter.route("/", saveRouter);

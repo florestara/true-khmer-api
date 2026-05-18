@@ -2,7 +2,10 @@ import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
 import type { AppBindings } from "../../../lib/types";
 import { requireAccessToken } from "../../../middlewares/auth.middleware";
 import { authProtectedErrorResponseSchema } from "../../auth/auth.schema";
-import { launchpadOperationErrorResponseSchema, launchpadValidationErrorResponseSchema } from "../schema/launchpad.response.schema";
+import {
+  launchpadOperationErrorResponseSchema,
+  launchpadValidationErrorResponseSchema,
+} from "../schema/launchpad.response.schema";
 import {
   getSavedLaunchpadsQuerySchema,
   getLaunchpadParamsSchema,
