@@ -230,8 +230,6 @@ type VolunteerApplicationTarget = {
   cityName: string;
   roleId: string;
   roleTitle: string;
-  roleCapacity: number;
-  roleConfirmedCount: number;
   createdBy: string;
   applicationDeadline: string;
   status: VolunteerOpportunityStatus;
@@ -239,7 +237,7 @@ type VolunteerApplicationTarget = {
 };
 type VolunteerApplicationOpportunityTarget = Omit<
   VolunteerApplicationTarget,
-  "roleId" | "roleTitle" | "roleCapacity" | "roleConfirmedCount"
+  "roleId" | "roleTitle"
 >;
 
 const CAMBODIA_NORMALIZED_NAME = env.VOLUNTEER_COUNTRY_NORMALIZED_NAME;
@@ -476,13 +474,6 @@ export async function findVolunteerApplicationTargetByRoleId(
       cityName: city.name,
       roleId: volunteerRole.id,
       roleTitle: volunteerRole.title,
-      roleCapacity: volunteerRole.capacity,
-      roleConfirmedCount: sql<number>`(
-        select count(*)::int
-        from ${volunteerApplication}
-        where ${volunteerApplication.roleId} = ${volunteerRole.id}
-          and ${volunteerApplication.status} = 'CONFIRMED'
-      )`,
       opportunityOverview: volunteerOpportunity.overview,
       createdBy: volunteerOpportunity.createdBy,
       applicationDeadline: volunteerOpportunity.applicationDeadline,
@@ -505,6 +496,43 @@ export async function findVolunteerApplicationTargetByRoleId(
   return row ?? null;
 }
 
+export async function findVolunteerApplicationTargetsByRoleIds(
+  roleIds: string[],
+): Promise<VolunteerApplicationTarget[]> {
+  if (roleIds.length === 0) {
+    return [];
+  }
+
+  return db
+    .select({
+      opportunityId: volunteerOpportunity.id,
+      opportunityTitle: volunteerOpportunity.title,
+      coverImageKey: volunteerOpportunity.coverImageKey,
+      categoryId: volunteerCategory.id,
+      categoryName: volunteerCategory.name,
+      cityId: city.id,
+      cityName: city.name,
+      roleId: volunteerRole.id,
+      roleTitle: volunteerRole.title,
+      opportunityOverview: volunteerOpportunity.overview,
+      createdBy: volunteerOpportunity.createdBy,
+      applicationDeadline: volunteerOpportunity.applicationDeadline,
+      status: volunteerOpportunity.status,
+      publishedAt: volunteerOpportunity.publishedAt,
+    })
+    .from(volunteerRole)
+    .innerJoin(
+      volunteerOpportunity,
+      eq(volunteerOpportunity.id, volunteerRole.opportunityId),
+    )
+    .innerJoin(
+      volunteerCategory,
+      eq(volunteerCategory.id, volunteerOpportunity.categoryId),
+    )
+    .innerJoin(city, eq(city.id, volunteerOpportunity.cityId))
+    .where(inArray(volunteerRole.id, roleIds));
+}
+
 export type CreateVolunteerOpportunityInput =
   CreateVolunteerOpportunityBodyInput & {
     createdBy: string;
@@ -525,6 +553,16 @@ type CreateVolunteerApplicationInput = {
   availability: string;
   relevantExperience: string;
   supportingDocuments: VolunteerSupportingDocument[];
+};
+
+type CreateVolunteerApplicationsBatchInput = Omit<
+  CreateVolunteerApplicationInput,
+  "roleId" | "roleTitle"
+> & {
+  roles: Array<{
+    roleId: string;
+    roleTitle: string;
+  }>;
 };
 
 type VolunteerOpportunityListRow = VolunteerOpportunityBaseRow & {
@@ -1567,6 +1605,57 @@ export async function createVolunteerApplication(
       category: data.category,
       location: data.location,
     });
+  });
+}
+
+export async function createVolunteerApplicationsBatch(
+  data: CreateVolunteerApplicationsBatchInput,
+): Promise<VolunteerApplicationDetail[]> {
+  return db.transaction(async (tx) => {
+    const applications = await tx
+      .insert(volunteerApplication)
+      .values(
+        data.roles.map((role) => ({
+          opportunityId: data.opportunityId,
+          roleId: role.roleId,
+          applicantId: data.applicantId,
+          availability: data.availability,
+          relevantExperience: data.relevantExperience,
+          supportingDocuments: data.supportingDocuments,
+          status: "SUBMITTED" as const,
+        })),
+      )
+      .returning();
+
+    await tx.insert(volunteerApplicationLog).values(
+      applications.map((application) => ({
+        volunteerApplicationId: application.id,
+        status: "SUBMITTED" as const,
+        declinedBy: null,
+        createdBy: data.applicantId,
+      })),
+    );
+
+    const roleTitleById = new Map(
+      data.roles.map((role) => [role.roleId, role.roleTitle]),
+    );
+
+    return applications.map((application) =>
+      hydrateVolunteerApplication(
+        application,
+        roleTitleById.get(application.roleId) ?? "",
+        {
+          id: data.opportunityId,
+          title: data.opportunityTitle,
+          coverImageKey: data.coverImageKey,
+          applicationDeadline: data.applicationDeadline,
+          status: "ACTIVE",
+          filled: false,
+          category: data.category,
+          location: data.location,
+        },
+      ),
+    );
   });
 }
 

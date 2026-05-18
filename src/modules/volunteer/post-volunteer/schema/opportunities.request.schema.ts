@@ -483,73 +483,96 @@ export const createVolunteerOpportunitySchema =
     })
     .openapi("CreateVolunteerOpportunityRequest");
 
-export const createVolunteerApplicationSchema = z
-  .object({
+const volunteerApplicationSupportingDocumentsSchema = z
+  .array(
+    z.object({
+      name: z
+        .string()
+        .trim()
+        .min(1, "supportingDocuments[].name is required")
+        .max(255, "supportingDocuments[].name must be <= 255 characters"),
+      key: z
+        .string()
+        .trim()
+        .min(1, "supportingDocuments[].key is required")
+        .max(600, "supportingDocuments[].key must be <= 600 characters"),
+    }),
+  )
+  .max(
+    MAX_VOLUNTEER_APPLICATION_DOCUMENT_COUNT,
+    `supportingDocuments must contain at most ${MAX_VOLUNTEER_APPLICATION_DOCUMENT_COUNT} files`,
+  )
+  .superRefine((value, ctx) => {
+    const seen = new Set<string>();
+    value.forEach((item, index) => {
+      if (seen.has(item.key)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [index],
+          message: "supportingDocuments[] must not contain duplicate keys",
+        });
+        return;
+      }
+
+      seen.add(item.key);
+    });
+  })
+  .default([]);
+
+const volunteerApplicationBaseSchema = z.object({
+  availability: z
+    .string()
+    .transform((value) => normalizeText(value))
+    .pipe(
+      z
+        .string()
+        .min(1, "availability is required and must be 1..500 characters")
+        .max(500, "availability is required and must be 1..500 characters"),
+    ),
+  relevantExperience: z
+    .string()
+    .transform((value) => normalizeText(value))
+    .pipe(
+      z
+        .string()
+        .min(1, "relevantExperience is required and must be 1..5000 characters")
+        .max(
+          5000,
+          "relevantExperience is required and must be 1..5000 characters",
+        ),
+    ),
+  supportingDocuments: volunteerApplicationSupportingDocumentsSchema,
+});
+
+export const createVolunteerApplicationSchema = volunteerApplicationBaseSchema
+  .extend({
     roleId: z.string().uuid("roleId must be a valid UUID"),
-    availability: z
-      .string()
-      .transform((value) => normalizeText(value))
-      .pipe(
-        z
-          .string()
-          .min(1, "availability is required and must be 1..500 characters")
-          .max(500, "availability is required and must be 1..500 characters"),
-      ),
-    relevantExperience: z
-      .string()
-      .transform((value) => normalizeText(value))
-      .pipe(
-        z
-          .string()
-          .min(
-            1,
-            "relevantExperience is required and must be 1..5000 characters",
-          )
-          .max(
-            5000,
-            "relevantExperience is required and must be 1..5000 characters",
-          ),
-      ),
-    supportingDocuments: z
-      .array(
-        z.object({
-          name: z
-            .string()
-            .trim()
-            .min(1, "supportingDocuments[].name is required")
-            .max(255, "supportingDocuments[].name must be <= 255 characters"),
-          key: z
-            .string()
-            .trim()
-            .min(1, "supportingDocuments[].key is required")
-            .max(600, "supportingDocuments[].key must be <= 600 characters"),
-        }),
-      )
-      .min(
-        MIN_VOLUNTEER_APPLICATION_DOCUMENT_COUNT,
-        `supportingDocuments must contain at least ${MIN_VOLUNTEER_APPLICATION_DOCUMENT_COUNT} files`,
-      )
-      .max(
-        MAX_VOLUNTEER_APPLICATION_DOCUMENT_COUNT,
-        `supportingDocuments must contain at most ${MAX_VOLUNTEER_APPLICATION_DOCUMENT_COUNT} files`,
-      )
+  })
+  .openapi("CreateVolunteerApplicationRequest");
+
+export const createVolunteerApplicationBatchSchema = volunteerApplicationBaseSchema
+  .extend({
+    roleIds: z
+      .array(z.string().uuid("roleIds[] must be a valid UUID"))
+      .min(1, "roleIds must contain at least 1 role")
+      .max(20, "roleIds must contain at most 20 roles")
       .superRefine((value, ctx) => {
         const seen = new Set<string>();
-        value.forEach((item, index) => {
-          if (seen.has(item.key)) {
+        value.forEach((roleId, index) => {
+          if (seen.has(roleId)) {
             ctx.addIssue({
               code: z.ZodIssueCode.custom,
               path: [index],
-              message: "supportingDocuments[] must not contain duplicate keys",
+              message: "roleIds[] must not contain duplicate roles",
             });
             return;
           }
 
-          seen.add(item.key);
+          seen.add(roleId);
         });
       }),
   })
-  .openapi("CreateVolunteerApplicationRequest");
+  .openapi("CreateVolunteerApplicationBatchRequest");
 
 export type PresignVolunteerOpportunityCoverUploadPayload = z.infer<
   typeof presignVolunteerOpportunityCoverUploadSchema
@@ -666,4 +689,8 @@ export type CreateVolunteerOpportunityBodyInput = z.infer<
 
 export type CreateVolunteerApplicationBodyInput = z.infer<
   typeof createVolunteerApplicationSchema
+>;
+
+export type CreateVolunteerApplicationBatchBodyInput = z.infer<
+  typeof createVolunteerApplicationBatchSchema
 >;

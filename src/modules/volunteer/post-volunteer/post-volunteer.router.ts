@@ -6,7 +6,9 @@ import {
 } from "../../../middlewares/auth.middleware";
 import { authProtectedErrorResponseSchema } from "../../auth/auth.schema";
 import {
+  createVolunteerApplicationBatchResponseSchema,
   createVolunteerApplicationResponseSchema,
+  createVolunteerApplicationBatchSchema,
   createVolunteerApplicationSchema,
   createVolunteerCategoryResponseSchema,
   createVolunteerCategorySchema,
@@ -30,6 +32,7 @@ import {
 } from "./post-volunteer.schema";
 import {
   handleCreateVolunteerApplication,
+  handleCreateVolunteerApplicationBatch,
   handleCreateVolunteerCategory,
   handleCreateVolunteerOpportunity,
   handleGetSavedVolunteerOpportunities,
@@ -770,6 +773,81 @@ const createVolunteerApplicationRoute = createRoute({
   },
 });
 
+const createVolunteerApplicationBatchRoute = createRoute({
+  method: "post",
+  path: "/applications/batch",
+  tags: ["Volunteer Post"],
+  middleware: [requireAccessToken],
+  security: [{ BearerAuth: [] }],
+  request: {
+    body: {
+      content: {
+        "application/json": {
+          schema: createVolunteerApplicationBatchSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "Volunteer applications submitted",
+      content: {
+        "application/json": {
+          schema: createVolunteerApplicationBatchResponseSchema,
+        },
+      },
+    },
+    400: {
+      description: "Validation failed",
+      content: {
+        "application/json": {
+          schema: volunteerValidationErrorResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: "Unauthorized",
+      content: {
+        "application/json": {
+          schema: authProtectedErrorResponseSchema,
+        },
+      },
+    },
+    403: {
+      description: "Forbidden",
+      content: {
+        "application/json": {
+          schema: authProtectedErrorResponseSchema,
+        },
+      },
+    },
+    404: {
+      description: "Volunteer role not found",
+      content: {
+        "application/json": {
+          schema: volunteerOperationErrorResponseSchema,
+        },
+      },
+    },
+    409: {
+      description: "Duplicate volunteer application",
+      content: {
+        "application/json": {
+          schema: volunteerOperationErrorResponseSchema,
+        },
+      },
+    },
+    500: {
+      description: "Internal server error",
+      content: {
+        "application/json": {
+          schema: volunteerOperationErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
 postVolunteerRouter.openapi(getVolunteerCategoriesRoute, async (c) => {
   return handleGetVolunteerCategories(c) as any;
 });
@@ -832,4 +910,9 @@ postVolunteerRouter.openapi(createVolunteerOpportunityRoute, async (c) => {
 postVolunteerRouter.openapi(createVolunteerApplicationRoute, async (c) => {
   const data = c.req.valid("json");
   return handleCreateVolunteerApplication(c, data) as any;
+});
+
+postVolunteerRouter.openapi(createVolunteerApplicationBatchRoute, async (c) => {
+  const data = c.req.valid("json");
+  return handleCreateVolunteerApplicationBatch(c, data) as any;
 });

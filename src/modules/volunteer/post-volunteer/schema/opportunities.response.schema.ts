@@ -202,6 +202,13 @@ export const createVolunteerApplicationResponseSchema = z
   })
   .openapi("CreateVolunteerApplicationResponse");
 
+export const createVolunteerApplicationBatchResponseSchema = z
+  .object({
+    ok: z.literal(true),
+    applications: z.array(volunteerApplicationResponseSchema),
+  })
+  .openapi("CreateVolunteerApplicationBatchResponse");
+
 export const getVolunteerOpportunityResponseSchema = z
   .object({
     ok: z.literal(true),
