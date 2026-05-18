@@ -163,7 +163,7 @@ type VolunteerPostingRow = {
   title: string;
   description: string | null;
   imageKey: string | null;
-  rawStatus: "DRAFT" | "ACTIVE" | "CLOSED" | "COMPLETED";
+  rawStatus: "DRAFT" | "ACTIVE" | "PUBLISHED" | "CLOSED" | "COMPLETED";
   filled: boolean;
   totalView: number;
   applicantCount: number;
@@ -443,7 +443,11 @@ function derivePostingStatus(input: {
   deadline: string | null;
   now: Date;
 }): ManagePostingStatus {
-  if (input.rawStatus && input.rawStatus !== "ACTIVE") {
+  if (
+    input.rawStatus &&
+    input.rawStatus !== "ACTIVE" &&
+    input.rawStatus !== "PUBLISHED"
+  ) {
     return input.rawStatus;
   }
 
@@ -454,7 +458,7 @@ function derivePostingStatus(input: {
     return "CLOSED";
   }
 
-  return "ACTIVE";
+  return input.rawStatus ?? "ACTIVE";
 }
 
 function matchesFilter(

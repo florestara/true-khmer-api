@@ -165,7 +165,7 @@ function resolveVolunteerApplicationTargetError(
   applicantId: string,
   notFoundError: string,
 ) {
-  if (!target || target.status !== "ACTIVE" || !target.publishedAt) {
+  if (!target || target.status !== "PUBLISHED" || !target.publishedAt) {
     return { status: 404 as const, error: notFoundError };
   }
 

@@ -22,6 +22,7 @@ import { volunteerCategory } from "./volunteer-categories";
 export const volunteerOpportunityStatus = pgEnum("volunteer_opportunity_status", [
   "DRAFT",
   "ACTIVE",
+  "PUBLISHED",
   "CLOSED",
   "COMPLETED",
 ]);
@@ -78,7 +79,7 @@ export const volunteerOpportunity = pgTable(
     totalView: integer("total_view").notNull().default(0),
     filled: boolean("filled").default(false).notNull(),
     status: volunteerOpportunityStatus("status")
-      .default("ACTIVE")
+      .default("PUBLISHED")
       .notNull(),
     publishedAt: timestamp("published_at", {
       withTimezone: true,

@@ -97,7 +97,7 @@ export const getManagePostingDetailQuerySchema = z
   .openapi("GetManagePostingDetailQuery");
 
 export const managePostingStatusSchema = z
-  .enum(["ACTIVE", "DRAFT", "CLOSED", "COMPLETED"])
+  .enum(["ACTIVE", "DRAFT", "PUBLISHED", "CLOSED", "COMPLETED"])
   .openapi("ManagePostingStatus");
 
 export const managePostingApplicantStatusSchema = z
