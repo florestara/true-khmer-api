@@ -1,0 +1,1 @@
+ALTER TABLE "launchpad_application" ALTER COLUMN "portfolio" DROP NOT NULL;
