@@ -18,6 +18,7 @@ import {
 } from "../../../utils/page-pagination.helper";
 import type {
   ChangeManagePostingApplicationStatusParam,
+  CompleteManagePostingParam,
   GetManagePostingApplicationParam,
   GetManagePostingDetailParam,
   GetManagePostingDetailQuery,
@@ -122,6 +123,10 @@ type ManagePostingApplicationUpdateResult =
   | "role_filled"
   | "applicant_already_approved"
   | ManagePostingApplicationDetail;
+type ManagePostingCompletionResult =
+  | "not_found"
+  | "not_in_progress"
+  | ManagePostingItem;
 
 const POSTER_LOCKED_APPLICATION_STATUSES = new Set<ManagePostingApplicantStatus>(
   ["CONFIRMED", "DECLINED", "COMPLETED", "WITHDRAWN"],
@@ -157,7 +162,7 @@ type VolunteerPostingRow = {
   title: string;
   description: string | null;
   imageKey: string | null;
-  rawStatus: "DRAFT" | "ACTIVE" | "PUBLISHED" | "CLOSED" | "COMPLETED";
+  rawStatus: "DRAFT" | "LIVE" | "IN_PROGRESS" | "COMPLETED";
   filled: boolean;
   totalView: number;
   applicantCount: number;
@@ -171,6 +176,7 @@ type ProjectPostingRow = {
   title: string;
   description: string | null;
   imageKey: string | null;
+  rawStatus: "DRAFT" | "LIVE" | "IN_PROGRESS" | "COMPLETED";
   totalView: number;
   applicantCount: number;
   capacity: number;
@@ -442,7 +448,7 @@ function buildProjectManagePostingApplicants(
         volunteer: null,
         project: {
           motivation: row.application.motivation,
-          portfolio: row.application.portfolio,
+          portfolio: row.application.portfolio ?? "",
           documentKeys: row.application.documentKeys as string[],
           documentNames: row.application.documentNames as string[],
         },
@@ -505,25 +511,8 @@ function matchesApplicantSearch(
 
 function derivePostingStatus(input: {
   rawStatus?: VolunteerPostingRow["rawStatus"];
-  deadline: string | null;
-  now: Date;
 }): ManagePostingStatus {
-  if (
-    input.rawStatus &&
-    input.rawStatus !== "ACTIVE" &&
-    input.rawStatus !== "PUBLISHED"
-  ) {
-    return input.rawStatus;
-  }
-
-  if (
-    input.deadline !== null &&
-    new Date(input.deadline).getTime() <= input.now.getTime()
-  ) {
-    return "CLOSED";
-  }
-
-  return input.rawStatus ?? "ACTIVE";
+  return input.rawStatus ?? "LIVE";
 }
 
 function matchesFilter(
@@ -536,6 +525,14 @@ function matchesFilter(
 
   if (filter === "filled") {
     return posting.filled;
+  }
+
+  if (filter === "active") {
+    return posting.status === "LIVE";
+  }
+
+  if (filter === "closed") {
+    return posting.status === "IN_PROGRESS";
   }
 
   return posting.status.toLowerCase() === filter;
@@ -612,8 +609,6 @@ async function findVolunteerManagePostings(
     .where(eq(volunteerOpportunity.createdBy, userId))
     .orderBy(desc(volunteerOpportunity.createdAt));
 
-  const now = new Date();
-
   return rows.map((row) => {
     const applicantCount = toInteger(row.applicantCount);
     const capacity = toInteger(row.capacity);
@@ -626,8 +621,6 @@ async function findVolunteerManagePostings(
       imageKey: row.imageKey,
       status: derivePostingStatus({
         rawStatus: row.rawStatus,
-        deadline: row.deadline,
-        now,
       }),
       filled: row.filled,
       applicantCount,
@@ -705,6 +698,7 @@ async function findProjectManagePostings(
       title: launchpad.name,
       description: launchpad.description,
       imageKey: launchpad.coverKey,
+      rawStatus: launchpad.status,
       totalView: launchpad.totalView,
       applicantCount: sql<number>`coalesce(${applicantGroups.applicantCount}, 0)`,
       capacity: sql<number>`coalesce(${roleCapacities.capacity}, 0)`,
@@ -722,8 +716,6 @@ async function findProjectManagePostings(
     .where(eq(launchpad.createdBy, userId))
     .orderBy(desc(launchpad.createdAt));
 
-  const now = new Date();
-
   return rows.map((row) => {
     const applicantCount = toInteger(row.applicantCount);
     const capacity = toInteger(row.capacity);
@@ -735,8 +727,7 @@ async function findProjectManagePostings(
       description: row.description,
       imageKey: row.imageKey,
       status: derivePostingStatus({
-        deadline: row.deadline,
-        now,
+        rawStatus: row.rawStatus,
       }),
       filled: row.filled,
       applicantCount,
@@ -1147,7 +1138,7 @@ async function findProjectManagePostingApplication(
       volunteer: null,
       project: {
         motivation: row.application.motivation,
-        portfolio: row.application.portfolio,
+        portfolio: row.application.portfolio ?? "",
         documentKeys: row.application.documentKeys as string[],
         documentNames: row.application.documentNames as string[],
       },
@@ -1410,6 +1401,138 @@ async function updateProjectManagePostingApplication(
   );
 
   return detail ?? "not_found";
+}
+
+async function completeVolunteerManagePosting(
+  userId: string,
+  params: CompleteManagePostingParam,
+): Promise<ManagePostingCompletionResult> {
+  const result = await db.transaction(async (tx) => {
+    const [current] = await tx
+      .select({
+        id: volunteerOpportunity.id,
+        status: volunteerOpportunity.status,
+      })
+      .from(volunteerOpportunity)
+      .where(
+        and(
+          eq(volunteerOpportunity.id, params.postingId),
+          eq(volunteerOpportunity.createdBy, userId),
+        ),
+      )
+      .for("update")
+      .limit(1);
+
+    if (!current) {
+      return "not_found" as const;
+    }
+
+    const derivedStatus = derivePostingStatus({
+      rawStatus: current.status,
+    });
+
+    if (derivedStatus === "COMPLETED") {
+      return "updated" as const;
+    }
+
+    if (derivedStatus !== "IN_PROGRESS") {
+      return "not_in_progress" as const;
+    }
+
+    const [updated] = await tx
+      .update(volunteerOpportunity)
+      .set({ status: "COMPLETED", updatedAt: sql`now()` })
+      .where(
+        and(
+          eq(volunteerOpportunity.id, params.postingId),
+          eq(volunteerOpportunity.status, current.status),
+        ),
+      )
+      .returning({ id: volunteerOpportunity.id });
+
+    return updated ? ("updated" as const) : ("not_found" as const);
+  });
+
+  if (result !== "updated") {
+    return result;
+  }
+
+  const posting =
+    (await findVolunteerManagePostings(userId)).find(
+      (item) => item.id === params.postingId,
+    ) ?? null;
+
+  return posting ?? "not_found";
+}
+
+async function completeProjectManagePosting(
+  userId: string,
+  params: CompleteManagePostingParam,
+): Promise<ManagePostingCompletionResult> {
+  const result = await db.transaction(async (tx) => {
+    const [current] = await tx
+      .select({
+        id: launchpad.id,
+        status: launchpad.status,
+      })
+      .from(launchpad)
+      .where(
+        and(eq(launchpad.id, params.postingId), eq(launchpad.createdBy, userId)),
+      )
+      .for("update")
+      .limit(1);
+
+    if (!current) {
+      return "not_found" as const;
+    }
+
+    const derivedStatus = derivePostingStatus({
+      rawStatus: current.status,
+    });
+
+    if (derivedStatus === "COMPLETED") {
+      return "updated" as const;
+    }
+
+    if (derivedStatus !== "IN_PROGRESS") {
+      return "not_in_progress" as const;
+    }
+
+    const [updated] = await tx
+      .update(launchpad)
+      .set({ status: "COMPLETED", updatedAt: sql`now()` })
+      .where(
+        and(
+          eq(launchpad.id, params.postingId),
+          eq(launchpad.status, current.status),
+        ),
+      )
+      .returning({ id: launchpad.id });
+
+    return updated ? ("updated" as const) : ("not_found" as const);
+  });
+
+  if (result !== "updated") {
+    return result;
+  }
+
+  const posting =
+    (await findProjectManagePostings(userId)).find(
+      (item) => item.id === params.postingId,
+    ) ?? null;
+
+  return posting ?? "not_found";
+}
+
+export async function completeManagePosting(
+  userId: string,
+  params: CompleteManagePostingParam,
+): Promise<ManagePostingCompletionResult> {
+  if (params.sourceType === "volunteer") {
+    return completeVolunteerManagePosting(userId, params);
+  }
+
+  return completeProjectManagePosting(userId, params);
 }
 
 export async function updateManagePostingApplication(

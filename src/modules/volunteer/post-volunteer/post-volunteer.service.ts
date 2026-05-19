@@ -165,7 +165,7 @@ function resolveVolunteerApplicationTargetError(
   applicantId: string,
   notFoundError: string,
 ) {
-  if (!target || target.status !== "PUBLISHED" || !target.publishedAt) {
+  if (!target || target.status !== "LIVE" || !target.publishedAt) {
     return { status: 404 as const, error: notFoundError };
   }
 
@@ -173,13 +173,6 @@ function resolveVolunteerApplicationTargetError(
     return {
       status: 400 as const,
       error: "You cannot apply to your own volunteer opportunity",
-    };
-  }
-
-  if (Date.parse(target.applicationDeadline) <= Date.now()) {
-    return {
-      status: 400 as const,
-      error: "Application deadline has passed or been reached",
     };
   }
 

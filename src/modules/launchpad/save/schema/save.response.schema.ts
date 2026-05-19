@@ -5,6 +5,7 @@ export const savedLaunchpadListItemSchema = z.object({
   name: z.string(),
   description: z.string().nullable(),
   deadline: z.date().nullable(),
+  status: z.enum(["DRAFT", "LIVE", "IN_PROGRESS", "COMPLETED"]),
   logoKey: z.string().nullable(),
   coverKey: z.string().nullable(),
   documentKeys: z.array(z.string()),

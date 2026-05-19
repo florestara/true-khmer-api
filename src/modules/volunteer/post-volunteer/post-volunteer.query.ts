@@ -278,12 +278,7 @@ function toInteger(value: unknown, fallback = 0): number {
 
 function resolveVolunteerOpportunityStatus(
   status: VolunteerOpportunityStatus,
-  applicationDeadline: string,
 ): VolunteerOpportunityStatus {
-  if (status === "PUBLISHED" && Date.parse(applicationDeadline) <= Date.now()) {
-    return "CLOSED";
-  }
-
   return status;
 }
 
@@ -298,8 +293,7 @@ export async function getVolunteerCategories(): Promise<
     .from(volunteerOpportunity)
     .where(
       and(
-        eq(volunteerOpportunity.status, "PUBLISHED"),
-        sql`${volunteerOpportunity.applicationDeadline} > now()`,
+        eq(volunteerOpportunity.status, "LIVE"),
         isNotNull(volunteerOpportunity.publishedAt),
       ),
     )
@@ -616,7 +610,6 @@ function hydrateVolunteerApplication(
       ...opportunity,
       status: resolveVolunteerOpportunityStatus(
         opportunity.status,
-        opportunity.applicationDeadline,
       ),
     },
     role: {
@@ -691,7 +684,6 @@ function hydrateVolunteerOpportunityDetail(
     benefits: opportunity.benefits as string[],
     status: resolveVolunteerOpportunityStatus(
       opportunity.status,
-      opportunity.applicationDeadline,
     ),
     publishedAt: opportunity.publishedAt,
     organizer: {
@@ -753,10 +745,9 @@ function buildVolunteerOpportunitiesWhereClause({
   "categoryId" | "locationId" | "search" | "cursor"
 >) {
   const filters: SQL<unknown>[] = [
-    eq(volunteerOpportunity.status, "PUBLISHED"),
+    eq(volunteerOpportunity.status, "LIVE"),
     eq(volunteerCategory.status, "ACTIVE"),
     eq(city.isActive, true),
-    sql`${volunteerOpportunity.applicationDeadline} > now()`,
     isNotNull(volunteerOpportunity.publishedAt),
   ];
 
@@ -1147,8 +1138,7 @@ async function getVolunteerOrganizersByUserIds(
     .where(
       and(
         inArray(volunteerOpportunity.createdBy, uniqueUserIds),
-        eq(volunteerOpportunity.status, "PUBLISHED"),
-        sql`${volunteerOpportunity.applicationDeadline} > now()`,
+        eq(volunteerOpportunity.status, "LIVE"),
         isNotNull(volunteerOpportunity.publishedAt),
       ),
     )
@@ -1308,8 +1298,7 @@ export async function getSavedVolunteerOpportunities(
   const cursorFilter = buildSavedVolunteerOpportunitiesCursorFilter(cursor);
   const filters: SQL<unknown>[] = [
     eq(volunteerOpportunitySaveList.saverId, userId),
-    eq(volunteerOpportunity.status, "PUBLISHED"),
-    sql`${volunteerOpportunity.applicationDeadline} > now()`,
+    eq(volunteerOpportunity.status, "LIVE"),
     eq(volunteerCategory.status, "ACTIVE"),
     eq(city.isActive, true),
     eq(country.isActive, true),
@@ -1368,8 +1357,7 @@ export async function getSavedVolunteerOpportunities(
     .where(
       and(
         eq(volunteerOpportunitySaveList.saverId, userId),
-        eq(volunteerOpportunity.status, "PUBLISHED"),
-        sql`${volunteerOpportunity.applicationDeadline} > now()`,
+        eq(volunteerOpportunity.status, "LIVE"),
         eq(volunteerCategory.status, "ACTIVE"),
         eq(city.isActive, true),
         eq(country.isActive, true),
@@ -1441,8 +1429,7 @@ export async function getVolunteerOpportunityById(
     .where(
       and(
         eq(volunteerOpportunity.id, opportunityId),
-        eq(volunteerOpportunity.status, "PUBLISHED"),
-        sql`${volunteerOpportunity.applicationDeadline} > now()`,
+        eq(volunteerOpportunity.status, "LIVE"),
         eq(volunteerCategory.status, "ACTIVE"),
         eq(city.isActive, true),
         eq(country.isActive, true),
@@ -1486,7 +1473,7 @@ export async function createVolunteerOpportunity(
         contactPhone: data.contact.phone,
         contactWebsiteUrl: data.contact.websiteUrl,
         commitmentDescription: data.commitmentDescription,
-        status: "PUBLISHED",
+        status: "LIVE",
         publishedAt: new Date().toISOString(),
         createdBy: data.createdBy,
       })
@@ -1602,7 +1589,7 @@ export async function createVolunteerApplication(
       title: data.opportunityTitle,
       coverImageKey: data.coverImageKey,
       applicationDeadline: data.applicationDeadline,
-      status: "PUBLISHED",
+      status: "LIVE",
       filled: false,
       category: data.category,
       location: data.location,
@@ -1652,7 +1639,7 @@ export async function createVolunteerApplicationsBatch(
           title: data.opportunityTitle,
           coverImageKey: data.coverImageKey,
           applicationDeadline: data.applicationDeadline,
-          status: "PUBLISHED",
+          status: "LIVE",
           filled: false,
           category: data.category,
           location: data.location,
@@ -1735,8 +1722,7 @@ export async function saveVolunteerOpportunityForUser(
       .where(
         and(
           eq(volunteerOpportunity.id, opportunityId),
-          eq(volunteerOpportunity.status, "PUBLISHED"),
-          sql`${volunteerOpportunity.applicationDeadline} > now()`,
+          eq(volunteerOpportunity.status, "LIVE"),
           eq(volunteerCategory.status, "ACTIVE"),
           eq(city.isActive, true),
           eq(country.isActive, true),

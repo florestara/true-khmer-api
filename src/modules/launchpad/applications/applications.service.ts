@@ -25,6 +25,12 @@ function validateOwnedDocumentKeys(
   return documentKeys.every((key) => key.startsWith(expectedPrefix));
 }
 
+function isLaunchpadOpenForApplications(target: {
+  status: string;
+}) {
+  return target.status === "LIVE";
+}
+
 export async function handlePresignLaunchpadApplicationDocumentUpload(
   c: Context,
   params: LaunchpadApplicationParamInput,
@@ -71,6 +77,16 @@ export async function handleCreateLaunchpadApplication(
 
     if (!target) {
       return c.json({ ok: false, error: "Launchpad role not found" }, 404);
+    }
+
+    if (!isLaunchpadOpenForApplications(target)) {
+      return c.json(
+        {
+          ok: false,
+          error: "Launchpad is not open for applications",
+        },
+        400,
+      );
     }
 
     if (

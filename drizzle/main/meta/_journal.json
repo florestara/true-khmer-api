@@ -281,6 +281,20 @@
       "when": 1779111119382,
       "tag": "0039_colorful_gauntlet",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1779177421746,
+      "tag": "0040_nappy_solo",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1779180400401,
+      "tag": "0041_big_pepper_potts",
+      "breakpoints": true
     }
   ]
 }
