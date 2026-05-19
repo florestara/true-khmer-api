@@ -5,6 +5,7 @@ import {
   type GetSavedQuestionsQuery,
   type GetTrendingTagsQuery,
   type GetQuestionsQuery,
+  type PresignForumQuestionImageUploadPayload,
   type QuestionIdParams,
   type VoteQuestionInput,
 } from "./questions.schema";
@@ -35,9 +36,80 @@ import {
   recordRecentActivityQuietly,
   replaceRecentActivitiesByReference,
 } from "../../recent-activity/recent-activity.service";
+import { presignForumImageUpload } from "../../uploads/uploads.service";
 
 function quoteActivityText(value: string) {
   return `'${value}'`;
+}
+
+function normalizeOwnedObjectKey(
+  expectedPrefix: string,
+  objectKey: string,
+): string | null {
+  const rawKey = objectKey.startsWith("/") ? objectKey.slice(1) : objectKey;
+  let normalizedKey: string;
+  try {
+    normalizedKey = decodeURIComponent(rawKey);
+  } catch {
+    return null;
+  }
+
+  const forbiddenPattern = /(^|\/)\.\.(\/|$)|\\|\/\/|[\u0000-\u001F\u007F]/;
+  if (forbiddenPattern.test(normalizedKey)) {
+    return null;
+  }
+
+  if (!normalizedKey.startsWith(expectedPrefix)) {
+    return null;
+  }
+
+  return normalizedKey;
+}
+
+function normalizeOwnedForumImageKey(
+  userId: string,
+  imageKey: string,
+): string | null {
+  return normalizeOwnedObjectKey(`forum/${userId}/`, imageKey);
+}
+
+function buildImageKeyValidationResponse(c: Context) {
+  return c.json(
+    {
+      ok: false,
+      error: "Validation failed",
+      issues: [
+        {
+          path: "imageKey",
+          message: "imageKey does not belong to current user",
+        },
+      ],
+    },
+    400,
+  );
+}
+
+export async function handlePresignForumQuestionImageUpload(
+  c: Context,
+  payload: PresignForumQuestionImageUploadPayload,
+) {
+  const authResult = getAuthUserId(c);
+  if (!authResult.ok) {
+    return authResult.response;
+  }
+
+  try {
+    const upload = presignForumImageUpload({
+      userId: authResult.userId,
+      contentType: payload.contentType,
+      fileSize: payload.fileSize,
+    });
+
+    return c.json({ ok: true, upload }, 200);
+  } catch (error) {
+    console.error("Failed to generate forum image upload URL", error);
+    return c.json({ ok: false, error: "Failed to generate upload URL" }, 500);
+  }
 }
 
 export async function handleGetQuestions(
@@ -192,7 +264,17 @@ export async function handleCreateQuestion(
       );
     }
 
-    const newQuestion = await createQuestion(data, authResult.userId);
+    const normalizedImageKey = data.imageKey
+      ? normalizeOwnedForumImageKey(authResult.userId, data.imageKey)
+      : null;
+    if (data.imageKey && !normalizedImageKey) {
+      return buildImageKeyValidationResponse(c);
+    }
+
+    const newQuestion = await createQuestion(
+      { ...data, imageKey: normalizedImageKey },
+      authResult.userId,
+    );
 
     awardPoints({
       userId: authResult.userId,
@@ -276,10 +358,18 @@ export async function handleEditQuestion(
       }
     }
 
+    const normalizedImageKey =
+      data.imageKey === undefined || data.imageKey === null
+        ? data.imageKey
+        : normalizeOwnedForumImageKey(authResult.userId, data.imageKey);
+    if (data.imageKey && !normalizedImageKey) {
+      return buildImageKeyValidationResponse(c);
+    }
+
     const updatedQuestion = await updateQuestion(
       params.questionId,
       authResult.userId,
-      data,
+      { ...data, imageKey: normalizedImageKey },
     );
     if (!updatedQuestion) {
       return c.json({ ok: false, error: "Question not found" }, 404);

@@ -1324,6 +1324,7 @@ export async function createQuestion(
       authorId,
       title: data.title,
       body: data.body,
+      imageKey: data.imageKey,
       status: data.status ?? "PUBLISHED",
       upvoteCount: 0,
       downvoteCount: 0,
@@ -1406,6 +1407,9 @@ export async function updateQuestion(
   }
   if (data.body !== undefined) {
     updateData.body = data.body;
+  }
+  if (data.imageKey !== undefined) {
+    updateData.imageKey = data.imageKey;
   }
   if (data.status !== undefined) {
     updateData.status = data.status;

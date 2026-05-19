@@ -87,6 +87,7 @@ export const forumQuestion = pgTable(
       .references(() => user.id),
     title: varchar("title", { length: 300 }).notNull(),
     body: text("body").notNull(),
+    imageKey: varchar("image_key", { length: 600 }),
     status: forumQuestionStatus("status").default("PUBLISHED").notNull(),
     answerCount: integer("answer_count").default(0).notNull(),
     upvoteCount: integer("upvote_count").default(0).notNull(),

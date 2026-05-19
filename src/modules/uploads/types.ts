@@ -35,6 +35,18 @@ export type PresignVolunteerApplicationDocumentUploadResponse = {
   expiresInSeconds: number;
 };
 
+export type PresignForumImageUploadResponse = {
+  uploadUrl: string;
+  method: "PUT";
+  requiredHeaders: {
+    "Content-Length": string;
+    "Content-Type": string;
+  };
+  imageKey: string;
+  publicUrl: string | null;
+  expiresInSeconds: number;
+};
+
 export type PresignLaunchpadLogoUploadResponse = {
   uploadUrl: string;
   method: "PUT";

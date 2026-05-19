@@ -267,6 +267,20 @@
       "when": 1779091344655,
       "tag": "0037_tired_lily_hollister",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1779111119381,
+      "tag": "0038_cynical_riptide",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1779111119382,
+      "tag": "0039_colorful_gauntlet",
+      "breakpoints": true
     }
   ]
 }
