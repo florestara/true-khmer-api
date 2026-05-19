@@ -380,6 +380,97 @@ function buildVolunteerStatsStatuses(
   return [...statusByGroup.values()];
 }
 
+type ProjectManagePostingRow = {
+  application: typeof launchpadApplication.$inferSelect;
+  role: {
+    id: string;
+    title: string;
+    description: string | null;
+  };
+  candidate: ManagePostingApplicant["candidate"];
+};
+
+function getProjectApplicationGroupKey(
+  postingId: string,
+  row: Pick<ProjectManagePostingRow, "application">,
+): string {
+  const documentKeys = (row.application.documentKeys as string[])
+    .map((key) => key.trim())
+    .sort((left, right) => left.localeCompare(right));
+
+  return JSON.stringify({
+    applicantId: row.application.createdBy,
+    launchpadId: postingId,
+    motivation: row.application.motivation,
+    portfolio: row.application.portfolio,
+    documentKeys,
+  });
+}
+
+function buildProjectManagePostingApplicants(
+  postingId: string,
+  rows: ProjectManagePostingRow[],
+): ManagePostingApplicant[] {
+  const applicantByGroup = new Map<string, ManagePostingApplicant>();
+
+  for (const row of rows) {
+    const groupKey = getProjectApplicationGroupKey(postingId, row);
+    const roleItem = {
+      applicationId: row.application.id,
+      roleId: row.role.id,
+      title: row.role.title,
+      description: row.role.description,
+      status: row.application.status,
+      appliedAt: row.application.createdAt,
+      updatedAt: row.application.updatedAt,
+    };
+    const existing = applicantByGroup.get(groupKey);
+
+    if (!existing) {
+      applicantByGroup.set(groupKey, {
+        candidate: row.candidate,
+        roles: [roleItem],
+        topPick: null,
+        status: row.application.status,
+        appliedAt: row.application.createdAt,
+        updatedAt: row.application.updatedAt,
+        contact: {
+          email: row.candidate.email,
+          phoneNumber: row.candidate.phoneNumber,
+          telegramUsername: row.candidate.telegramUsername,
+        },
+        volunteer: null,
+        project: {
+          motivation: row.application.motivation,
+          portfolio: row.application.portfolio,
+          documentKeys: row.application.documentKeys as string[],
+          documentNames: row.application.documentNames as string[],
+        },
+      });
+      continue;
+    }
+
+    existing.roles.push(roleItem);
+    existing.status = resolveVolunteerStatsStatus(
+      existing.status,
+      row.application.status,
+    );
+    if (Date.parse(row.application.createdAt) < Date.parse(existing.appliedAt)) {
+      existing.appliedAt = row.application.createdAt;
+    }
+    if (Date.parse(row.application.updatedAt) > Date.parse(existing.updatedAt)) {
+      existing.updatedAt = row.application.updatedAt;
+    }
+  }
+
+  return [...applicantByGroup.values()].map((applicant) => ({
+    ...applicant,
+    roles: applicant.roles.sort(
+      (left, right) => Date.parse(left.appliedAt) - Date.parse(right.appliedAt),
+    ),
+  }));
+}
+
 function matchesAppliedRange(
   range: GetManagePostingDetailQuery["range"],
   appliedAt: string,
@@ -464,18 +555,24 @@ function matchesPostingTitleSearch(
 async function findVolunteerManagePostings(
   userId: string,
 ): Promise<ManagePostingItem[]> {
-  const confirmedApplications = db
+  const applicantGroups = db
     .select({
       opportunityId: volunteerApplication.opportunityId,
-      applicantCount:
-        sql<number>`count(distinct ${volunteerApplication.applicantId})::int`.as(
-          "applicant_count",
-        ),
+      applicantCount: sql<number>`count(distinct (
+        ${volunteerApplication.applicantId},
+        ${volunteerApplication.opportunityId},
+        ${volunteerApplication.availability},
+        ${volunteerApplication.relevantExperience},
+        (
+          select coalesce(jsonb_agg(document_item.value->>'key' order by document_item.value->>'key')::text, '[]')
+          from jsonb_array_elements(${volunteerApplication.supportingDocuments}) as document_item(value)
+        )
+      ))::int`.as("applicant_count"),
     })
     .from(volunteerApplication)
-    .where(eq(volunteerApplication.status, "CONFIRMED"))
+    .where(sql`${volunteerApplication.status} <> 'WITHDRAWN'`)
     .groupBy(volunteerApplication.opportunityId)
-    .as("confirmed_volunteer_applications");
+    .as("volunteer_application_groups");
 
   const roleCapacities = db
     .select({
@@ -498,15 +595,15 @@ async function findVolunteerManagePostings(
       rawStatus: volunteerOpportunity.status,
       filled: volunteerOpportunity.filled,
       totalView: volunteerOpportunity.totalView,
-      applicantCount: sql<number>`coalesce(${confirmedApplications.applicantCount}, 0)`,
+      applicantCount: sql<number>`coalesce(${applicantGroups.applicantCount}, 0)`,
       capacity: sql<number>`coalesce(${roleCapacities.capacity}, 0)`,
       deadline: volunteerOpportunity.applicationDeadline,
       createdAt: volunteerOpportunity.createdAt,
     })
     .from(volunteerOpportunity)
     .leftJoin(
-      confirmedApplications,
-      eq(confirmedApplications.opportunityId, volunteerOpportunity.id),
+      applicantGroups,
+      eq(applicantGroups.opportunityId, volunteerOpportunity.id),
     )
     .leftJoin(
       roleCapacities,
@@ -545,15 +642,24 @@ async function findVolunteerManagePostings(
 async function findProjectManagePostings(
   userId: string,
 ): Promise<ManagePostingItem[]> {
-  const confirmedApplications = db
+  const applicantGroups = db
     .select({
       launchpadId: launchpadApplication.launchpadId,
-      applicantCount: sql<number>`count(*)::int`.as("applicant_count"),
+      applicantCount: sql<number>`count(distinct (
+        ${launchpadApplication.createdBy},
+        ${launchpadApplication.launchpadId},
+        ${launchpadApplication.motivation},
+        ${launchpadApplication.portfolio},
+        (
+          select coalesce(jsonb_agg(trim(document_key.value) order by trim(document_key.value))::text, '[]')
+          from jsonb_array_elements_text(${launchpadApplication.documentKeys}) as document_key(value)
+        )
+      ))::int`.as("applicant_count"),
     })
     .from(launchpadApplication)
-    .where(eq(launchpadApplication.status, "CONFIRMED"))
+    .where(sql`${launchpadApplication.status} <> 'WITHDRAWN'`)
     .groupBy(launchpadApplication.launchpadId)
-    .as("confirmed_launchpad_applications");
+    .as("launchpad_application_groups");
 
   const roleCapacities = db
     .select({
@@ -600,7 +706,7 @@ async function findProjectManagePostings(
       description: launchpad.description,
       imageKey: launchpad.coverKey,
       totalView: launchpad.totalView,
-      applicantCount: sql<number>`coalesce(${confirmedApplications.applicantCount}, 0)`,
+      applicantCount: sql<number>`coalesce(${applicantGroups.applicantCount}, 0)`,
       capacity: sql<number>`coalesce(${roleCapacities.capacity}, 0)`,
       filled: sql<boolean>`coalesce(${filledLaunchpads.filled}, false)`,
       deadline: launchpad.deadline,
@@ -608,8 +714,8 @@ async function findProjectManagePostings(
     })
     .from(launchpad)
     .leftJoin(
-      confirmedApplications,
-      eq(confirmedApplications.launchpadId, launchpad.id),
+      applicantGroups,
+      eq(applicantGroups.launchpadId, launchpad.id),
     )
     .leftJoin(roleCapacities, eq(roleCapacities.launchpadId, launchpad.id))
     .leftJoin(filledLaunchpads, eq(filledLaunchpads.launchpadId, launchpad.id))
@@ -751,36 +857,10 @@ async function findProjectManagePostingDetail(
     )
     .orderBy(desc(launchpadApplication.createdAt));
 
-  const applicants: ManagePostingApplicant[] = rows.map((row) => ({
-    candidate: row.candidate,
-    roles: [
-      {
-        applicationId: row.application.id,
-        roleId: row.role.id,
-        title: row.role.title,
-        description: row.role.description,
-        status: row.application.status,
-        appliedAt: row.application.createdAt,
-        updatedAt: row.application.updatedAt,
-      },
-    ],
-    topPick: null,
-    status: row.application.status,
-    appliedAt: row.application.createdAt,
-    updatedAt: row.application.updatedAt,
-    contact: {
-      email: row.candidate.email,
-      phoneNumber: row.candidate.phoneNumber,
-      telegramUsername: row.candidate.telegramUsername,
-    },
-    volunteer: null,
-    project: {
-      motivation: row.application.motivation,
-      portfolio: row.application.portfolio,
-      documentKeys: row.application.documentKeys as string[],
-      documentNames: row.application.documentNames as string[],
-    },
-  }));
+  const applicants = buildProjectManagePostingApplicants(
+    postingId,
+    rows as ProjectManagePostingRow[],
+  );
 
   return buildManagePostingDetail(posting, applicants, query);
 }
@@ -989,6 +1069,56 @@ async function findProjectManagePostingApplication(
 
   if (!row) {
     return null;
+  }
+
+  const groupRows = await db
+    .select({
+      application: launchpadApplication,
+      role: {
+        id: launchpadRole.id,
+        title: launchpadRole.title,
+        description: launchpadRole.description,
+      },
+      candidate: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        phoneNumber: user.phoneNumber,
+        telegramUsername: user.telegramUsername,
+        avatarUrl: userProfile.avatarUrl,
+        avatarKey: userProfile.avatarKey,
+      },
+    })
+    .from(launchpadApplication)
+    .innerJoin(
+      launchpadRole,
+      eq(launchpadRole.id, launchpadApplication.launchpadRoleId),
+    )
+    .innerJoin(launchpad, eq(launchpad.id, launchpadApplication.launchpadId))
+    .innerJoin(user, eq(user.id, launchpadApplication.createdBy))
+    .leftJoin(userProfile, eq(userProfile.userId, user.id))
+    .where(
+      and(
+        eq(launchpadApplication.launchpadId, postingId),
+        eq(launchpadApplication.createdBy, row.application.createdBy),
+        eq(launchpad.createdBy, userId),
+      ),
+    )
+    .orderBy(desc(launchpadApplication.createdAt));
+
+  const applicant = buildProjectManagePostingApplicants(
+    postingId,
+    groupRows as ProjectManagePostingRow[],
+  ).find((candidate) =>
+    candidate.roles.some((role) => role.applicationId === applicationId),
+  );
+
+  if (applicant) {
+    return {
+      applicant: {
+        ...applicant,
+      },
+    };
   }
 
   return {
