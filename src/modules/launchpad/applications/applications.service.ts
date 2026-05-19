@@ -74,7 +74,7 @@ export async function handleCreateLaunchpadApplication(
     }
 
     if (
-      data.documentKeys.length > 0 &&
+      data.documentKeys && data.documentKeys.length > 0 &&
       !validateOwnedDocumentKeys(
         params.launchpadId,
         authResult.userId,
