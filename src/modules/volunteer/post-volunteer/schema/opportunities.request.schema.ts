@@ -9,7 +9,6 @@ const VOLUNTEER_COVER_IMAGE_ALLOWED_CONTENT_TYPES = [
 const VOLUNTEER_APPLICATION_DOCUMENT_CONTENT_TYPE = "application/pdf";
 const MIN_VOLUNTEER_APPLICATION_DOCUMENT_COUNT = 1;
 const MAX_VOLUNTEER_APPLICATION_DOCUMENT_COUNT = 3;
-const MAX_VOLUNTEER_OPPORTUNITIES_PAGE_SIZE = 50;
 const DEFAULT_VOLUNTEER_OPPORTUNITIES_PAGE_SIZE = 10;
 const VOLUNTEER_COMMITMENT_LABELS = ["Light", "Regular", "Intensive"] as const;
 
@@ -625,8 +624,7 @@ export const getVolunteerOpportunitiesQuerySchema = z
     limit: z.coerce
       .number()
       .int()
-      .min(1, "limit must be between 1 and 50")
-      .max(MAX_VOLUNTEER_OPPORTUNITIES_PAGE_SIZE, "limit must be between 1 and 50")
+      .min(1, "limit must be >= 1")
       .default(DEFAULT_VOLUNTEER_OPPORTUNITIES_PAGE_SIZE),
     cursor: z.string().optional().transform((value, ctx) => {
       if (value === undefined) {
@@ -659,8 +657,7 @@ export const getSavedVolunteerOpportunitiesQuerySchema = z
     limit: z.coerce
       .number()
       .int()
-      .min(1, "limit must be between 1 and 50")
-      .max(MAX_VOLUNTEER_OPPORTUNITIES_PAGE_SIZE, "limit must be between 1 and 50")
+      .min(1, "limit must be >= 1")
       .default(DEFAULT_VOLUNTEER_OPPORTUNITIES_PAGE_SIZE),
     cursor: z.string().optional().transform((value, ctx) => {
       if (value === undefined) {
