@@ -2,7 +2,6 @@ import { z } from "zod";
 import { UUID_RE } from "../../../lib/constant";
 
 const DEFAULT_MANAGE_POSTINGS_PAGE_SIZE = 6;
-const MAX_MANAGE_POSTINGS_PAGE_SIZE = 50;
 
 export const managePostingTypeSchema = z
   .enum(["all", "volunteer", "projects"])
@@ -28,8 +27,7 @@ export const getManagePostingsQuerySchema = z
     limit: z.coerce
       .number()
       .int()
-      .min(1, "limit must be between 1 and 50")
-      .max(MAX_MANAGE_POSTINGS_PAGE_SIZE, "limit must be between 1 and 50")
+      .min(1, "limit must be >= 1")
       .default(DEFAULT_MANAGE_POSTINGS_PAGE_SIZE),
     search: z
       .string()
@@ -90,8 +88,7 @@ export const getManagePostingDetailQuerySchema = z
     limit: z.coerce
       .number()
       .int()
-      .min(1, "limit must be between 1 and 50")
-      .max(50, "limit must be between 1 and 50")
+      .min(1, "limit must be >= 1")
       .default(10),
   })
   .openapi("GetManagePostingDetailQuery");
