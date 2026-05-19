@@ -48,7 +48,7 @@ export const launchpadApplicationSchema = z
     launchpadId: z.string(),
     launchpadRoleId: z.string(),
     motivation: z.string(),
-    portfolio: z.string(),
+    portfolio: z.string().nullable(),
     status: launchpadApplicationStatusSchema,
     documentKeys: z.array(z.string()),
     documentNames: z.array(z.string()),

@@ -76,9 +76,9 @@ export async function createLaunchpadApplication(data: {
   launchpadId: string;
   launchpadRoleId: string;
   motivation: string;
-  portfolio: string;
-  documentKeys: string[];
-  documentNames: string[];
+  portfolio?: string | null;
+  documentKeys?: string[];
+  documentNames?: string[];
   createdBy: string;
 }): Promise<LaunchpadApplicationDetail> {
   return db.transaction(async (tx) => {
@@ -88,9 +88,9 @@ export async function createLaunchpadApplication(data: {
         launchpadId: data.launchpadId,
         launchpadRoleId: data.launchpadRoleId,
         motivation: data.motivation,
-        portfolio: data.portfolio,
-        documentKeys: data.documentKeys,
-        documentNames: data.documentNames,
+        portfolio: data.portfolio ?? null,
+        documentKeys: data.documentKeys ?? [],
+        documentNames: data.documentNames ?? [],
         status: "SUBMITTED",
         createdBy: data.createdBy,
       })

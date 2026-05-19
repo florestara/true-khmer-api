@@ -42,7 +42,7 @@ const launchpadApplication = pgTable(
         onDelete: "cascade",
       }),
     motivation: varchar("motivation", { length: 2000 }).notNull(),
-    portfolio: varchar("portfolio", { length: 255 }).notNull(),
+    portfolio: varchar("portfolio", { length: 255 }),
     status: launchpadApplicationStatusEnum("status")
       .default("SUBMITTED")
       .notNull(),

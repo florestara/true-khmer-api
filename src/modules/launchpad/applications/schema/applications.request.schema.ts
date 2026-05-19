@@ -60,25 +60,16 @@ export const createLaunchpadApplicationSchema = z
       .trim()
       .url("portfolio must be a valid URL")
       .refine((url) => url.startsWith("https://"), "portfolio must use HTTPS")
-      .max(255, "portfolio must be <= 255 characters"),
+      .max(255, "portfolio must be <= 255 characters")
+      .optional(),
     documentKeys: z
       .array(z.string().trim().min(1).max(500))
-      .min(1, "documentKeys must have at least 1 entry")
-      .max(5, "documentKeys can have at most 5 entries"),
+      .max(5, "documentKeys can have at most 5 entries")
+      .optional(),
     documentNames: z
       .array(z.string().trim().min(1).max(255))
-      .min(1, "documentNames must have at least 1 entry")
-      .max(5, "documentNames can have at most 5 entries"),
-  })
-  .superRefine((data, ctx) => {
-    if (data.documentKeys.length !== data.documentNames.length) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message:
-          "documentKeys and documentNames must have the same number of entries",
-        path: ["documentNames"],
-      });
-    }
+      .max(5, "documentNames can have at most 5 entries")
+      .optional(),
   })
   .openapi("CreateLaunchpadApplicationRequest");
 
