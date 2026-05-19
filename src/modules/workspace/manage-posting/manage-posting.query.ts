@@ -442,7 +442,7 @@ function buildProjectManagePostingApplicants(
         volunteer: null,
         project: {
           motivation: row.application.motivation,
-          portfolio: row.application.portfolio,
+          portfolio: row.application.portfolio ?? "",
           documentKeys: row.application.documentKeys as string[],
           documentNames: row.application.documentNames as string[],
         },
@@ -1147,7 +1147,7 @@ async function findProjectManagePostingApplication(
       volunteer: null,
       project: {
         motivation: row.application.motivation,
-        portfolio: row.application.portfolio,
+        portfolio: row.application.portfolio ?? "",
         documentKeys: row.application.documentKeys as string[],
         documentNames: row.application.documentNames as string[],
       },
