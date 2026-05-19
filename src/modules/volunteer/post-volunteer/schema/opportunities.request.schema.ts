@@ -309,6 +309,12 @@ const volunteerOpportunityRoleSchema = z
   })
   .openapi("VolunteerOpportunityRoleRequest");
 
+const updateVolunteerOpportunityRoleSchema = volunteerOpportunityRoleSchema
+  .extend({
+    id: z.string().uuid("roles[].id must be a valid UUID").optional(),
+  })
+  .openapi("UpdateVolunteerOpportunityRoleRequest");
+
 export const presignVolunteerOpportunityCoverUploadSchema = z
   .object({
     contentType: z
@@ -482,6 +488,163 @@ export const createVolunteerOpportunitySchema =
         .max(600, "coverImageKey must be <= 600 characters"),
     })
     .openapi("CreateVolunteerOpportunityRequest");
+
+const updateVolunteerOpportunityContactSchema = volunteerOpportunityContactSchema
+  .partial()
+  .strict()
+  .openapi("UpdateVolunteerOpportunityContactRequest");
+
+export const updateVolunteerOpportunitySchema = z
+  .object({
+    categoryId: z.string().uuid("categoryId must be a valid UUID").optional(),
+    locationId: z.string().uuid("locationId must be a valid UUID").optional(),
+    title: z
+      .string()
+      .transform((value) => normalizeText(value))
+      .pipe(
+        z
+          .string()
+          .min(1, "title must be 1..255 characters")
+          .max(255, "title must be 1..255 characters"),
+      )
+      .optional(),
+    overview: z
+      .string()
+      .transform((value) => normalizeText(value))
+      .pipe(
+        z
+          .string()
+          .min(1, "overview must be 1..5000 characters")
+          .max(5000, "overview must be 1..5000 characters"),
+      )
+      .optional(),
+    communityImpact: z
+      .string()
+      .nullish()
+      .transform((value) => normalizeOptionalText(value))
+      .refine(
+        (value) => value === null || value.length <= 5000,
+        "communityImpact must be <= 5000 characters",
+      )
+      .optional(),
+    startDate: optionalDateTimeSchema("startDate").optional(),
+    endDate: optionalDateTimeSchema("endDate").optional(),
+    commitmentLabel: z
+      .string()
+      .nullish()
+      .transform((value) => normalizeOptionalText(value))
+      .refine(
+        (value) => value === null || isVolunteerCommitmentLabel(value),
+        `commitmentLabel must be one of: ${VOLUNTEER_COMMITMENT_LABELS.join(", ")}`,
+      )
+      .optional(),
+    commitmentDescription: z
+      .string()
+      .nullish()
+      .transform((value) => normalizeOptionalText(value))
+      .refine(
+        (value) => value === null || value.length <= 2000,
+        "commitmentDescription must be <= 2000 characters",
+      )
+      .optional(),
+    applicationDeadline: z
+      .string()
+      .datetime("applicationDeadline must be a valid ISO datetime")
+      .refine(
+        (value) => Number.isFinite(Date.parse(value)),
+        "applicationDeadline must be a valid ISO datetime",
+      )
+      .refine(
+        (value) => Date.parse(value) > Date.now(),
+        "applicationDeadline must be in the future",
+      )
+      .optional(),
+    coverImageKey: z
+      .string()
+      .trim()
+      .min(1, "coverImageKey is required")
+      .max(600, "coverImageKey must be <= 600 characters")
+      .optional(),
+    benefits: z
+      .array(z.string())
+      .max(12, "benefits must contain at most 12 items")
+      .nullish()
+      .transform((value) => normalizeStringList(value))
+      .superRefine((value, ctx) => {
+        value.forEach((item, index) => {
+          if (item.length > 180) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: [index],
+              message: "benefits[] must be 1..180 characters",
+            });
+          }
+        });
+      })
+      .optional(),
+    contact: updateVolunteerOpportunityContactSchema.optional(),
+    roles: z
+      .array(updateVolunteerOpportunityRoleSchema)
+      .min(1, "roles must contain at least 1 role")
+      .max(20, "roles must contain at most 20 roles")
+      .optional(),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    const contactFieldCount =
+      value.contact === undefined ? 0 : Object.keys(value.contact).length;
+    const hasPatchField =
+      Object.keys(value).some((key) => key !== "contact") ||
+      contactFieldCount > 0;
+
+    if (!hasPatchField) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "At least one volunteer opportunity field is required",
+      });
+    }
+
+    if (value.contact !== undefined && contactFieldCount === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["contact"],
+        message: "At least one contact field is required",
+      });
+    }
+
+    if (
+      value.startDate &&
+      value.endDate &&
+      Date.parse(value.endDate) < Date.parse(value.startDate)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["endDate"],
+        message: "endDate must be on or after startDate",
+      });
+    }
+
+    if (value.roles) {
+      const seenRoleIds = new Set<string>();
+      value.roles.forEach((role, index) => {
+        if (!role.id) {
+          return;
+        }
+
+        if (seenRoleIds.has(role.id)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["roles", index, "id"],
+            message: "roles[].id must not contain duplicates",
+          });
+          return;
+        }
+
+        seenRoleIds.add(role.id);
+      });
+    }
+  })
+  .openapi("UpdateVolunteerOpportunityRequest");
 
 const volunteerApplicationSupportingDocumentsSchema = z
   .array(
@@ -708,6 +871,10 @@ export type GetVolunteerOpportunityParams = z.infer<
 
 export type CreateVolunteerOpportunityBodyInput = z.infer<
   typeof createVolunteerOpportunitySchema
+>;
+
+export type UpdateVolunteerOpportunityBodyInput = z.infer<
+  typeof updateVolunteerOpportunitySchema
 >;
 
 export type CreateVolunteerApplicationBodyInput = z.infer<
