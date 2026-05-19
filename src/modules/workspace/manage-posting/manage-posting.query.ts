@@ -651,7 +651,7 @@ async function findProjectManagePostings(
         ${launchpadApplication.motivation},
         ${launchpadApplication.portfolio},
         (
-          select coalesce(jsonb_agg(document_key.value order by document_key.value)::text, '[]')
+          select coalesce(jsonb_agg(trim(document_key.value) order by trim(document_key.value))::text, '[]')
           from jsonb_array_elements_text(${launchpadApplication.documentKeys}) as document_key(value)
         )
       ))::int`.as("applicant_count"),
