@@ -1431,10 +1431,6 @@ async function completeVolunteerManagePosting(
       rawStatus: current.status,
     });
 
-    if (derivedStatus === "COMPLETED") {
-      return "updated" as const;
-    }
-
     if (derivedStatus !== "IN_PROGRESS") {
       return "not_in_progress" as const;
     }
@@ -1489,10 +1485,6 @@ async function completeProjectManagePosting(
     const derivedStatus = derivePostingStatus({
       rawStatus: current.status,
     });
-
-    if (derivedStatus === "COMPLETED") {
-      return "updated" as const;
-    }
 
     if (derivedStatus !== "IN_PROGRESS") {
       return "not_in_progress" as const;
