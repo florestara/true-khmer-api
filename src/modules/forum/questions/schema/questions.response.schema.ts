@@ -7,11 +7,35 @@ export const questionTagResponseSchema = z
   })
   .openapi("QuestionTagResponse");
 
+const presignedUploadHeadersSchema = z.object({
+  "Content-Length": z.string(),
+  "Content-Type": z.string(),
+});
+
+export const presignForumQuestionImageUploadResultSchema = z
+  .object({
+    uploadUrl: z.string(),
+    method: z.literal("PUT"),
+    requiredHeaders: presignedUploadHeadersSchema,
+    imageKey: z.string(),
+    publicUrl: z.string().nullable(),
+    expiresInSeconds: z.number(),
+  })
+  .openapi("PresignForumQuestionImageUploadResult");
+
+export const presignForumQuestionImageUploadResponseSchema = z
+  .object({
+    ok: z.literal(true),
+    upload: presignForumQuestionImageUploadResultSchema,
+  })
+  .openapi("PresignForumQuestionImageUploadResponse");
+
 export const questionResponseSchema = z
   .object({
     id: z.string(),
     title: z.string(),
     body: z.string(),
+    imageKey: z.string().nullable(),
     status: z.enum(["PUBLISHED", "CLOSED", "DELETED"]),
     upvoteCount: z.number().int().nonnegative(),
     downvoteCount: z.number().int().nonnegative(),

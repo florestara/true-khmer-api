@@ -4,6 +4,7 @@ import { getAuthUserId } from "../auth/utils/get-auth";
 import type { PresignAvatarUploadPayload } from "./uploads.schema";
 import type {
   PresignAvatarUploadResponse,
+  PresignForumImageUploadResponse,
   PresignLaunchpadApplicationDocumentUploadResponse,
   PresignLaunchpadCoverUploadResponse,
   PresignLaunchpadDocumentUploadResponse,
@@ -53,6 +54,14 @@ function buildAvatarKey(userId: string, fileName: string) {
 function buildVolunteerCoverKey(userId: string, contentType: string) {
   return buildNestedImageObjectKeyFromContentType(
     "volunteer-covers",
+    userId,
+    contentType,
+  );
+}
+
+function buildForumImageKey(userId: string, contentType: string) {
+  return buildNestedImageObjectKeyFromContentType(
+    "forum",
     userId,
     contentType,
   );
@@ -291,6 +300,30 @@ export function presignVolunteerApplicationDocumentUpload(options: {
       name: options.fileName,
       key: supportingDocumentKey,
     },
+    expiresInSeconds: presigned.expiresInSeconds,
+  };
+
+  return response;
+}
+
+export function presignForumImageUpload(options: {
+  userId: string;
+  contentType: string;
+  fileSize: number;
+}) {
+  const imageKey = buildForumImageKey(options.userId, options.contentType);
+  const presigned = buildPresignedPutUrl(
+    imageKey,
+    options.contentType,
+    options.fileSize,
+  );
+
+  const response: PresignForumImageUploadResponse = {
+    uploadUrl: presigned.uploadUrl,
+    method: "PUT",
+    requiredHeaders: presigned.requiredHeaders,
+    imageKey,
+    publicUrl: resolvePublicUrl(imageKey),
     expiresInSeconds: presigned.expiresInSeconds,
   };
 

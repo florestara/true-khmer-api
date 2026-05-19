@@ -11,6 +11,7 @@ import {
   handleGetQuestions,
   handleSaveQuestion,
   handleGetTrendingTags,
+  handlePresignForumQuestionImageUpload,
   handleUnsaveQuestion,
   handleVoteQuestion,
 } from "./questions.service";
@@ -28,6 +29,8 @@ import {
   getQuestionsQuerySchema,
   getQuestionParamsSchema,
   saveQuestionResponseSchema,
+  presignForumQuestionImageUploadResponseSchema,
+  presignForumQuestionImageUploadSchema,
   voteQuestionSchema,
 } from "./questions.schema";
 
@@ -159,6 +162,32 @@ const createQuestionRoute = createRoute({
     },
     400: { description: "Validation failed" },
     404: { description: "Category not found" },
+  },
+});
+
+const presignForumQuestionImageUploadRoute = createRoute({
+  method: "post",
+  path: "/image/presign",
+  tags: ["Forum Question"],
+  middleware: [requireAccessToken],
+  security: [{ BearerAuth: [] }],
+  request: {
+    body: {
+      content: {
+        "application/json": { schema: presignForumQuestionImageUploadSchema },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Presigned forum image upload URL generated",
+      content: {
+        "application/json": {
+          schema: presignForumQuestionImageUploadResponseSchema,
+        },
+      },
+    },
+    400: { description: "Validation failed" },
   },
 });
 
@@ -305,6 +334,11 @@ questionsRouter.openapi(getRoute, async (c) => {
 questionsRouter.openapi(createQuestionRoute, async (c) => {
   const data = c.req.valid("json");
   return handleCreateQuestion(c, data) as any;
+});
+
+questionsRouter.openapi(presignForumQuestionImageUploadRoute, async (c) => {
+  const data = c.req.valid("json");
+  return handlePresignForumQuestionImageUpload(c, data) as any;
 });
 
 questionsRouter.openapi(editQuestionRoute, async (c) => {

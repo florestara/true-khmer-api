@@ -1,0 +1,1 @@
+ALTER TABLE "forum_question" ADD COLUMN "image_key" varchar(600);

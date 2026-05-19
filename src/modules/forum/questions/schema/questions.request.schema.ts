@@ -10,6 +10,12 @@ const MAX_TAG_LENGTH = 30;
 const MAX_BODY_LENGTH = 10000;
 const MAX_QUESTIONS_PAGE_SIZE = 50;
 const DEFAULT_QUESTIONS_PAGE_SIZE = 10;
+const FORUM_IMAGE_ALLOWED_CONTENT_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+] as const;
+const FORUM_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 const questionSortBySchema = z
   .enum([
     "mostRelevant",
@@ -43,6 +49,12 @@ const questionBodySchema = z
     MAX_BODY_LENGTH,
     `body is required and must be 1..${MAX_BODY_LENGTH} characters`,
   );
+
+const forumImageKeySchema = z
+  .string()
+  .trim()
+  .min(1, "imageKey is required")
+  .max(600, "imageKey must be <= 600 characters");
 
 const forumQuestionStatusSchema = z.enum(["PUBLISHED", "CLOSED", "DELETED"]);
 export type ForumQuestionStatus = z.infer<typeof forumQuestionStatusSchema>;
@@ -602,6 +614,34 @@ export const getTrendingTagsQuerySchema = z
 
 export type GetTrendingTagsQuery = z.infer<typeof getTrendingTagsQuerySchema>;
 
+export const presignForumQuestionImageUploadSchema = z
+  .object({
+    contentType: z
+      .string()
+      .trim()
+      .toLowerCase()
+      .refine(
+        (value) =>
+          (FORUM_IMAGE_ALLOWED_CONTENT_TYPES as readonly string[]).includes(
+            value,
+          ),
+        "Unsupported image contentType",
+      ),
+    fileSize: z
+      .number()
+      .int("fileSize must be an integer")
+      .positive("fileSize must be positive")
+      .max(
+        FORUM_IMAGE_MAX_BYTES,
+        `fileSize must be <= ${FORUM_IMAGE_MAX_BYTES / (1024 * 1024)} MB`,
+      ),
+  })
+  .openapi("PresignForumQuestionImageUploadRequest");
+
+export type PresignForumQuestionImageUploadPayload = z.infer<
+  typeof presignForumQuestionImageUploadSchema
+>;
+
 export const createQuestionSchema = z
   .object({
     categoryId: z
@@ -622,6 +662,7 @@ export const createQuestionSchema = z
         `body is required and must be 1..${MAX_BODY_LENGTH} characters`,
       ),
     tags: tagsSchema,
+    imageKey: forumImageKeySchema.nullable().optional(),
     status: normalizedStatusSchema.optional(),
   })
   .superRefine((value, ctx) => {
@@ -638,6 +679,7 @@ export const createQuestionSchema = z
     title: value.title,
     body: value.body,
     tags: value.tags,
+    imageKey: value.imageKey ?? null,
     status: value.status,
   }))
   .openapi("CreateQuestionRequest");
@@ -654,6 +696,7 @@ export const editQuestionSchema = z
     title: questionTitleSchema.optional(),
     body: questionBodySchema.optional(),
     tags: editTagsSchema,
+    imageKey: forumImageKeySchema.nullable().optional(),
     status: normalizedStatusSchema.optional(),
   })
   .superRefine((value, ctx) => {
@@ -671,6 +714,7 @@ export const editQuestionSchema = z
     title: value.title,
     body: value.body,
     tags: value.tags,
+    imageKey: value.imageKey,
     status: value.status,
   }))
   .openapi("EditQuestionRequest");
