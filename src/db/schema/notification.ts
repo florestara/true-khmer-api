@@ -14,7 +14,9 @@ export const notification = pgTable(
   "notification",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    userId: uuid("user_id").references(() => user.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
     body: text("body").notNull(),
     imageUrl: text("image_url"),

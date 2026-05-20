@@ -62,13 +62,13 @@ export async function handleUnregisterToken(
 
 export async function handleSendToUser(c: Context, payload: SendToUserPayload) {
   try {
-    createNotification({
+    await createNotification({
       userId: payload.userId,
       title: payload.title,
       body: payload.body,
       imageUrl: payload.imageUrl,
       data: payload.data,
-    }).catch((err) => console.error("Failed to persist notification", err));
+    });
 
     const allTokens = await getFcmTokensByUserId(payload.userId);
     const mobileTokens = allTokens.filter(
@@ -80,24 +80,26 @@ export async function handleSendToUser(c: Context, payload: SendToUserPayload) {
     }
 
     const messaging = getMessaging();
-    const result = await messaging.sendEachForMulticast({
-      tokens: mobileTokens.map((t) => t.token),
-      notification: {
-        title: payload.title,
-        body: payload.body,
-        imageUrl: payload.imageUrl,
-      },
-      data: payload.data,
-    });
+    const CHUNK_SIZE = 500;
+    let successCount = 0;
+    let failureCount = 0;
 
-    return c.json(
-      {
-        ok: true,
-        successCount: result.successCount,
-        failureCount: result.failureCount,
-      },
-      200,
-    );
+    for (let i = 0; i < mobileTokens.length; i += CHUNK_SIZE) {
+      const chunk = mobileTokens.slice(i, i + CHUNK_SIZE);
+      const result = await messaging.sendEachForMulticast({
+        tokens: chunk.map((t) => t.token),
+        notification: {
+          title: payload.title,
+          body: payload.body,
+          imageUrl: payload.imageUrl,
+        },
+        data: payload.data,
+      });
+      successCount += result.successCount;
+      failureCount += result.failureCount;
+    }
+
+    return c.json({ ok: true, successCount, failureCount }, 200);
   } catch (err) {
     console.error("Failed to send notification to user", err);
     return c.json({ ok: false, error: "Internal server error" }, 500);
@@ -106,14 +108,12 @@ export async function handleSendToUser(c: Context, payload: SendToUserPayload) {
 
 export async function handleBroadcast(c: Context, payload: BroadcastPayload) {
   try {
-    createNotificationsForAllUsers({
+    await createNotificationsForAllUsers({
       title: payload.title,
       body: payload.body,
       imageUrl: payload.imageUrl,
       data: payload.data,
-    }).catch((err) =>
-      console.error("Failed to persist broadcast notifications", err),
-    );
+    });
 
     const allTokens = await getAllFcmTokens();
     const mobileTokens = allTokens.filter(

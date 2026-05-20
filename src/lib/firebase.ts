@@ -1,11 +1,17 @@
 import admin from "firebase-admin";
 import { env } from "../config/env";
 
-let firebaseApp: admin.app.App | null = null;
+let cachedApp: admin.app.App | undefined = undefined;
 
 export function getFirebaseApp(): admin.app.App {
-  if (firebaseApp) {
-    return firebaseApp;
+  if (cachedApp) {
+    return cachedApp;
+  }
+
+  const existingApps = admin.apps;
+  if (existingApps.length > 0 && existingApps[0]) {
+    cachedApp = existingApps[0];
+    return cachedApp;
   }
 
   if (
@@ -18,16 +24,15 @@ export function getFirebaseApp(): admin.app.App {
     );
   }
 
-  firebaseApp = admin.initializeApp({
+  cachedApp = admin.initializeApp({
     credential: admin.credential.cert({
       projectId: env.FIREBASE_PROJECT_ID,
       clientEmail: env.FIREBASE_CLIENT_EMAIL,
-      // Render / Docker envs encode newlines as literal \n
       privateKey: env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n"),
     }),
   });
 
-  return firebaseApp;
+  return cachedApp;
 }
 
 export function getMessaging(): admin.messaging.Messaging {

@@ -70,7 +70,7 @@ export type MarkReadPayload = z.infer<typeof markReadSchema>;
 export const tokenResponseSchema = z.object({
   ok: z.boolean(),
   message: z.string(),
-  platform: fcmPlatformEnum.default("web"),
+  platform: fcmPlatformEnum.optional().default("web"),
 });
 
 export const sendResponseSchema = z.object({

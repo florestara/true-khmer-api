@@ -2,7 +2,7 @@ import { EventEmitter } from "events";
 import { db } from "../../db";
 import { fcmToken } from "../../db/schema/fcm-token";
 import { notification } from "../../db/schema/notification";
-import { and, count, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, count, eq, inArray, sql } from "drizzle-orm";
 import type {
   FcmTokenPlatform,
   ListNotificationsQuery,
@@ -35,17 +35,17 @@ export async function upsertFcmToken(
   token: string,
   platform: FcmTokenPlatform,
 ) {
-  const existing = await db.query.fcmToken.findFirst({
-    where: and(eq(fcmToken.userId, userId), eq(fcmToken.token, token)),
-  });
-
-  if (existing) {
-    return existing;
-  }
-
   const [inserted] = await db
     .insert(fcmToken)
     .values({ userId, token, platform })
+    .onConflictDoUpdate({
+      target: fcmToken.token,
+      set: {
+        userId,
+        platform,
+        updatedAt: new Date(),
+      },
+    })
     .returning();
 
   return inserted;
@@ -71,7 +71,7 @@ export async function getAllFcmTokens() {
 }
 
 export async function createNotification(opts: {
-  userId: string | null;
+  userId: string;
   title: string;
   body: string;
   imageUrl?: string;
@@ -80,7 +80,7 @@ export async function createNotification(opts: {
   const [row] = await db
     .insert(notification)
     .values({
-      userId: opts.userId ?? null,
+      userId: opts.userId,
       title: opts.title,
       body: opts.body,
       imageUrl: opts.imageUrl ?? null,
@@ -135,7 +135,7 @@ export async function listNotificationsForUser(
   const offset = (query.page - 1) * query.limit;
 
   const whereClause = and(
-    or(eq(notification.userId, userId), isNull(notification.userId)),
+    eq(notification.userId, userId),
     query.unreadOnly ? eq(notification.isRead, false) : undefined,
   );
 
@@ -177,10 +177,7 @@ export async function countUnreadForUser(userId: string): Promise<number> {
     .select({ value: count() })
     .from(notification)
     .where(
-      and(
-        or(eq(notification.userId, userId), isNull(notification.userId)),
-        eq(notification.isRead, false),
-      ),
+      and(eq(notification.userId, userId), eq(notification.isRead, false)),
     );
 
   return value;

@@ -33,7 +33,7 @@ export const fcmToken = pgTable(
   },
   (table) => [
     index("fcm_token_userId_idx").on(table.userId),
-    unique("fcm_token_user_token_unique").on(table.userId, table.token),
+    unique("fcm_token_unique").on(table.token),
   ],
 );
 
