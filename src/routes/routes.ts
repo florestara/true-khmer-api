@@ -19,6 +19,7 @@ import { launchpadApplicationsRouter } from "../modules/launchpad/applications/a
 import { myApplicationsRouter } from "../modules/my-application/my-application.router";
 import { myspaceRouter } from "../modules/myspace/myspace.router";
 import { managePostingRouter } from "../modules/workspace/manage-posting/manage-posting.router";
+import { notificationsRouter } from "../modules/notifications/notifications.router";
 
 const routes = new OpenAPIHono<AppBindings>();
 
@@ -41,5 +42,6 @@ routes.route("/launchpad", launchpadApplicationsRouter);
 routes.route("/my-application", myApplicationsRouter);
 routes.route("/me", myspaceRouter);
 routes.route("/workspace/manage-posting", managePostingRouter);
+routes.route("/notifications", notificationsRouter);
 
 export default routes;

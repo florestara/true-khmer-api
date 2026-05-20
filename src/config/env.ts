@@ -20,11 +20,7 @@ const envSchema = z.object({
   APP_DOMAIN: z.preprocess(emptyStringToUndefined, z.string().url()),
   PORT: z.coerce.number().int().positive().default(3000),
   FORUM_MIN_TRENDING_TAG_COUNT: z.coerce.number().int().positive().default(10),
-  FORUM_MAX_TRENDING_TAG_AMOUNT: z.coerce
-    .number()
-    .int()
-    .positive()
-    .default(10),
+  FORUM_MAX_TRENDING_TAG_AMOUNT: z.coerce.number().int().positive().default(10),
   FORUM_TRENDING_WINDOW_HOURS: z.coerce.number().int().positive().default(48),
   FORUM_MIN_TRENDING_ENGAGEMENT_SCORE: z.coerce
     .number()
@@ -68,6 +64,18 @@ const envSchema = z.object({
         "Invalid email",
       )
       .optional(),
+  ),
+  FIREBASE_PROJECT_ID: z.preprocess(
+    emptyStringToUndefined,
+    z.string().min(1).optional(),
+  ),
+  FIREBASE_CLIENT_EMAIL: z.preprocess(
+    emptyStringToUndefined,
+    z.string().email().optional(),
+  ),
+  FIREBASE_PRIVATE_KEY: z.preprocess(
+    emptyStringToUndefined,
+    z.string().min(1).optional(),
   ),
 });
 
