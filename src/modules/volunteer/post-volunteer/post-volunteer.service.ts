@@ -14,6 +14,7 @@ import {
   findVolunteerApplicationTargetByRoleId,
   findVolunteerApplicationTargetsByRoleIds,
   findVolunteerLocationById,
+  findVolunteerOpportunityEditTargetById,
   findVolunteerOpportunityApplicationTargetById,
   getSavedVolunteerOpportunities,
   getVolunteerCategories,
@@ -23,6 +24,11 @@ import {
   incrementVolunteerOpportunityViewCount,
   saveVolunteerOpportunityForUser,
   unsaveVolunteerOpportunityForUser,
+  updateVolunteerOpportunity,
+  VolunteerOpportunityDateRangeError,
+  VolunteerOpportunityRoleCapacityError,
+  VolunteerOpportunityRoleNotFoundError,
+  VolunteerOpportunityRoleRemovalBlockedError,
 } from "./post-volunteer.query";
 import type {
   CreateVolunteerApplicationBatchBodyInput,
@@ -34,6 +40,7 @@ import type {
   GetVolunteerOpportunitiesQuery,
   PresignVolunteerApplicationDocumentUploadPayload,
   PresignVolunteerOpportunityCoverUploadPayload,
+  UpdateVolunteerOpportunityBodyInput,
 } from "./post-volunteer.schema";
 import { recordRecentActivityQuietly } from "../../recent-activity/recent-activity.service";
 import type { VolunteerSupportingDocument } from "./post-volunteer.query";
@@ -813,6 +820,112 @@ export async function handleCreateVolunteerOpportunity(
     return c.json({ ok: true, opportunity }, 201);
   } catch (error) {
     console.error("Failed to create volunteer opportunity", error);
+    return c.json({ ok: false, error: "Internal server error" }, 500);
+  }
+}
+
+export async function handleUpdateVolunteerOpportunity(
+  c: Context,
+  params: GetVolunteerOpportunityParams,
+  data: UpdateVolunteerOpportunityBodyInput,
+) {
+  const authResult = getAuthUserId(c);
+  if (!authResult.ok) {
+    return authResult.response;
+  }
+
+  try {
+    const target = await findVolunteerOpportunityEditTargetById(
+      params.opportunityId,
+    );
+
+    if (!target) {
+      return c.json({ ok: false, error: "Volunteer opportunity not found" }, 404);
+    }
+
+    if (target.createdBy !== authResult.userId) {
+      return c.json(
+        { ok: false, error: "You can only edit your own volunteer opportunity" },
+        403,
+      );
+    }
+
+    let coverImageKey = data.coverImageKey;
+    if (data.coverImageKey !== undefined) {
+      const normalizedCoverImageKey = normalizeOwnedCoverImageKey(
+        authResult.userId,
+        data.coverImageKey,
+      );
+
+      if (!normalizedCoverImageKey) {
+        return c.json(
+          {
+            ok: false,
+            error: "Validation failed",
+            issues: [
+              {
+                path: "coverImageKey",
+                message: "coverImageKey does not belong to current user",
+              },
+            ],
+          },
+          400,
+        );
+      }
+
+      coverImageKey = normalizedCoverImageKey;
+    }
+
+    const [category, location] = await Promise.all([
+      data.categoryId
+        ? findActiveVolunteerCategoryById(data.categoryId)
+        : Promise.resolve(null),
+      data.locationId
+        ? findVolunteerLocationById(data.locationId)
+        : Promise.resolve(null),
+    ]);
+
+    if (data.categoryId && !category) {
+      return c.json({ ok: false, error: "Volunteer category not found" }, 404);
+    }
+
+    if (data.locationId && !location) {
+      return c.json({ ok: false, error: "Location not found" }, 404);
+    }
+
+    const opportunity = await updateVolunteerOpportunity(
+      params.opportunityId,
+      authResult.userId,
+      {
+        ...data,
+        ...(coverImageKey !== undefined ? { coverImageKey } : {}),
+        updatedBy: authResult.userId,
+      },
+    );
+
+    if (!opportunity) {
+      return c.json({ ok: false, error: "Volunteer opportunity not found" }, 404);
+    }
+
+    return c.json({ ok: true, opportunity }, 200);
+  } catch (error) {
+    if (error instanceof VolunteerOpportunityDateRangeError) {
+      return c.json({ ok: false, error: error.message }, 400);
+    }
+
+    if (error instanceof VolunteerOpportunityRoleNotFoundError) {
+      return c.json({ ok: false, error: error.message }, 404);
+    }
+
+    if (error instanceof VolunteerOpportunityRoleRemovalBlockedError) {
+      return c.json({ ok: false, error: error.message }, 409);
+    }
+
+    if (error instanceof VolunteerOpportunityRoleCapacityError) {
+      return c.json({ ok: false, error: error.message }, 409);
+    }
+
+    console.error("Failed to update volunteer opportunity", error);
     return c.json({ ok: false, error: "Internal server error" }, 500);
   }
 }

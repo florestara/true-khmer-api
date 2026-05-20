@@ -47,6 +47,7 @@ import {
   type GetSavedVolunteerOpportunitiesQuery,
   type GetVolunteerOpportunitiesQuery,
   type SavedVolunteerOpportunitiesPageCursor,
+  type UpdateVolunteerOpportunityBodyInput,
   type VolunteerOpportunitiesPageCursor,
 } from "./post-volunteer.schema";
 
@@ -120,6 +121,7 @@ type VolunteerOrganizerQueryRow = {
   opportunityCount: number;
 };
 type VolunteerQueryExecutor = Pick<typeof db, "select">;
+type VolunteerTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type VolunteerOpportunityBaseRow = {
   opportunity: VolunteerOpportunityRow;
   category: VolunteerReference;
@@ -215,6 +217,35 @@ export type VolunteerApplicationDetail = {
   createdAt: string;
   updatedAt: string;
 };
+
+export class VolunteerOpportunityDateRangeError extends Error {
+  constructor() {
+    super("endDate must be on or after startDate");
+    this.name = "VolunteerOpportunityDateRangeError";
+  }
+}
+
+export class VolunteerOpportunityRoleNotFoundError extends Error {
+  constructor() {
+    super("Volunteer role not found");
+    this.name = "VolunteerOpportunityRoleNotFoundError";
+  }
+}
+
+export class VolunteerOpportunityRoleRemovalBlockedError extends Error {
+  constructor() {
+    super("Cannot remove volunteer role with applications");
+    this.name = "VolunteerOpportunityRoleRemovalBlockedError";
+  }
+}
+
+export class VolunteerOpportunityRoleCapacityError extends Error {
+  constructor() {
+    super("Role capacity cannot be lower than confirmed applications");
+    this.name = "VolunteerOpportunityRoleCapacityError";
+  }
+}
+
 type VolunteerOpportunitiesListResult = {
   opportunities: VolunteerOpportunityListItem[];
   pagination: CursorPagination;
@@ -460,6 +491,21 @@ export async function findVolunteerOpportunityApplicationTargetById(
   return row ?? null;
 }
 
+export async function findVolunteerOpportunityEditTargetById(
+  opportunityId: string,
+): Promise<{ id: string; createdBy: string } | null> {
+  const [row] = await db
+    .select({
+      id: volunteerOpportunity.id,
+      createdBy: volunteerOpportunity.createdBy,
+    })
+    .from(volunteerOpportunity)
+    .where(eq(volunteerOpportunity.id, opportunityId))
+    .limit(1);
+
+  return row ?? null;
+}
+
 export async function findVolunteerApplicationTargetByRoleId(
   roleId: string,
 ): Promise<VolunteerApplicationTarget | null> {
@@ -538,6 +584,11 @@ export type CreateVolunteerOpportunityInput =
     createdBy: string;
     category: VolunteerReference;
     location: VolunteerReference;
+  };
+
+export type UpdateVolunteerOpportunityInput =
+  UpdateVolunteerOpportunityBodyInput & {
+    updatedBy: string;
   };
 
 type CreateVolunteerApplicationInput = {
@@ -1461,6 +1512,375 @@ export async function getVolunteerOpportunityById(
     viewerId,
   );
   return opportunity ?? null;
+}
+
+export async function getVolunteerOpportunityOwnedById(
+  opportunityId: string,
+  ownerId: string,
+  viewerId?: string,
+) {
+  const [row] = await db
+    .select({
+      opportunity: volunteerOpportunity,
+      category: {
+        id: volunteerCategory.id,
+        name: volunteerCategory.name,
+      },
+      location: {
+        id: city.id,
+        name: city.name,
+      },
+    })
+    .from(volunteerOpportunity)
+    .innerJoin(
+      volunteerCategory,
+      eq(volunteerCategory.id, volunteerOpportunity.categoryId),
+    )
+    .innerJoin(city, eq(city.id, volunteerOpportunity.cityId))
+    .where(
+      and(
+        eq(volunteerOpportunity.id, opportunityId),
+        eq(volunteerOpportunity.createdBy, ownerId),
+      ),
+    )
+    .limit(1);
+
+  if (!row) {
+    return null;
+  }
+
+  const [opportunity] = await hydrateVolunteerOpportunityDetails(
+    [row],
+    viewerId,
+  );
+  return opportunity ?? null;
+}
+
+async function getConfirmedApplicationCountsByRoleIds(
+  tx: VolunteerTransaction,
+  roleIds: string[],
+): Promise<Map<string, number>> {
+  if (roleIds.length === 0) {
+    return new Map();
+  }
+
+  const rows = await tx
+    .select({
+      roleId: volunteerApplication.roleId,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(volunteerApplication)
+    .where(
+      and(
+        inArray(volunteerApplication.roleId, roleIds),
+        eq(volunteerApplication.status, "CONFIRMED"),
+      ),
+    )
+    .groupBy(volunteerApplication.roleId);
+
+  return new Map(rows.map((row) => [row.roleId, toInteger(row.count)]));
+}
+
+async function getApplicationCountsByRoleIds(
+  tx: VolunteerTransaction,
+  roleIds: string[],
+): Promise<Map<string, number>> {
+  if (roleIds.length === 0) {
+    return new Map();
+  }
+
+  const rows = await tx
+    .select({
+      roleId: volunteerApplication.roleId,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(volunteerApplication)
+    .where(inArray(volunteerApplication.roleId, roleIds))
+    .groupBy(volunteerApplication.roleId);
+
+  return new Map(rows.map((row) => [row.roleId, toInteger(row.count)]));
+}
+
+async function replaceVolunteerRoleRequirements(
+  tx: VolunteerTransaction,
+  roleId: string,
+  requirements: string[],
+) {
+  await tx
+    .delete(volunteerRoleRequirement)
+    .where(eq(volunteerRoleRequirement.roleId, roleId));
+
+  if (requirements.length === 0) {
+    return;
+  }
+
+  await tx.insert(volunteerRoleRequirement).values(
+    requirements.map((requirementText, requirementIndex) => ({
+      roleId,
+      requirementText,
+      displayOrder: requirementIndex,
+    })),
+  );
+}
+
+async function updateVolunteerOpportunityRoles(
+  tx: VolunteerTransaction,
+  opportunityId: string,
+  roles: NonNullable<UpdateVolunteerOpportunityInput["roles"]>,
+) {
+  const existingRoles = await tx
+    .select({
+      id: volunteerRole.id,
+      opportunityId: volunteerRole.opportunityId,
+    })
+    .from(volunteerRole)
+    .where(eq(volunteerRole.opportunityId, opportunityId))
+    .for("update");
+
+  const existingRoleIds = new Set(existingRoles.map((role) => role.id));
+  const incomingExistingRoleIds = roles
+    .map((role) => role.id)
+    .filter((roleId): roleId is string => Boolean(roleId));
+
+  if (incomingExistingRoleIds.some((roleId) => !existingRoleIds.has(roleId))) {
+    throw new VolunteerOpportunityRoleNotFoundError();
+  }
+
+  const removedRoleIds = existingRoles
+    .map((role) => role.id)
+    .filter((roleId) => !incomingExistingRoleIds.includes(roleId));
+
+  const removedApplicationCounts = await getApplicationCountsByRoleIds(
+    tx,
+    removedRoleIds,
+  );
+  const confirmedApplicationCounts = await getConfirmedApplicationCountsByRoleIds(
+    tx,
+    incomingExistingRoleIds,
+  );
+
+  if (
+    removedRoleIds.some(
+      (roleId) => (removedApplicationCounts.get(roleId) ?? 0) > 0,
+    )
+  ) {
+    throw new VolunteerOpportunityRoleRemovalBlockedError();
+  }
+
+  for (const roleInput of roles) {
+    if (!roleInput.id) {
+      continue;
+    }
+
+    const confirmedCount = confirmedApplicationCounts.get(roleInput.id) ?? 0;
+    if (roleInput.capacity < confirmedCount) {
+      throw new VolunteerOpportunityRoleCapacityError();
+    }
+  }
+
+  if (removedRoleIds.length > 0) {
+    await tx
+      .delete(volunteerRole)
+      .where(inArray(volunteerRole.id, removedRoleIds));
+  }
+
+  for (const [roleIndex, roleInput] of roles.entries()) {
+    if (roleInput.id) {
+      await tx
+        .update(volunteerRole)
+        .set({
+          title: roleInput.title,
+          commitmentLabel: roleInput.commitmentLabel,
+          capacity: roleInput.capacity,
+          responsibilities: roleInput.responsibilities,
+          displayOrder: roleIndex,
+          updatedAt: sql`now()`,
+        })
+        .where(
+          and(
+            eq(volunteerRole.id, roleInput.id),
+            eq(volunteerRole.opportunityId, opportunityId),
+          ),
+        );
+
+      await replaceVolunteerRoleRequirements(
+        tx,
+        roleInput.id,
+        roleInput.requirements,
+      );
+      continue;
+    }
+
+    const [newRole] = await tx
+      .insert(volunteerRole)
+      .values({
+        opportunityId,
+        title: roleInput.title,
+        commitmentLabel: roleInput.commitmentLabel,
+        capacity: roleInput.capacity,
+        responsibilities: roleInput.responsibilities,
+        displayOrder: roleIndex,
+      })
+      .returning({ id: volunteerRole.id });
+
+    if (!newRole) {
+      throw new Error("Created volunteer role could not be loaded");
+    }
+
+    await replaceVolunteerRoleRequirements(
+      tx,
+      newRole.id,
+      roleInput.requirements,
+    );
+  }
+}
+
+async function syncVolunteerOpportunityFilled(
+  tx: VolunteerTransaction,
+  opportunityId: string,
+  updatedBy: string,
+) {
+  const rows = await tx
+    .select({
+      capacity: volunteerRole.capacity,
+      confirmedCount: sql<number>`(
+        select count(*)::int
+        from ${volunteerApplication}
+        where ${volunteerApplication.roleId} = ${volunteerRole.id}
+          and ${volunteerApplication.status} = 'CONFIRMED'
+      )`,
+    })
+    .from(volunteerRole)
+    .where(eq(volunteerRole.opportunityId, opportunityId));
+
+  const filled =
+    rows.length > 0 &&
+    rows.every((role) => toInteger(role.confirmedCount) >= role.capacity);
+
+  await tx
+    .update(volunteerOpportunity)
+    .set({
+      filled,
+      updatedBy,
+      updatedAt: sql`now()`,
+    })
+    .where(eq(volunteerOpportunity.id, opportunityId));
+}
+
+export async function updateVolunteerOpportunity(
+  opportunityId: string,
+  ownerId: string,
+  data: UpdateVolunteerOpportunityInput,
+): Promise<VolunteerOpportunityDetail | null> {
+  const updated = await db.transaction(async (tx) => {
+    const [existingOpportunity] = await tx
+      .select({
+        id: volunteerOpportunity.id,
+        startDate: volunteerOpportunity.startDate,
+        endDate: volunteerOpportunity.endDate,
+      })
+      .from(volunteerOpportunity)
+      .where(
+        and(
+          eq(volunteerOpportunity.id, opportunityId),
+          eq(volunteerOpportunity.createdBy, ownerId),
+        ),
+      )
+      .for("update")
+      .limit(1);
+
+    if (!existingOpportunity) {
+      return false;
+    }
+
+    const nextStartDate =
+      data.startDate !== undefined
+        ? data.startDate
+        : existingOpportunity.startDate;
+    const nextEndDate =
+      data.endDate !== undefined ? data.endDate : existingOpportunity.endDate;
+
+    if (
+      nextStartDate &&
+      nextEndDate &&
+      Date.parse(nextEndDate) < Date.parse(nextStartDate)
+    ) {
+      throw new VolunteerOpportunityDateRangeError();
+    }
+
+    const opportunityUpdate: Partial<typeof volunteerOpportunity.$inferInsert> =
+      {};
+
+    if (data.categoryId !== undefined) {
+      opportunityUpdate.categoryId = data.categoryId;
+    }
+    if (data.locationId !== undefined) {
+      opportunityUpdate.cityId = data.locationId;
+    }
+    if (data.title !== undefined) opportunityUpdate.title = data.title;
+    if (data.overview !== undefined) opportunityUpdate.overview = data.overview;
+    if (data.communityImpact !== undefined) {
+      opportunityUpdate.communityImpact = data.communityImpact;
+    }
+    if (data.startDate !== undefined) {
+      opportunityUpdate.startDate = data.startDate;
+    }
+    if (data.endDate !== undefined) opportunityUpdate.endDate = data.endDate;
+    if (data.commitmentLabel !== undefined) {
+      opportunityUpdate.commitmentLabel = data.commitmentLabel;
+    }
+    if (data.commitmentDescription !== undefined) {
+      opportunityUpdate.commitmentDescription = data.commitmentDescription;
+    }
+    if (data.applicationDeadline !== undefined) {
+      opportunityUpdate.applicationDeadline = data.applicationDeadline;
+    }
+    if (data.coverImageKey !== undefined) {
+      opportunityUpdate.coverImageKey = data.coverImageKey;
+    }
+    if (data.benefits !== undefined) opportunityUpdate.benefits = data.benefits;
+    if (data.contact?.email !== undefined) {
+      opportunityUpdate.contactEmail = data.contact.email;
+    }
+    if (data.contact?.telegramUsername !== undefined) {
+      opportunityUpdate.contactTelegramUsername = data.contact.telegramUsername;
+    }
+    if (data.contact?.phone !== undefined) {
+      opportunityUpdate.contactPhone = data.contact.phone;
+    }
+    if (data.contact?.websiteUrl !== undefined) {
+      opportunityUpdate.contactWebsiteUrl = data.contact.websiteUrl;
+    }
+
+    if (Object.keys(opportunityUpdate).length > 0) {
+      await tx
+        .update(volunteerOpportunity)
+        .set({
+          ...opportunityUpdate,
+          updatedBy: data.updatedBy,
+          updatedAt: sql`now()`,
+        })
+        .where(
+          and(
+            eq(volunteerOpportunity.id, opportunityId),
+            eq(volunteerOpportunity.createdBy, ownerId),
+          ),
+        );
+    }
+
+    if (data.roles !== undefined) {
+      await updateVolunteerOpportunityRoles(tx, opportunityId, data.roles);
+      await syncVolunteerOpportunityFilled(tx, opportunityId, data.updatedBy);
+    }
+
+    return true;
+  });
+
+  if (!updated) {
+    return null;
+  }
+
+  return getVolunteerOpportunityOwnedById(opportunityId, ownerId, ownerId);
 }
 
 export async function createVolunteerOpportunity(
