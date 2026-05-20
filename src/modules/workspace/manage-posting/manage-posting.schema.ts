@@ -102,7 +102,7 @@ export const getManagePostingDetailQuerySchema = z
   .openapi("GetManagePostingDetailQuery");
 
 export const managePostingStatusSchema = z
-  .enum(["DRAFT", "LIVE", "IN_PROGRESS", "COMPLETED", "CANCELED"])
+  .enum(["DRAFT", "LIVE", "IN_PROGRESS", "COMPLETED", "CANCELED", "DELETED"])
   .openapi("ManagePostingStatus");
 
 export const managePostingActionSchema = z

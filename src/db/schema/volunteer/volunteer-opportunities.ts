@@ -25,6 +25,7 @@ export const volunteerOpportunityStatus = pgEnum("volunteer_opportunity_status",
   "IN_PROGRESS",
   "COMPLETED",
   "CANCELED",
+  "DELETED",
 ]);
 
 export const volunteerApplicationStatus = pgEnum("volunteer_application_status", [

@@ -217,7 +217,7 @@ function resolvePostingActionDecision(input: {
 
   return {
     action: "DELETE",
-    nextStatus: currentStatus,
+    nextStatus: "DELETED",
     deletedAt: new Date().toISOString(),
   };
 }
@@ -227,7 +227,13 @@ type VolunteerPostingRow = {
   title: string;
   description: string | null;
   imageKey: string | null;
-  rawStatus: "DRAFT" | "LIVE" | "IN_PROGRESS" | "COMPLETED" | "CANCELED";
+  rawStatus:
+    | "DRAFT"
+    | "LIVE"
+    | "IN_PROGRESS"
+    | "COMPLETED"
+    | "CANCELED"
+    | "DELETED";
   filled: boolean;
   totalView: number;
   applicantCount: number;
@@ -241,7 +247,13 @@ type ProjectPostingRow = {
   title: string;
   description: string | null;
   imageKey: string | null;
-  rawStatus: "DRAFT" | "LIVE" | "IN_PROGRESS" | "COMPLETED" | "CANCELED";
+  rawStatus:
+    | "DRAFT"
+    | "LIVE"
+    | "IN_PROGRESS"
+    | "COMPLETED"
+    | "CANCELED"
+    | "DELETED";
   totalView: number;
   applicantCount: number;
   capacity: number;

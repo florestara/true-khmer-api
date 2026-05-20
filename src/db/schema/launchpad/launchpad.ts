@@ -22,6 +22,7 @@ export const launchpadStatus = pgEnum("launchpad_status", [
   "IN_PROGRESS",
   "COMPLETED",
   "CANCELED",
+  "DELETED",
 ]);
 
 export const launchpad = pgTable(

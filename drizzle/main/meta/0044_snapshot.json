@@ -1,6 +1,6 @@
 {
-  "id": "19b24130-fff6-4f05-9c95-67824cbed85c",
-  "prevId": "fbbbdbdd-de12-491a-9732-21dbb201670e",
+  "id": "f501278c-e0a9-4546-87c7-bb233c059b56",
+  "prevId": "19b24130-fff6-4f05-9c95-67824cbed85c",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -3383,6 +3383,28 @@
           "method": "btree",
           "with": {}
         },
+        "volunteer_application_applicant_opportunity_top_pick_active_unique_idx": {
+          "name": "volunteer_application_applicant_opportunity_top_pick_active_unique_idx",
+          "columns": [
+            {
+              "expression": "applicant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "opportunity_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"volunteer_application\".\"top_pick\" = true and \"volunteer_application\".\"status\" in ('SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'CONFIRMED', 'COMPLETED')",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "volunteer_application_opportunity_idx": {
           "name": "volunteer_application_opportunity_idx",
           "columns": [
@@ -3460,28 +3482,6 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "volunteer_application_applicant_opportunity_top_pick_active_unique_idx": {
-          "name": "volunteer_application_applicant_opportunity_top_pick_active_unique_idx",
-          "columns": [
-            {
-              "expression": "applicant_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "opportunity_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"volunteer_application\".\"top_pick\" = true and \"volunteer_application\".\"status\" in ('SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'CONFIRMED', 'COMPLETED')",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -4043,6 +4043,13 @@
           "notNull": true,
           "default": "'{}'::jsonb"
         },
+        "status": {
+          "name": "status",
+          "type": "volunteer_opportunity_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
         "created_by": {
           "name": "created_by",
           "type": "uuid",
@@ -4055,13 +4062,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
-        },
-        "status": {
-          "name": "status",
-          "type": "volunteer_opportunity_status",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
         }
       },
       "indexes": {
@@ -5391,6 +5391,13 @@
           "notNull": true,
           "default": "'{}'::jsonb"
         },
+        "status": {
+          "name": "status",
+          "type": "launchpad_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
         "created_by": {
           "name": "created_by",
           "type": "uuid",
@@ -5403,13 +5410,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
-        },
-        "status": {
-          "name": "status",
-          "type": "launchpad_status",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
         }
       },
       "indexes": {
@@ -6212,7 +6212,8 @@
         "LIVE",
         "IN_PROGRESS",
         "COMPLETED",
-        "CANCELED"
+        "CANCELED",
+        "DELETED"
       ]
     },
     "public.point_systems_mode": {
@@ -6301,7 +6302,8 @@
         "LIVE",
         "IN_PROGRESS",
         "COMPLETED",
-        "CANCELED"
+        "CANCELED",
+        "DELETED"
       ]
     },
     "public.launchpad_application_status": {
