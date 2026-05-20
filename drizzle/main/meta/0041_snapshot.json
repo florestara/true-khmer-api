@@ -1,6 +1,6 @@
 {
-  "id": "fbbbdbdd-de12-491a-9732-21dbb201670e",
-  "prevId": "07534049-40e8-46e2-a574-68b6e0c1fa3f",
+  "id": "07534049-40e8-46e2-a574-68b6e0c1fa3f",
+  "prevId": "adc62ea3-e133-431f-9de5-f748c4904296",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -3463,6 +3463,28 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "volunteer_application_applicant_opportunity_top_pick_active_unique_idx": {
+          "name": "volunteer_application_applicant_opportunity_top_pick_active_unique_idx",
+          "columns": [
+            {
+              "expression": "applicant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "opportunity_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"volunteer_application\".\"top_pick\" = true and \"volunteer_application\".\"status\" in ('SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'CONFIRMED', 'COMPLETED')",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -5012,14 +5034,6 @@
           "notNull": true,
           "default": 0
         },
-        "status": {
-          "name": "status",
-          "type": "launchpad_status",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'LIVE'"
-        },
         "created_by": {
           "name": "created_by",
           "type": "uuid",
@@ -5068,21 +5082,6 @@
           "columns": [
             {
               "expression": "city_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "launchpad_status_idx": {
-          "name": "launchpad_status_idx",
-          "columns": [
-            {
-              "expression": "status",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -5966,16 +5965,6 @@
         "ACTIVE",
         "ARCHIVED",
         "HIDDEN"
-      ]
-    },
-    "public.launchpad_status": {
-      "name": "launchpad_status",
-      "schema": "public",
-      "values": [
-        "DRAFT",
-        "LIVE",
-        "IN_PROGRESS",
-        "COMPLETED"
       ]
     },
     "public.launchpad_application_status": {

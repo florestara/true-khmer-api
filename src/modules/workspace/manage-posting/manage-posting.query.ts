@@ -408,7 +408,7 @@ function getProjectApplicationGroupKey(
     applicantId: row.application.createdBy,
     launchpadId: postingId,
     motivation: row.application.motivation,
-    portfolio: row.application.portfolio,
+    portfolio: row.application.portfolio ?? "",
     documentKeys,
   });
 }

@@ -26,6 +26,7 @@ import {
   presignVolunteerOpportunityCoverUploadResponseSchema,
   presignVolunteerOpportunityCoverUploadSchema,
   saveVolunteerOpportunityResponseSchema,
+  updateVolunteerOpportunitySchema,
   volunteerCategoryValidationErrorResponseSchema,
   volunteerOperationErrorResponseSchema,
   volunteerValidationErrorResponseSchema,
@@ -44,6 +45,7 @@ import {
   handlePresignVolunteerOpportunityCoverUpload,
   handleSaveVolunteerOpportunity,
   handleUnsaveVolunteerOpportunity,
+  handleUpdateVolunteerOpportunity,
 } from "./post-volunteer.service";
 
 export const postVolunteerRouter = new OpenAPIHono<AppBindings>();
@@ -698,6 +700,82 @@ const createVolunteerOpportunityRoute = createRoute({
   },
 });
 
+const updateVolunteerOpportunityRoute = createRoute({
+  method: "patch",
+  path: "/opportunities/{opportunityId}",
+  tags: ["Volunteer Post"],
+  middleware: [requireAccessToken],
+  security: [{ BearerAuth: [] }],
+  request: {
+    params: getVolunteerOpportunityParamsSchema,
+    body: {
+      content: {
+        "application/json": {
+          schema: updateVolunteerOpportunitySchema,
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Volunteer opportunity updated",
+      content: {
+        "application/json": {
+          schema: createVolunteerOpportunityResponseSchema,
+        },
+      },
+    },
+    400: {
+      description: "Validation failed",
+      content: {
+        "application/json": {
+          schema: volunteerValidationErrorResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: "Unauthorized",
+      content: {
+        "application/json": {
+          schema: authProtectedErrorResponseSchema,
+        },
+      },
+    },
+    403: {
+      description: "Forbidden",
+      content: {
+        "application/json": {
+          schema: authProtectedErrorResponseSchema,
+        },
+      },
+    },
+    404: {
+      description: "Volunteer opportunity or related record not found",
+      content: {
+        "application/json": {
+          schema: volunteerOperationErrorResponseSchema,
+        },
+      },
+    },
+    409: {
+      description: "Volunteer opportunity edit conflict",
+      content: {
+        "application/json": {
+          schema: volunteerOperationErrorResponseSchema,
+        },
+      },
+    },
+    500: {
+      description: "Internal server error",
+      content: {
+        "application/json": {
+          schema: volunteerOperationErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
 const createVolunteerApplicationRoute = createRoute({
   method: "post",
   path: "/applications",
@@ -905,6 +983,12 @@ postVolunteerRouter.openapi(unsaveVolunteerOpportunityRoute, async (c) => {
 postVolunteerRouter.openapi(createVolunteerOpportunityRoute, async (c) => {
   const data = c.req.valid("json");
   return handleCreateVolunteerOpportunity(c, data) as any;
+});
+
+postVolunteerRouter.openapi(updateVolunteerOpportunityRoute, async (c) => {
+  const params = c.req.valid("param");
+  const data = c.req.valid("json");
+  return handleUpdateVolunteerOpportunity(c, params, data) as any;
 });
 
 postVolunteerRouter.openapi(createVolunteerApplicationRoute, async (c) => {

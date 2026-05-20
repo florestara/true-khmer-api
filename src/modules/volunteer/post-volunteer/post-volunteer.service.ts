@@ -13,7 +13,9 @@ import {
   findActiveVolunteerCategoryById,
   findVolunteerApplicationTargetByRoleId,
   findVolunteerApplicationTargetsByRoleIds,
+  findVolunteerTopPickedRoleId,
   findVolunteerLocationById,
+  findVolunteerOpportunityEditTargetById,
   findVolunteerOpportunityApplicationTargetById,
   getSavedVolunteerOpportunities,
   getVolunteerCategories,
@@ -23,6 +25,11 @@ import {
   incrementVolunteerOpportunityViewCount,
   saveVolunteerOpportunityForUser,
   unsaveVolunteerOpportunityForUser,
+  updateVolunteerOpportunity,
+  VolunteerOpportunityDateRangeError,
+  VolunteerOpportunityRoleCapacityError,
+  VolunteerOpportunityRoleNotFoundError,
+  VolunteerOpportunityRoleRemovalBlockedError,
 } from "./post-volunteer.query";
 import type {
   CreateVolunteerApplicationBatchBodyInput,
@@ -34,6 +41,7 @@ import type {
   GetVolunteerOpportunitiesQuery,
   PresignVolunteerApplicationDocumentUploadPayload,
   PresignVolunteerOpportunityCoverUploadPayload,
+  UpdateVolunteerOpportunityBodyInput,
 } from "./post-volunteer.schema";
 import { recordRecentActivityQuietly } from "../../recent-activity/recent-activity.service";
 import type { VolunteerSupportingDocument } from "./post-volunteer.query";
@@ -44,6 +52,8 @@ const VOLUNTEER_CATEGORY_NAME_UNIQUE_INDEX =
   "volunteer_category_name_unique_idx";
 const VOLUNTEER_APPLICATION_APPLICANT_ROLE_UNIQUE_INDEX =
   "volunteer_application_applicant_role_active_unique_idx";
+const VOLUNTEER_APPLICATION_APPLICANT_OPPORTUNITY_TOP_PICK_UNIQUE_INDEX =
+  "volunteer_application_applicant_opportunity_top_pick_active_unique_idx";
 
 function quoteActivityText(value: string) {
   return `'${value}'`;
@@ -509,6 +519,23 @@ export async function handleCreateVolunteerApplication(
       throw new Error("Volunteer application target missing after validation");
     }
 
+    if (data.topPickRoleId === data.roleId) {
+      const existingTopPickedRoleId = await findVolunteerTopPickedRoleId(
+        target.opportunityId,
+        authResult.userId,
+      );
+
+      if (existingTopPickedRoleId) {
+        return c.json(
+          {
+            ok: false,
+            error: "You have already selected a top pick for this opportunity",
+          },
+          409,
+        );
+      }
+    }
+
     const normalizedSupportingDocuments = normalizeOwnedSupportingDocumentKeys(
       target.opportunityId,
       authResult.userId,
@@ -587,6 +614,20 @@ export async function handleCreateVolunteerApplication(
       );
     }
 
+    if (
+      error?.code === POSTGRES_UNIQUE_VIOLATION &&
+      getPostgresConstraint(error) ===
+        VOLUNTEER_APPLICATION_APPLICANT_OPPORTUNITY_TOP_PICK_UNIQUE_INDEX
+    ) {
+      return c.json(
+        {
+          ok: false,
+          error: "You have already selected a top pick for this opportunity",
+        },
+        409,
+      );
+    }
+
     console.error("Failed to create volunteer application", err);
     return c.json({ ok: false, error: "Internal server error" }, 500);
   }
@@ -640,6 +681,23 @@ export async function handleCreateVolunteerApplicationBatch(
             error: "All roleIds must belong to the same volunteer opportunity",
           },
           400,
+        );
+      }
+    }
+
+    if (data.topPickRoleId && data.roleIds.includes(data.topPickRoleId)) {
+      const existingTopPickedRoleId = await findVolunteerTopPickedRoleId(
+        firstTarget.opportunityId,
+        authResult.userId,
+      );
+
+      if (existingTopPickedRoleId) {
+        return c.json(
+          {
+            ok: false,
+            error: "You have already selected a top pick for this opportunity",
+          },
+          409,
         );
       }
     }
@@ -738,6 +796,20 @@ export async function handleCreateVolunteerApplicationBatch(
       );
     }
 
+    if (
+      error?.code === POSTGRES_UNIQUE_VIOLATION &&
+      getPostgresConstraint(error) ===
+        VOLUNTEER_APPLICATION_APPLICANT_OPPORTUNITY_TOP_PICK_UNIQUE_INDEX
+    ) {
+      return c.json(
+        {
+          ok: false,
+          error: "You have already selected a top pick for this opportunity",
+        },
+        409,
+      );
+    }
+
     console.error("Failed to create volunteer application batch", err);
     return c.json({ ok: false, error: "Internal server error" }, 500);
   }
@@ -814,6 +886,112 @@ export async function handleCreateVolunteerOpportunity(
     return c.json({ ok: true, opportunity }, 201);
   } catch (error) {
     console.error("Failed to create volunteer opportunity", error);
+    return c.json({ ok: false, error: "Internal server error" }, 500);
+  }
+}
+
+export async function handleUpdateVolunteerOpportunity(
+  c: Context,
+  params: GetVolunteerOpportunityParams,
+  data: UpdateVolunteerOpportunityBodyInput,
+) {
+  const authResult = getAuthUserId(c);
+  if (!authResult.ok) {
+    return authResult.response;
+  }
+
+  try {
+    const target = await findVolunteerOpportunityEditTargetById(
+      params.opportunityId,
+    );
+
+    if (!target) {
+      return c.json({ ok: false, error: "Volunteer opportunity not found" }, 404);
+    }
+
+    if (target.createdBy !== authResult.userId) {
+      return c.json(
+        { ok: false, error: "You can only edit your own volunteer opportunity" },
+        403,
+      );
+    }
+
+    let coverImageKey = data.coverImageKey;
+    if (data.coverImageKey !== undefined) {
+      const normalizedCoverImageKey = normalizeOwnedCoverImageKey(
+        authResult.userId,
+        data.coverImageKey,
+      );
+
+      if (!normalizedCoverImageKey) {
+        return c.json(
+          {
+            ok: false,
+            error: "Validation failed",
+            issues: [
+              {
+                path: "coverImageKey",
+                message: "coverImageKey does not belong to current user",
+              },
+            ],
+          },
+          400,
+        );
+      }
+
+      coverImageKey = normalizedCoverImageKey;
+    }
+
+    const [category, location] = await Promise.all([
+      data.categoryId
+        ? findActiveVolunteerCategoryById(data.categoryId)
+        : Promise.resolve(null),
+      data.locationId
+        ? findVolunteerLocationById(data.locationId)
+        : Promise.resolve(null),
+    ]);
+
+    if (data.categoryId && !category) {
+      return c.json({ ok: false, error: "Volunteer category not found" }, 404);
+    }
+
+    if (data.locationId && !location) {
+      return c.json({ ok: false, error: "Location not found" }, 404);
+    }
+
+    const opportunity = await updateVolunteerOpportunity(
+      params.opportunityId,
+      authResult.userId,
+      {
+        ...data,
+        ...(coverImageKey !== undefined ? { coverImageKey } : {}),
+        updatedBy: authResult.userId,
+      },
+    );
+
+    if (!opportunity) {
+      return c.json({ ok: false, error: "Volunteer opportunity not found" }, 404);
+    }
+
+    return c.json({ ok: true, opportunity }, 200);
+  } catch (error) {
+    if (error instanceof VolunteerOpportunityDateRangeError) {
+      return c.json({ ok: false, error: error.message }, 400);
+    }
+
+    if (error instanceof VolunteerOpportunityRoleNotFoundError) {
+      return c.json({ ok: false, error: error.message }, 404);
+    }
+
+    if (error instanceof VolunteerOpportunityRoleRemovalBlockedError) {
+      return c.json({ ok: false, error: error.message }, 409);
+    }
+
+    if (error instanceof VolunteerOpportunityRoleCapacityError) {
+      return c.json({ ok: false, error: error.message }, 409);
+    }
+
+    console.error("Failed to update volunteer opportunity", error);
     return c.json({ ok: false, error: "Internal server error" }, 500);
   }
 }
