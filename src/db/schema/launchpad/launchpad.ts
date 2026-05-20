@@ -21,6 +21,7 @@ export const launchpadStatus = pgEnum("launchpad_status", [
   "LIVE",
   "IN_PROGRESS",
   "COMPLETED",
+  "CANCELED",
 ]);
 
 export const launchpad = pgTable(
@@ -64,11 +65,50 @@ export const launchpad = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" })
       .defaultNow()
       .notNull(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true, mode: "string" }),
   },
   (table) => [
     index("launchpad_category_id_idx").using("btree", table.categoryId),
     index("launchpad_city_id_idx").using("btree", table.cityId),
     index("launchpad_status_idx").using("btree", table.status),
+    index("launchpad_deleted_at_idx").using("btree", table.deletedAt),
+  ],
+);
+
+export const launchpadActionLog = pgTable(
+  "launchpad_action_log",
+  {
+    id: uuid("id").defaultRandom().primaryKey().notNull(),
+    launchpadId: uuid("launchpad_id")
+      .notNull()
+      .references(() => launchpad.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 120 }).notNull(),
+    description: text("description"),
+    fromData: jsonb("from_data")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    toData: jsonb("to_data")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    status: launchpadStatus("status").notNull(),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("launchpad_action_log_launchpad_idx").using(
+      "btree",
+      table.launchpadId,
+    ),
+    index("launchpad_action_log_created_by_idx").using(
+      "btree",
+      table.createdBy,
+    ),
   ],
 );
 
@@ -87,7 +127,18 @@ export const launchpadRelations = relations(launchpad, ({ one, many }) => ({
   }),
   roles: many(launchpadRole),
   launchpadSave: many(launchpadSave),
+  actionLogs: many(launchpadActionLog),
 }));
+
+export const launchpadActionLogRelations = relations(
+  launchpadActionLog,
+  ({ one }) => ({
+    launchpad: one(launchpad, {
+      fields: [launchpadActionLog.launchpadId],
+      references: [launchpad.id],
+    }),
+  }),
+);
 
 export const launchpadSave = pgTable(
   "launchpad_save",

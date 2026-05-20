@@ -24,6 +24,7 @@ export const volunteerOpportunityStatus = pgEnum("volunteer_opportunity_status",
   "LIVE",
   "IN_PROGRESS",
   "COMPLETED",
+  "CANCELED",
 ]);
 
 export const volunteerApplicationStatus = pgEnum("volunteer_application_status", [
@@ -93,6 +94,7 @@ export const volunteerOpportunity = pgTable(
       .defaultNow()
       .notNull(),
     archivedAt: timestamp("archived_at", { withTimezone: true, mode: "string" }),
+    deletedAt: timestamp("deleted_at", { withTimezone: true, mode: "string" }),
   },
   (table) => [
     index("volunteer_opportunity_category_idx").using("btree", table.categoryId),
@@ -103,6 +105,44 @@ export const volunteerOpportunity = pgTable(
       table.applicationDeadline,
     ),
     index("volunteer_opportunity_created_by_idx").using(
+      "btree",
+      table.createdBy,
+    ),
+    index("volunteer_opportunity_deleted_at_idx").using("btree", table.deletedAt),
+  ],
+);
+
+export const volunteerOpportunityActionLog = pgTable(
+  "volunteer_opportunity_action_log",
+  {
+    id: uuid("id").defaultRandom().primaryKey().notNull(),
+    opportunityId: uuid("opportunity_id")
+      .notNull()
+      .references(() => volunteerOpportunity.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 120 }).notNull(),
+    description: text("description"),
+    fromData: jsonb("from_data")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    toData: jsonb("to_data")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    status: volunteerOpportunityStatus("status").notNull(),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("volunteer_opportunity_action_log_opportunity_idx").using(
+      "btree",
+      table.opportunityId,
+    ),
+    index("volunteer_opportunity_action_log_created_by_idx").using(
       "btree",
       table.createdBy,
     ),

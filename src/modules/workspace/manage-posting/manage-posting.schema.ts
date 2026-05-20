@@ -14,12 +14,11 @@ export const managePostingSourceParamSchema = z
 export const managePostingFilterSchema = z
   .enum([
     "all",
-    "active",
     "live",
     "draft",
     "in_progress",
-    "closed",
     "completed",
+    "canceled",
     "filled",
   ])
   .openapi("ManagePostingFilter");
@@ -103,18 +102,23 @@ export const getManagePostingDetailQuerySchema = z
   .openapi("GetManagePostingDetailQuery");
 
 export const managePostingStatusSchema = z
-  .enum(["DRAFT", "LIVE", "IN_PROGRESS", "COMPLETED"])
+  .enum(["DRAFT", "LIVE", "IN_PROGRESS", "COMPLETED", "CANCELED"])
   .openapi("ManagePostingStatus");
 
-export const completeManagePostingParamSchema = z
+export const managePostingActionSchema = z
+  .enum(["cancel", "delete", "mark_complete"])
+  .openapi("ManagePostingAction");
+
+export const updateManagePostingActionParamSchema = z
   .object({
     sourceType: managePostingSourceParamSchema,
     postingId: z
       .string()
       .trim()
       .regex(UUID_RE, "postingId must be a valid UUID"),
+    postingAction: managePostingActionSchema,
   })
-  .openapi("CompleteManagePostingParam");
+  .openapi("UpdateManagePostingActionParam");
 
 export const managePostingApplicantStatusSchema = z
   .enum([
@@ -269,12 +273,12 @@ export const managePostingApplicationActionResponseSchema = z
   })
   .openapi("ManagePostingApplicationActionResponse");
 
-export const completeManagePostingResponseSchema = z
+export const updateManagePostingActionResponseSchema = z
   .object({
     ok: z.literal(true),
     posting: managePostingItemSchema,
   })
-  .openapi("CompleteManagePostingResponse");
+  .openapi("UpdateManagePostingActionResponse");
 
 export const managePostingsErrorResponseSchema = z
   .object({
@@ -295,8 +299,8 @@ export type GetManagePostingApplicationParam = z.infer<
 export type ChangeManagePostingApplicationStatusParam = z.infer<
   typeof changeManagePostingApplicationStatusParamSchema
 >;
-export type CompleteManagePostingParam = z.infer<
-  typeof completeManagePostingParamSchema
+export type UpdateManagePostingActionParam = z.infer<
+  typeof updateManagePostingActionParamSchema
 >;
 export type GetManagePostingDetailQuery = z.infer<
   typeof getManagePostingDetailQuerySchema
@@ -306,3 +310,4 @@ export type ManagePostingStatus = z.infer<typeof managePostingStatusSchema>;
 export type ManagePostingStatusAction = z.infer<
   typeof managePostingStatusActionSchema
 >;
+export type ManagePostingAction = z.infer<typeof managePostingActionSchema>;

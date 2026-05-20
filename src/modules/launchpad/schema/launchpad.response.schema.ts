@@ -95,6 +95,7 @@ const launchpadStatusSchema = z.enum([
   "LIVE",
   "IN_PROGRESS",
   "COMPLETED",
+  "CANCELED",
 ]);
 
 export const createLaunchpadResponseSchema = z
