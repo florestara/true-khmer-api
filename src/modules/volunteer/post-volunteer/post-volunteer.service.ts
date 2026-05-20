@@ -551,6 +551,10 @@ export async function handleCreateVolunteerApplication(
       supportingDocuments: normalizedSupportingDocuments,
     });
 
+    if (!application) {
+      return c.json({ ok: false, error: "Volunteer role not found" }, 404);
+    }
+
     recordRecentActivityQuietly({
       userId: authResult.userId,
       type: "volunteer_application_submitted",
@@ -686,6 +690,10 @@ export async function handleCreateVolunteerApplicationBatch(
       supportingDocuments: normalizedSupportingDocuments,
       topPickRoleId: data.topPickRoleId,
     });
+
+    if (!applications) {
+      return c.json({ ok: false, error: "Volunteer role not found" }, 404);
+    }
 
     const applicationByRoleId = new Map(
       applications.map((application) => [application.role.id, application]),

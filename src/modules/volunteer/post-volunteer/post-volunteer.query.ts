@@ -70,6 +70,7 @@ type VolunteerLocationRow = {
 type VolunteerOpportunityRow = typeof volunteerOpportunity.$inferSelect;
 type VolunteerOpportunityStatus = VolunteerOpportunityRow["status"];
 type VolunteerApplicationRow = typeof volunteerApplication.$inferSelect;
+type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type VolunteerOpportunitySaveInsert =
   typeof volunteerOpportunitySave.$inferInsert;
 type VolunteerRoleRow = typeof volunteerRole.$inferSelect;
@@ -559,6 +560,26 @@ type CreateVolunteerApplicationsBatchInput = Omit<
     roleTitle: string;
   }>;
 };
+
+async function lockLiveVolunteerApplicationOpportunity(
+  tx: DbTransaction,
+  opportunityId: string,
+) {
+  const [opportunity] = await tx
+    .select({ id: volunteerOpportunity.id })
+    .from(volunteerOpportunity)
+    .where(
+      and(
+        eq(volunteerOpportunity.id, opportunityId),
+        eq(volunteerOpportunity.status, "LIVE"),
+        isNotNull(volunteerOpportunity.publishedAt),
+      ),
+    )
+    .limit(1)
+    .for("update");
+
+  return opportunity ?? null;
+}
 
 type VolunteerOpportunityListRow = VolunteerOpportunityBaseRow & {
   applicationCount: number;
@@ -1561,8 +1582,17 @@ export async function createVolunteerOpportunity(
 
 export async function createVolunteerApplication(
   data: CreateVolunteerApplicationInput,
-): Promise<VolunteerApplicationDetail> {
+): Promise<VolunteerApplicationDetail | null> {
   return db.transaction(async (tx) => {
+    const liveOpportunity = await lockLiveVolunteerApplicationOpportunity(
+      tx,
+      data.opportunityId,
+    );
+
+    if (!liveOpportunity) {
+      return null;
+    }
+
     const [application] = await tx
       .insert(volunteerApplication)
       .values({
@@ -1599,8 +1629,17 @@ export async function createVolunteerApplication(
 
 export async function createVolunteerApplicationsBatch(
   data: CreateVolunteerApplicationsBatchInput,
-): Promise<VolunteerApplicationDetail[]> {
+): Promise<VolunteerApplicationDetail[] | null> {
   return db.transaction(async (tx) => {
+    const liveOpportunity = await lockLiveVolunteerApplicationOpportunity(
+      tx,
+      data.opportunityId,
+    );
+
+    if (!liveOpportunity) {
+      return null;
+    }
+
     const applications = await tx
       .insert(volunteerApplication)
       .values(
