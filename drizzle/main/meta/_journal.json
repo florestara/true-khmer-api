@@ -281,6 +281,13 @@
       "when": 1779111119382,
       "tag": "0039_colorful_gauntlet",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1779171204352,
+      "tag": "0040_clammy_psylocke",
+      "breakpoints": true
     }
   ]
 }

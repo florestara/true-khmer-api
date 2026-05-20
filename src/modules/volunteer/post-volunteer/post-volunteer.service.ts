@@ -13,6 +13,7 @@ import {
   findActiveVolunteerCategoryById,
   findVolunteerApplicationTargetByRoleId,
   findVolunteerApplicationTargetsByRoleIds,
+  findVolunteerTopPickedRoleId,
   findVolunteerLocationById,
   findVolunteerOpportunityEditTargetById,
   findVolunteerOpportunityApplicationTargetById,
@@ -51,6 +52,8 @@ const VOLUNTEER_CATEGORY_NAME_UNIQUE_INDEX =
   "volunteer_category_name_unique_idx";
 const VOLUNTEER_APPLICATION_APPLICANT_ROLE_UNIQUE_INDEX =
   "volunteer_application_applicant_role_active_unique_idx";
+const VOLUNTEER_APPLICATION_APPLICANT_OPPORTUNITY_TOP_PICK_UNIQUE_INDEX =
+  "volunteer_application_applicant_opportunity_top_pick_active_unique_idx";
 
 function quoteActivityText(value: string) {
   return `'${value}'`;
@@ -523,6 +526,23 @@ export async function handleCreateVolunteerApplication(
       throw new Error("Volunteer application target missing after validation");
     }
 
+    if (data.topPickRoleId === data.roleId) {
+      const existingTopPickedRoleId = await findVolunteerTopPickedRoleId(
+        target.opportunityId,
+        authResult.userId,
+      );
+
+      if (existingTopPickedRoleId) {
+        return c.json(
+          {
+            ok: false,
+            error: "You have already selected a top pick for this opportunity",
+          },
+          409,
+        );
+      }
+    }
+
     const normalizedSupportingDocuments = normalizeOwnedSupportingDocumentKeys(
       target.opportunityId,
       authResult.userId,
@@ -597,6 +617,20 @@ export async function handleCreateVolunteerApplication(
       );
     }
 
+    if (
+      error?.code === POSTGRES_UNIQUE_VIOLATION &&
+      getPostgresConstraint(error) ===
+        VOLUNTEER_APPLICATION_APPLICANT_OPPORTUNITY_TOP_PICK_UNIQUE_INDEX
+    ) {
+      return c.json(
+        {
+          ok: false,
+          error: "You have already selected a top pick for this opportunity",
+        },
+        409,
+      );
+    }
+
     console.error("Failed to create volunteer application", err);
     return c.json({ ok: false, error: "Internal server error" }, 500);
   }
@@ -650,6 +684,23 @@ export async function handleCreateVolunteerApplicationBatch(
             error: "All roleIds must belong to the same volunteer opportunity",
           },
           400,
+        );
+      }
+    }
+
+    if (data.topPickRoleId && data.roleIds.includes(data.topPickRoleId)) {
+      const existingTopPickedRoleId = await findVolunteerTopPickedRoleId(
+        firstTarget.opportunityId,
+        authResult.userId,
+      );
+
+      if (existingTopPickedRoleId) {
+        return c.json(
+          {
+            ok: false,
+            error: "You have already selected a top pick for this opportunity",
+          },
+          409,
         );
       }
     }
@@ -740,6 +791,20 @@ export async function handleCreateVolunteerApplicationBatch(
     ) {
       return c.json(
         { ok: false, error: "You have already applied to one or more roles" },
+        409,
+      );
+    }
+
+    if (
+      error?.code === POSTGRES_UNIQUE_VIOLATION &&
+      getPostgresConstraint(error) ===
+        VOLUNTEER_APPLICATION_APPLICANT_OPPORTUNITY_TOP_PICK_UNIQUE_INDEX
+    ) {
+      return c.json(
+        {
+          ok: false,
+          error: "You have already selected a top pick for this opportunity",
+        },
         409,
       );
     }

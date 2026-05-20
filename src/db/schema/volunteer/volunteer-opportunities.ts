@@ -246,6 +246,13 @@ export const volunteerApplication = pgTable(
       .where(
         sql`${table.status} in ('SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'CONFIRMED', 'COMPLETED')`,
       ),
+    uniqueIndex(
+      "volunteer_application_applicant_opportunity_top_pick_active_unique_idx",
+    )
+      .on(table.applicantId, table.opportunityId)
+      .where(
+        sql`${table.topPick} = true and ${table.status} in ('SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'CONFIRMED', 'COMPLETED')`,
+      ),
     index("volunteer_application_opportunity_idx").using(
       "btree",
       table.opportunityId,

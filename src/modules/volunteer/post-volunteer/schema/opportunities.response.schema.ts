@@ -150,6 +150,7 @@ export const volunteerOpportunityResponseSchema = z
     createdAt: z.string(),
     updatedAt: z.string(),
     viewerSave: z.boolean(),
+    viewerTopPicked: z.string().nullable(),
     roles: z.array(volunteerOpportunityRoleResponseSchema),
   })
   .openapi("VolunteerOpportunityResponse");

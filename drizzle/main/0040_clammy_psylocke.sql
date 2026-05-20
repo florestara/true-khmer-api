@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "volunteer_application_applicant_opportunity_top_pick_active_unique_idx" ON "volunteer_application" USING btree ("applicant_id","opportunity_id") WHERE "volunteer_application"."top_pick" = true and "volunteer_application"."status" in ('SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'CONFIRMED', 'COMPLETED');
