@@ -16,6 +16,7 @@ import {
 } from "./schema/save.request.schema";
 
 const launchpadSaveList = aliasedTable(launchpadSave, "launchpad_save_list");
+type LaunchpadStatus = (typeof launchpad.$inferSelect)["status"];
 
 export type SavedLaunchpadListResult = {
   launchpads: SavedLaunchpadListItem[];
@@ -29,6 +30,7 @@ export type SavedLaunchpadListItem = {
   name: string;
   description: string | null;
   deadline: Date | null;
+  status: LaunchpadStatus;
   logoKey: string | null;
   coverKey: string | null;
   documentKeys: string[];
@@ -58,6 +60,10 @@ export type SavedLaunchpadListItem = {
 };
 
 type LaunchpadSaveInsert = typeof launchpadSave.$inferInsert;
+
+function resolveLaunchpadStatus(status: LaunchpadStatus): LaunchpadStatus {
+  return status;
+}
 
 function buildSavedLaunchpadsCursorFilter(
   cursor: SavedLaunchpadsPageCursor | undefined,
@@ -155,6 +161,7 @@ export async function getSavedLaunchpads(
     name: row.launchpad.name,
     description: row.launchpad.description,
     deadline: row.launchpad.deadline ? new Date(row.launchpad.deadline) : null,
+    status: resolveLaunchpadStatus(row.launchpad.status),
     logoKey: row.launchpad.logoKey,
     coverKey: row.launchpad.coverKey,
     documentKeys: row.launchpad.documentKeys as string[],
@@ -287,6 +294,7 @@ export async function saveLaunchpadForUser(
         name: existing.name,
         description: existing.description,
         deadline: existing.deadline ? new Date(existing.deadline) : null,
+        status: resolveLaunchpadStatus(existing.status),
         logoKey: existing.logoKey,
         coverKey: existing.coverKey,
         documentKeys: existing.documentKeys as string[],
@@ -371,6 +379,7 @@ export async function saveLaunchpadForUser(
       name: existing.name,
       description: existing.description,
       deadline: existing.deadline ? new Date(existing.deadline) : null,
+      status: resolveLaunchpadStatus(existing.status),
       logoKey: existing.logoKey,
       coverKey: existing.coverKey,
       documentKeys: existing.documentKeys as string[],

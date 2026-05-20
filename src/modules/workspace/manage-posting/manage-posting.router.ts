@@ -4,6 +4,8 @@ import { requireAccessToken } from "../../../middlewares/auth.middleware";
 import { authProtectedErrorResponseSchema } from "../../auth/auth.schema";
 import {
   changeManagePostingApplicationStatusParamSchema,
+  completeManagePostingParamSchema,
+  completeManagePostingResponseSchema,
   getManagePostingApplicationParamSchema,
   getManagePostingDetailParamSchema,
   getManagePostingDetailQuerySchema,
@@ -15,6 +17,7 @@ import {
   managePostingsResponseSchema,
 } from "./manage-posting.schema";
 import {
+  handleCompleteManagePosting,
   handleGetManagePostingApplication,
   handleGetManagePostingDetail,
   handleGetManagePostings,
@@ -176,6 +179,67 @@ const getManagePostingApplicationRoute = createRoute({
   },
 });
 
+const completeManagePostingRoute = createRoute({
+  method: "post",
+  path: "/{sourceType}/{postingId}/complete",
+  tags: ["Workspace"],
+  middleware: [requireAccessToken],
+  security: [{ BearerAuth: [] }],
+  request: {
+    params: completeManagePostingParamSchema,
+  },
+  responses: {
+    200: {
+      description: "Posting marked completed",
+      content: {
+        "application/json": {
+          schema: completeManagePostingResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: "Unauthorized",
+      content: {
+        "application/json": {
+          schema: authProtectedErrorResponseSchema,
+        },
+      },
+    },
+    403: {
+      description: "Onboarding required",
+      content: {
+        "application/json": {
+          schema: authProtectedErrorResponseSchema,
+        },
+      },
+    },
+    404: {
+      description: "Posting not found",
+      content: {
+        "application/json": {
+          schema: managePostingsErrorResponseSchema,
+        },
+      },
+    },
+    409: {
+      description: "Posting is not in progress",
+      content: {
+        "application/json": {
+          schema: managePostingsErrorResponseSchema,
+        },
+      },
+    },
+    500: {
+      description: "Internal server error",
+      content: {
+        "application/json": {
+          schema: managePostingsErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
 const updateManagePostingApplicationRoute = createRoute({
   method: "post",
   path: "/{sourceType}/{postingId}/{applicationId}/change-status/{statusAction}",
@@ -245,6 +309,11 @@ managePostingRouter.openapi(getManagePostingsRoute, async (c) => {
 managePostingRouter.openapi(getManagePostingApplicationRoute, async (c) => {
   const params = c.req.valid("param");
   return (await handleGetManagePostingApplication(c, params)) as any;
+});
+
+managePostingRouter.openapi(completeManagePostingRoute, async (c) => {
+  const params = c.req.valid("param");
+  return (await handleCompleteManagePosting(c, params)) as any;
 });
 
 managePostingRouter.openapi(updateManagePostingApplicationRoute, async (c) => {

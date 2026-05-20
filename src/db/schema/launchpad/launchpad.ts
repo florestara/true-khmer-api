@@ -2,6 +2,7 @@ import {
   index,
   integer,
   jsonb,
+  pgEnum,
   pgTable,
   text,
   timestamp,
@@ -14,6 +15,13 @@ import { city } from "../onboarding";
 import { user } from "../user";
 import { relations, sql } from "drizzle-orm";
 import { launchpadRole } from "./roles/roles";
+
+export const launchpadStatus = pgEnum("launchpad_status", [
+  "DRAFT",
+  "LIVE",
+  "IN_PROGRESS",
+  "COMPLETED",
+]);
 
 export const launchpad = pgTable(
   "launchpad",
@@ -43,6 +51,7 @@ export const launchpad = pgTable(
     telegramUsername: varchar("telegram_username", { length: 255 }),
     website: varchar("website", { length: 255 }),
     totalView: integer("total_view").notNull().default(0),
+    status: launchpadStatus("status").default("LIVE").notNull(),
     createdBy: uuid("created_by")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
@@ -59,6 +68,7 @@ export const launchpad = pgTable(
   (table) => [
     index("launchpad_category_id_idx").using("btree", table.categoryId),
     index("launchpad_city_id_idx").using("btree", table.cityId),
+    index("launchpad_status_idx").using("btree", table.status),
   ],
 );
 

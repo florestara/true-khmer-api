@@ -1,6 +1,6 @@
 {
-  "id": "adc62ea3-e133-431f-9de5-f748c4904296",
-  "prevId": "4eebb813-3dfa-4e63-b552-b18e47582548",
+  "id": "07534049-40e8-46e2-a574-68b6e0c1fa3f",
+  "prevId": "adc62ea3-e133-431f-9de5-f748c4904296",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -3383,28 +3383,6 @@
           "method": "btree",
           "with": {}
         },
-        "volunteer_application_applicant_opportunity_top_pick_active_unique_idx": {
-          "name": "volunteer_application_applicant_opportunity_top_pick_active_unique_idx",
-          "columns": [
-            {
-              "expression": "applicant_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "opportunity_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"volunteer_application\".\"top_pick\" = true and \"volunteer_application\".\"status\" in ('SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'CONFIRMED', 'COMPLETED')",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "volunteer_application_opportunity_idx": {
           "name": "volunteer_application_opportunity_idx",
           "columns": [
@@ -3482,6 +3460,28 @@
             }
           ],
           "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "volunteer_application_applicant_opportunity_top_pick_active_unique_idx": {
+          "name": "volunteer_application_applicant_opportunity_top_pick_active_unique_idx",
+          "columns": [
+            {
+              "expression": "applicant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "opportunity_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"volunteer_application\".\"top_pick\" = true and \"volunteer_application\".\"status\" in ('SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'CONFIRMED', 'COMPLETED')",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -3800,7 +3800,7 @@
           "typeSchema": "public",
           "primaryKey": false,
           "notNull": true,
-          "default": "'PUBLISHED'"
+          "default": "'LIVE'"
         },
         "published_at": {
           "name": "published_at",
@@ -5884,9 +5884,8 @@
       "schema": "public",
       "values": [
         "DRAFT",
-        "ACTIVE",
-        "PUBLISHED",
-        "CLOSED",
+        "LIVE",
+        "IN_PROGRESS",
         "COMPLETED"
       ]
     },

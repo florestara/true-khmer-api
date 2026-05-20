@@ -22,6 +22,8 @@ export type LaunchpadApplicationDetail =
 export type LaunchpadApplicationTarget = {
   launchpadId: string;
   launchpadName: string;
+  deadline: string | null;
+  status: (typeof launchpad.$inferSelect)["status"];
   roleId: string;
   roleTitle: string;
 };
@@ -34,6 +36,8 @@ export async function findLaunchpadApplicationTarget(
     .select({
       launchpadId: launchpad.id,
       launchpadName: launchpad.name,
+      deadline: launchpad.deadline,
+      status: launchpad.status,
       roleId: launchpadRole.id,
       roleTitle: launchpadRole.title,
     })

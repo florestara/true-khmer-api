@@ -12,7 +12,16 @@ export const managePostingSourceParamSchema = z
   .openapi("ManagePostingSourceParam");
 
 export const managePostingFilterSchema = z
-  .enum(["all", "active", "draft", "closed", "completed", "filled"])
+  .enum([
+    "all",
+    "active",
+    "live",
+    "draft",
+    "in_progress",
+    "closed",
+    "completed",
+    "filled",
+  ])
   .openapi("ManagePostingFilter");
 
 export const getManagePostingsQuerySchema = z
@@ -94,8 +103,18 @@ export const getManagePostingDetailQuerySchema = z
   .openapi("GetManagePostingDetailQuery");
 
 export const managePostingStatusSchema = z
-  .enum(["ACTIVE", "DRAFT", "PUBLISHED", "CLOSED", "COMPLETED"])
+  .enum(["DRAFT", "LIVE", "IN_PROGRESS", "COMPLETED"])
   .openapi("ManagePostingStatus");
+
+export const completeManagePostingParamSchema = z
+  .object({
+    sourceType: managePostingSourceParamSchema,
+    postingId: z
+      .string()
+      .trim()
+      .regex(UUID_RE, "postingId must be a valid UUID"),
+  })
+  .openapi("CompleteManagePostingParam");
 
 export const managePostingApplicantStatusSchema = z
   .enum([
@@ -250,6 +269,13 @@ export const managePostingApplicationActionResponseSchema = z
   })
   .openapi("ManagePostingApplicationActionResponse");
 
+export const completeManagePostingResponseSchema = z
+  .object({
+    ok: z.literal(true),
+    posting: managePostingItemSchema,
+  })
+  .openapi("CompleteManagePostingResponse");
+
 export const managePostingsErrorResponseSchema = z
   .object({
     ok: z.literal(false),
@@ -268,6 +294,9 @@ export type GetManagePostingApplicationParam = z.infer<
 >;
 export type ChangeManagePostingApplicationStatusParam = z.infer<
   typeof changeManagePostingApplicationStatusParamSchema
+>;
+export type CompleteManagePostingParam = z.infer<
+  typeof completeManagePostingParamSchema
 >;
 export type GetManagePostingDetailQuery = z.infer<
   typeof getManagePostingDetailQuerySchema

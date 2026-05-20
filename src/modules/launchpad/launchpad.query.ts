@@ -21,6 +21,7 @@ import {
 
 type launchpadInsert = typeof launchpad.$inferInsert;
 type launchpadRoleInsert = typeof launchpadRole.$inferInsert;
+type LaunchpadStatus = (typeof launchpad.$inferSelect)["status"];
 
 export type LaunchpadRole = {
   id: string;
@@ -34,6 +35,7 @@ export type LaunchpadDetail = {
   name: string;
   description: string | null;
   deadline: Date | null;
+  status: LaunchpadStatus;
   logoKey: string | null;
   coverKey: string | null;
   documentKeys: string[];
@@ -65,6 +67,7 @@ export type LaunchpadListItem = {
   name: string;
   description: string | null;
   deadline: Date | null;
+  status: LaunchpadStatus;
   logoKey: string | null;
   coverKey: string | null;
   documentKeys: string[];
@@ -132,6 +135,10 @@ function buildLaunchpadBaseQuery() {
       userProfile.id,
       launchpadCountSubquery.count,
     );
+}
+
+function resolveLaunchpadStatus(status: LaunchpadStatus): LaunchpadStatus {
+  return status;
 }
 
 function buildLaunchpadWhereClause(
@@ -280,6 +287,7 @@ export async function createLaunchpad(
       name: created.name,
       description: created.description,
       deadline: created.deadline ? new Date(created.deadline) : null,
+      status: resolveLaunchpadStatus(created.status),
       logoKey: created.logoKey,
       coverKey: created.coverKey,
       documentKeys: created.documentKeys as string[],
@@ -376,6 +384,7 @@ export async function findLaunchpadById(
       : undefined,
     description: row.launchpad.description,
     deadline: row.launchpad.deadline ? new Date(row.launchpad.deadline) : null,
+    status: resolveLaunchpadStatus(row.launchpad.status),
     logoKey: row.launchpad.logoKey,
     coverKey: row.launchpad.coverKey,
     documentKeys: row.launchpad.documentKeys as string[],
@@ -452,6 +461,7 @@ export async function findLaunchpads(
     name: row.launchpad.name,
     description: row.launchpad.description,
     deadline: row.launchpad.deadline ? new Date(row.launchpad.deadline) : null,
+    status: resolveLaunchpadStatus(row.launchpad.status),
     logoKey: row.launchpad.logoKey,
     coverKey: row.launchpad.coverKey,
     documentKeys: row.launchpad.documentKeys as string[],

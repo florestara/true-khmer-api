@@ -175,7 +175,7 @@ function resolveVolunteerApplicationTargetError(
   applicantId: string,
   notFoundError: string,
 ) {
-  if (!target || target.status !== "PUBLISHED" || !target.publishedAt) {
+  if (!target || target.status !== "LIVE" || !target.publishedAt) {
     return { status: 404 as const, error: notFoundError };
   }
 
@@ -183,13 +183,6 @@ function resolveVolunteerApplicationTargetError(
     return {
       status: 400 as const,
       error: "You cannot apply to your own volunteer opportunity",
-    };
-  }
-
-  if (Date.parse(target.applicationDeadline) <= Date.now()) {
-    return {
-      status: 400 as const,
-      error: "Application deadline has passed or been reached",
     };
   }
 
@@ -585,6 +578,10 @@ export async function handleCreateVolunteerApplication(
       supportingDocuments: normalizedSupportingDocuments,
     });
 
+    if (!application) {
+      return c.json({ ok: false, error: "Volunteer role not found" }, 404);
+    }
+
     recordRecentActivityQuietly({
       userId: authResult.userId,
       type: "volunteer_application_submitted",
@@ -751,6 +748,10 @@ export async function handleCreateVolunteerApplicationBatch(
       supportingDocuments: normalizedSupportingDocuments,
       topPickRoleId: data.topPickRoleId,
     });
+
+    if (!applications) {
+      return c.json({ ok: false, error: "Volunteer role not found" }, 404);
+    }
 
     const applicationByRoleId = new Map(
       applications.map((application) => [application.role.id, application]),

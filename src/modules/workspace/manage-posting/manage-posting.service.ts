@@ -1,6 +1,7 @@
 import type { Context } from "hono";
 import { getAuthUserId } from "../../auth/utils/get-auth";
 import {
+  completeManagePosting,
   findManagePostingApplication,
   findManagePostingDetail,
   findManagePostings,
@@ -8,6 +9,7 @@ import {
 } from "./manage-posting.query";
 import type {
   ChangeManagePostingApplicationStatusParam,
+  CompleteManagePostingParam,
   GetManagePostingApplicationParam,
   GetManagePostingDetailParam,
   GetManagePostingDetailQuery,
@@ -70,6 +72,39 @@ export async function handleGetManagePostingDetail(
     );
   } catch (error) {
     console.error("Failed to get manage posting detail", error);
+    return c.json({ ok: false, error: "Internal server error" }, 500);
+  }
+}
+
+export async function handleCompleteManagePosting(
+  c: Context,
+  params: CompleteManagePostingParam,
+) {
+  const authResult = getAuthUserId(c);
+  if (!authResult.ok) {
+    return authResult.response;
+  }
+
+  try {
+    const result = await completeManagePosting(authResult.userId, params);
+
+    if (result === "not_found") {
+      return c.json({ ok: false, error: "Posting not found" }, 404);
+    }
+
+    if (result === "not_in_progress") {
+      return c.json(
+        {
+          ok: false,
+          error: "Posting can only be completed after it is in progress",
+        },
+        409,
+      );
+    }
+
+    return c.json({ ok: true, posting: result }, 200);
+  } catch (error) {
+    console.error("Failed to complete manage posting", error);
     return c.json({ ok: false, error: "Internal server error" }, 500);
   }
 }

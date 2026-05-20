@@ -71,6 +71,7 @@ type VolunteerLocationRow = {
 type VolunteerOpportunityRow = typeof volunteerOpportunity.$inferSelect;
 type VolunteerOpportunityStatus = VolunteerOpportunityRow["status"];
 type VolunteerApplicationRow = typeof volunteerApplication.$inferSelect;
+type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type VolunteerOpportunitySaveInsert =
   typeof volunteerOpportunitySave.$inferInsert;
 type VolunteerRoleRow = typeof volunteerRole.$inferSelect;
@@ -310,12 +311,7 @@ function toInteger(value: unknown, fallback = 0): number {
 
 function resolveVolunteerOpportunityStatus(
   status: VolunteerOpportunityStatus,
-  applicationDeadline: string,
 ): VolunteerOpportunityStatus {
-  if (status === "PUBLISHED" && Date.parse(applicationDeadline) <= Date.now()) {
-    return "CLOSED";
-  }
-
   return status;
 }
 
@@ -330,8 +326,7 @@ export async function getVolunteerCategories(): Promise<
     .from(volunteerOpportunity)
     .where(
       and(
-        eq(volunteerOpportunity.status, "PUBLISHED"),
-        sql`${volunteerOpportunity.applicationDeadline} > now()`,
+        eq(volunteerOpportunity.status, "LIVE"),
         isNotNull(volunteerOpportunity.publishedAt),
       ),
     )
@@ -618,6 +613,26 @@ type CreateVolunteerApplicationsBatchInput = Omit<
   }>;
 };
 
+async function lockLiveVolunteerApplicationOpportunity(
+  tx: DbTransaction,
+  opportunityId: string,
+) {
+  const [opportunity] = await tx
+    .select({ id: volunteerOpportunity.id })
+    .from(volunteerOpportunity)
+    .where(
+      and(
+        eq(volunteerOpportunity.id, opportunityId),
+        eq(volunteerOpportunity.status, "LIVE"),
+        isNotNull(volunteerOpportunity.publishedAt),
+      ),
+    )
+    .limit(1)
+    .for("update");
+
+  return opportunity ?? null;
+}
+
 type VolunteerOpportunityListRow = VolunteerOpportunityBaseRow & {
   applicationCount: number;
   capacity: number;
@@ -668,7 +683,6 @@ function hydrateVolunteerApplication(
       ...opportunity,
       status: resolveVolunteerOpportunityStatus(
         opportunity.status,
-        opportunity.applicationDeadline,
       ),
     },
     role: {
@@ -744,7 +758,6 @@ function hydrateVolunteerOpportunityDetail(
     benefits: opportunity.benefits as string[],
     status: resolveVolunteerOpportunityStatus(
       opportunity.status,
-      opportunity.applicationDeadline,
     ),
     publishedAt: opportunity.publishedAt,
     organizer: {
@@ -807,10 +820,9 @@ function buildVolunteerOpportunitiesWhereClause({
   "categoryId" | "locationId" | "search" | "cursor"
 >) {
   const filters: SQL<unknown>[] = [
-    eq(volunteerOpportunity.status, "PUBLISHED"),
+    eq(volunteerOpportunity.status, "LIVE"),
     eq(volunteerCategory.status, "ACTIVE"),
     eq(city.isActive, true),
-    sql`${volunteerOpportunity.applicationDeadline} > now()`,
     isNotNull(volunteerOpportunity.publishedAt),
   ];
 
@@ -1251,8 +1263,7 @@ async function getVolunteerOrganizersByUserIds(
     .where(
       and(
         inArray(volunteerOpportunity.createdBy, uniqueUserIds),
-        eq(volunteerOpportunity.status, "PUBLISHED"),
-        sql`${volunteerOpportunity.applicationDeadline} > now()`,
+        eq(volunteerOpportunity.status, "LIVE"),
         isNotNull(volunteerOpportunity.publishedAt),
       ),
     )
@@ -1412,8 +1423,7 @@ export async function getSavedVolunteerOpportunities(
   const cursorFilter = buildSavedVolunteerOpportunitiesCursorFilter(cursor);
   const filters: SQL<unknown>[] = [
     eq(volunteerOpportunitySaveList.saverId, userId),
-    eq(volunteerOpportunity.status, "PUBLISHED"),
-    sql`${volunteerOpportunity.applicationDeadline} > now()`,
+    eq(volunteerOpportunity.status, "LIVE"),
     eq(volunteerCategory.status, "ACTIVE"),
     eq(city.isActive, true),
     eq(country.isActive, true),
@@ -1472,8 +1482,7 @@ export async function getSavedVolunteerOpportunities(
     .where(
       and(
         eq(volunteerOpportunitySaveList.saverId, userId),
-        eq(volunteerOpportunity.status, "PUBLISHED"),
-        sql`${volunteerOpportunity.applicationDeadline} > now()`,
+        eq(volunteerOpportunity.status, "LIVE"),
         eq(volunteerCategory.status, "ACTIVE"),
         eq(city.isActive, true),
         eq(country.isActive, true),
@@ -1545,8 +1554,7 @@ export async function getVolunteerOpportunityById(
     .where(
       and(
         eq(volunteerOpportunity.id, opportunityId),
-        eq(volunteerOpportunity.status, "PUBLISHED"),
-        sql`${volunteerOpportunity.applicationDeadline} > now()`,
+        eq(volunteerOpportunity.status, "LIVE"),
         eq(volunteerCategory.status, "ACTIVE"),
         eq(city.isActive, true),
         eq(country.isActive, true),
@@ -1959,7 +1967,7 @@ export async function createVolunteerOpportunity(
         contactPhone: data.contact.phone,
         contactWebsiteUrl: data.contact.websiteUrl,
         commitmentDescription: data.commitmentDescription,
-        status: "PUBLISHED",
+        status: "LIVE",
         publishedAt: new Date().toISOString(),
         createdBy: data.createdBy,
       })
@@ -2048,8 +2056,17 @@ export async function createVolunteerOpportunity(
 
 export async function createVolunteerApplication(
   data: CreateVolunteerApplicationInput,
-): Promise<VolunteerApplicationDetail> {
+): Promise<VolunteerApplicationDetail | null> {
   return db.transaction(async (tx) => {
+    const liveOpportunity = await lockLiveVolunteerApplicationOpportunity(
+      tx,
+      data.opportunityId,
+    );
+
+    if (!liveOpportunity) {
+      return null;
+    }
+
     const [application] = await tx
       .insert(volunteerApplication)
       .values({
@@ -2076,7 +2093,7 @@ export async function createVolunteerApplication(
       title: data.opportunityTitle,
       coverImageKey: data.coverImageKey,
       applicationDeadline: data.applicationDeadline,
-      status: "PUBLISHED",
+      status: "LIVE",
       filled: false,
       category: data.category,
       location: data.location,
@@ -2086,8 +2103,17 @@ export async function createVolunteerApplication(
 
 export async function createVolunteerApplicationsBatch(
   data: CreateVolunteerApplicationsBatchInput,
-): Promise<VolunteerApplicationDetail[]> {
+): Promise<VolunteerApplicationDetail[] | null> {
   return db.transaction(async (tx) => {
+    const liveOpportunity = await lockLiveVolunteerApplicationOpportunity(
+      tx,
+      data.opportunityId,
+    );
+
+    if (!liveOpportunity) {
+      return null;
+    }
+
     const applications = await tx
       .insert(volunteerApplication)
       .values(
@@ -2126,7 +2152,7 @@ export async function createVolunteerApplicationsBatch(
           title: data.opportunityTitle,
           coverImageKey: data.coverImageKey,
           applicationDeadline: data.applicationDeadline,
-          status: "PUBLISHED",
+          status: "LIVE",
           filled: false,
           category: data.category,
           location: data.location,
@@ -2209,8 +2235,7 @@ export async function saveVolunteerOpportunityForUser(
       .where(
         and(
           eq(volunteerOpportunity.id, opportunityId),
-          eq(volunteerOpportunity.status, "PUBLISHED"),
-          sql`${volunteerOpportunity.applicationDeadline} > now()`,
+          eq(volunteerOpportunity.status, "LIVE"),
           eq(volunteerCategory.status, "ACTIVE"),
           eq(city.isActive, true),
           eq(country.isActive, true),

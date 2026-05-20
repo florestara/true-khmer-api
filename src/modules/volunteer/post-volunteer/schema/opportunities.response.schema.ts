@@ -78,12 +78,19 @@ const volunteerApplicationRoleResponseSchema = z
   })
   .openapi("VolunteerApplicationRoleResponse");
 
+const volunteerOpportunityStatusResponseSchema = z.enum([
+  "DRAFT",
+  "LIVE",
+  "IN_PROGRESS",
+  "COMPLETED",
+]);
+
 const volunteerApplicationOpportunitySchema = z
   .object({
     id: z.string(),
     title: z.string(),
     coverImageKey: z.string(),
-    status: z.enum(["DRAFT", "ACTIVE", "PUBLISHED", "CLOSED", "COMPLETED"]),
+    status: volunteerOpportunityStatusResponseSchema,
     applicationDeadline: z.string(),
     filled: z.boolean(),
     category: volunteerOpportunityReferenceSchema,
@@ -143,7 +150,7 @@ export const volunteerOpportunityResponseSchema = z
     totalView: z.number(),
     coverImageKey: z.string(),
     benefits: z.array(z.string()),
-    status: z.enum(["DRAFT", "ACTIVE", "PUBLISHED", "CLOSED", "COMPLETED"]),
+    status: volunteerOpportunityStatusResponseSchema,
     publishedAt: z.string().nullable(),
     organizer: volunteerOpportunityOrganizerResponseSchema,
     createdBy: z.string(),

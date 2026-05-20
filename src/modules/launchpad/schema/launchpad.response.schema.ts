@@ -90,6 +90,13 @@ export const createLaunchpadRoleSchema: z.ZodType<LaunchpadRole> = z.object({
   capacity: z.number(),
 });
 
+const launchpadStatusSchema = z.enum([
+  "DRAFT",
+  "LIVE",
+  "IN_PROGRESS",
+  "COMPLETED",
+]);
+
 export const createLaunchpadResponseSchema = z
   .object({
     ok: z.literal(true),
@@ -98,6 +105,7 @@ export const createLaunchpadResponseSchema = z
       name: z.string(),
       description: z.string().nullable(),
       deadline: z.date().nullable(),
+      status: launchpadStatusSchema,
       logoKey: z.string().nullable(),
       coverKey: z.string().nullable(),
       documentKeys: z.array(z.string()),
@@ -138,6 +146,7 @@ export const getLaunchpadByIdResponseSchema = z
       name: z.string(),
       description: z.string().nullable(),
       deadline: z.date().nullable(),
+      status: launchpadStatusSchema,
       logoKey: z.string().nullable(),
       coverKey: z.string().nullable(),
       documentKeys: z.array(z.string()),
@@ -175,6 +184,7 @@ export const launchpadListItemSchema: z.ZodType<LaunchpadListItem> = z.object({
   name: z.string(),
   description: z.string().nullable(),
   deadline: z.date().nullable(),
+  status: launchpadStatusSchema,
   logoKey: z.string().nullable(),
   coverKey: z.string().nullable(),
   documentKeys: z.array(z.string()),
