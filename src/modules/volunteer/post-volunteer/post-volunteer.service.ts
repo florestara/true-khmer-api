@@ -519,7 +519,7 @@ export async function handleCreateVolunteerApplication(
       throw new Error("Volunteer application target missing after validation");
     }
 
-    if (data.topPickRoleId) {
+    if (data.topPickRoleId === data.roleId) {
       const existingTopPickedRoleId = await findVolunteerTopPickedRoleId(
         target.opportunityId,
         authResult.userId,
@@ -681,7 +681,7 @@ export async function handleCreateVolunteerApplicationBatch(
       }
     }
 
-    if (data.topPickRoleId) {
+    if (data.topPickRoleId && data.roleIds.includes(data.topPickRoleId)) {
       const existingTopPickedRoleId = await findVolunteerTopPickedRoleId(
         firstTarget.opportunityId,
         authResult.userId,
