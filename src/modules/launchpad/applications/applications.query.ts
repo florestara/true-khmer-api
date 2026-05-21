@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { db } from "../../../db";
 import {
   launchpad,
@@ -47,6 +47,7 @@ export async function findLaunchpadApplicationTarget(
       and(
         eq(launchpadRole.id, roleId),
         eq(launchpadRole.launchpadId, launchpadId),
+        isNull(launchpad.deletedAt),
       ),
     )
     .limit(1);

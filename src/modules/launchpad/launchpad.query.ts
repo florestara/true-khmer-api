@@ -1,4 +1,4 @@
-import { sql, eq, and, ilike, inArray } from "drizzle-orm";
+import { sql, eq, and, ilike, inArray, isNull } from "drizzle-orm";
 import { db } from "../../db";
 import {
   LAUNCHPAD_ADVISORY_LOCK_NAMESPACE,
@@ -102,6 +102,7 @@ function buildLaunchpadBaseQuery() {
       count: sql<number>`cast(count(${launchpad.id}) as int)`.as("count"),
     })
     .from(launchpad)
+    .where(isNull(launchpad.deletedAt))
     .groupBy(launchpad.createdBy)
     .as("launchpad_count");
 
@@ -147,7 +148,7 @@ function buildLaunchpadWhereClause(
   cityId?: string,
   search?: string,
 ) {
-  const conditions = [];
+  const conditions = [isNull(launchpad.deletedAt)];
 
   if (categoryId) {
     conditions.push(eq(launchpad.categoryId, categoryId));
@@ -205,7 +206,7 @@ export async function incrementLaunchpadViewCount(
     .set({
       totalView: sql`${launchpad.totalView} + 1`,
     })
-    .where(eq(launchpad.id, launchpadId));
+    .where(and(eq(launchpad.id, launchpadId), isNull(launchpad.deletedAt)));
 }
 
 export async function createLaunchpad(
@@ -280,7 +281,7 @@ export async function createLaunchpad(
         count: sql<number>`cast(count(${launchpad.id}) as int)`,
       })
       .from(launchpad)
-      .where(sql`${launchpad.createdBy} = ${userId}`);
+      .where(and(eq(launchpad.createdBy, userId), isNull(launchpad.deletedAt)));
 
     return {
       id: created.id,
@@ -348,7 +349,7 @@ export async function findLaunchpadById(
     .leftJoin(city, eq(launchpad.cityId, city.id))
     .leftJoin(user, eq(launchpad.createdBy, user.id))
     .leftJoin(userProfile, eq(user.id, userProfile.userId))
-    .where(eq(launchpad.id, launchpadId))
+    .where(and(eq(launchpad.id, launchpadId), isNull(launchpad.deletedAt)))
     .limit(1);
 
   if (!row) {
@@ -365,7 +366,12 @@ export async function findLaunchpadById(
       count: sql<number>`cast(count(${launchpad.id}) as int)`,
     })
     .from(launchpad)
-    .where(sql`${launchpad.createdBy} = ${row.launchpad.createdBy}`);
+    .where(
+      and(
+        eq(launchpad.createdBy, row.launchpad.createdBy),
+        isNull(launchpad.deletedAt),
+      ),
+    );
 
   return {
     id: row.launchpad.id,

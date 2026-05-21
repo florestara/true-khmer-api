@@ -4,8 +4,6 @@ import { requireAccessToken } from "../../../middlewares/auth.middleware";
 import { authProtectedErrorResponseSchema } from "../../auth/auth.schema";
 import {
   changeManagePostingApplicationStatusParamSchema,
-  completeManagePostingParamSchema,
-  completeManagePostingResponseSchema,
   getManagePostingApplicationParamSchema,
   getManagePostingDetailParamSchema,
   getManagePostingDetailQuerySchema,
@@ -13,14 +11,16 @@ import {
   managePostingApplicationActionResponseSchema,
   managePostingApplicationDetailResponseSchema,
   managePostingDetailResponseSchema,
+  updateManagePostingActionParamSchema,
+  updateManagePostingActionResponseSchema,
   managePostingsErrorResponseSchema,
   managePostingsResponseSchema,
 } from "./manage-posting.schema";
 import {
-  handleCompleteManagePosting,
   handleGetManagePostingApplication,
   handleGetManagePostingDetail,
   handleGetManagePostings,
+  handleUpdateManagePostingAction,
   handleUpdateManagePostingApplication,
 } from "./manage-posting.service";
 
@@ -179,21 +179,21 @@ const getManagePostingApplicationRoute = createRoute({
   },
 });
 
-const completeManagePostingRoute = createRoute({
+const updateManagePostingActionRoute = createRoute({
   method: "post",
-  path: "/{sourceType}/{postingId}/complete",
+  path: "/{sourceType}/{postingId}/action/{postingAction}",
   tags: ["Workspace"],
   middleware: [requireAccessToken],
   security: [{ BearerAuth: [] }],
   request: {
-    params: completeManagePostingParamSchema,
+    params: updateManagePostingActionParamSchema,
   },
   responses: {
     200: {
-      description: "Posting marked completed",
+      description: "Posting action completed",
       content: {
         "application/json": {
-          schema: completeManagePostingResponseSchema,
+          schema: updateManagePostingActionResponseSchema,
         },
       },
     },
@@ -222,7 +222,7 @@ const completeManagePostingRoute = createRoute({
       },
     },
     409: {
-      description: "Posting is not in progress",
+      description: "Posting action is not allowed for the current state",
       content: {
         "application/json": {
           schema: managePostingsErrorResponseSchema,
@@ -311,9 +311,9 @@ managePostingRouter.openapi(getManagePostingApplicationRoute, async (c) => {
   return (await handleGetManagePostingApplication(c, params)) as any;
 });
 
-managePostingRouter.openapi(completeManagePostingRoute, async (c) => {
+managePostingRouter.openapi(updateManagePostingActionRoute, async (c) => {
   const params = c.req.valid("param");
-  return (await handleCompleteManagePosting(c, params)) as any;
+  return (await handleUpdateManagePostingAction(c, params)) as any;
 });
 
 managePostingRouter.openapi(updateManagePostingApplicationRoute, async (c) => {

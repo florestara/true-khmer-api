@@ -1,4 +1,14 @@
-import { and, desc, eq, inArray, lt, or, sql, aliasedTable } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  inArray,
+  isNull,
+  lt,
+  or,
+  sql,
+  aliasedTable,
+} from "drizzle-orm";
 import { db } from "../../../db";
 import {
   city,
@@ -86,6 +96,7 @@ export async function getSavedLaunchpads(
 
   const filters: Parameters<typeof and>[0][] = [
     eq(launchpadSaveList.saverId, userId),
+    isNull(launchpad.deletedAt),
   ];
 
   if (cursorFilter) {
@@ -98,6 +109,7 @@ export async function getSavedLaunchpads(
       count: sql<number>`cast(count(${launchpad.id}) as int)`.as("count"),
     })
     .from(launchpad)
+    .where(isNull(launchpad.deletedAt))
     .groupBy(launchpad.createdBy)
     .as("launchpad_count");
 
@@ -216,7 +228,7 @@ export async function saveLaunchpadForUser(
   const [existing] = await db
     .select()
     .from(launchpad)
-    .where(eq(launchpad.id, launchpadId))
+    .where(and(eq(launchpad.id, launchpadId), isNull(launchpad.deletedAt)))
     .limit(1);
 
   if (!existing) {
@@ -279,7 +291,12 @@ export async function saveLaunchpadForUser(
         count: sql<number>`cast(count(${launchpad.id}) as int)`,
       })
       .from(launchpad)
-      .where(eq(launchpad.createdBy, existing.createdBy));
+      .where(
+        and(
+          eq(launchpad.createdBy, existing.createdBy),
+          isNull(launchpad.deletedAt),
+        ),
+      );
 
     const [roleCount] = await db
       .select({
@@ -364,7 +381,12 @@ export async function saveLaunchpadForUser(
       count: sql<number>`cast(count(${launchpad.id}) as int)`,
     })
     .from(launchpad)
-    .where(eq(launchpad.createdBy, existing.createdBy));
+    .where(
+      and(
+        eq(launchpad.createdBy, existing.createdBy),
+        isNull(launchpad.deletedAt),
+      ),
+    );
 
   const [roleCount] = await db
     .select({

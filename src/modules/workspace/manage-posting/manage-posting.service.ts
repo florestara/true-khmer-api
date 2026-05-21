@@ -1,19 +1,19 @@
 import type { Context } from "hono";
 import { getAuthUserId } from "../../auth/utils/get-auth";
 import {
-  completeManagePosting,
   findManagePostingApplication,
   findManagePostingDetail,
   findManagePostings,
+  updateManagePostingAction,
   updateManagePostingApplication,
 } from "./manage-posting.query";
 import type {
   ChangeManagePostingApplicationStatusParam,
-  CompleteManagePostingParam,
   GetManagePostingApplicationParam,
   GetManagePostingDetailParam,
   GetManagePostingDetailQuery,
   GetManagePostingsQuery,
+  UpdateManagePostingActionParam,
 } from "./manage-posting.schema";
 
 export async function handleGetManagePostings(
@@ -76,9 +76,9 @@ export async function handleGetManagePostingDetail(
   }
 }
 
-export async function handleCompleteManagePosting(
+export async function handleUpdateManagePostingAction(
   c: Context,
-  params: CompleteManagePostingParam,
+  params: UpdateManagePostingActionParam,
 ) {
   const authResult = getAuthUserId(c);
   if (!authResult.ok) {
@@ -86,7 +86,7 @@ export async function handleCompleteManagePosting(
   }
 
   try {
-    const result = await completeManagePosting(authResult.userId, params);
+    const result = await updateManagePostingAction(authResult.userId, params);
 
     if (result === "not_found") {
       return c.json({ ok: false, error: "Posting not found" }, 404);
@@ -102,9 +102,42 @@ export async function handleCompleteManagePosting(
       );
     }
 
+    if (result === "cancel_not_allowed") {
+      return c.json(
+        {
+          ok: false,
+          error:
+            "Posting can only be canceled while it is live with applicants or in progress",
+        },
+        409,
+      );
+    }
+
+    if (result === "delete_not_allowed") {
+      return c.json(
+        {
+          ok: false,
+          error:
+            "Posting can only be deleted while it is draft or live with no applicants",
+        },
+        409,
+      );
+    }
+
+    if (result === "live_has_applicants") {
+      return c.json(
+        {
+          ok: false,
+          error:
+            "Live posting already has applicants and must be canceled instead of deleted",
+        },
+        409,
+      );
+    }
+
     return c.json({ ok: true, posting: result }, 200);
   } catch (error) {
-    console.error("Failed to complete manage posting", error);
+    console.error("Failed to update manage posting action", error);
     return c.json({ ok: false, error: "Internal server error" }, 500);
   }
 }

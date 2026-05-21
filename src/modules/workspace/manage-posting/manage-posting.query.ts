@@ -1,7 +1,8 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { db } from "../../../db";
 import {
   launchpad,
+  launchpadActionLog,
   launchpadApplication,
   launchpadApplicationLog,
   launchpadRole,
@@ -10,6 +11,7 @@ import {
   volunteerApplication,
   volunteerApplicationLog,
   volunteerOpportunity,
+  volunteerOpportunityActionLog,
   volunteerRole,
 } from "../../../db/schema";
 import {
@@ -18,7 +20,6 @@ import {
 } from "../../../utils/page-pagination.helper";
 import type {
   ChangeManagePostingApplicationStatusParam,
-  CompleteManagePostingParam,
   GetManagePostingApplicationParam,
   GetManagePostingDetailParam,
   GetManagePostingDetailQuery,
@@ -26,6 +27,7 @@ import type {
   ManagePostingFilter,
   ManagePostingStatusAction,
   ManagePostingStatus,
+  UpdateManagePostingActionParam,
 } from "./manage-posting.schema";
 
 type ManagePostingSourceType = "VOLUNTEER" | "PROJECT";
@@ -123,10 +125,25 @@ type ManagePostingApplicationUpdateResult =
   | "role_filled"
   | "applicant_already_approved"
   | ManagePostingApplicationDetail;
-type ManagePostingCompletionResult =
+type ManagePostingActionFailure =
   | "not_found"
   | "not_in_progress"
-  | ManagePostingItem;
+  | "cancel_not_allowed"
+  | "delete_not_allowed"
+  | "live_has_applicants";
+type ManagePostingActionResult = ManagePostingActionFailure | ManagePostingItem;
+type PostingLogAction = "CANCEL" | "DELETE" | "COMPLETE";
+type PostingActionDecision = {
+  action: PostingLogAction;
+  nextStatus: ManagePostingStatus;
+  deletedAt?: string;
+};
+
+const POSTING_ACTION_LOG_NAME: Record<PostingLogAction, string> = {
+  CANCEL: "Posting canceled",
+  DELETE: "Posting deleted",
+  COMPLETE: "Posting completed",
+};
 
 const POSTER_LOCKED_APPLICATION_STATUSES = new Set<ManagePostingApplicantStatus>(
   ["CONFIRMED", "DECLINED", "COMPLETED", "WITHDRAWN"],
@@ -157,12 +174,66 @@ function buildPosterStatusLogSequence(
   return [nextStatus];
 }
 
+function resolvePostingActionDecision(input: {
+  postingAction: UpdateManagePostingActionParam["postingAction"];
+  currentStatus: ManagePostingStatus;
+  applicantCount: number;
+}): PostingActionDecision | Exclude<ManagePostingActionFailure, "not_found"> {
+  const { postingAction, currentStatus, applicantCount } = input;
+
+  if (postingAction === "mark_complete") {
+    if (currentStatus !== "IN_PROGRESS") {
+      return "not_in_progress";
+    }
+
+    return {
+      action: "COMPLETE",
+      nextStatus: "COMPLETED",
+    };
+  }
+
+  if (postingAction === "cancel") {
+    if (currentStatus === "LIVE" && applicantCount === 0) {
+      return "cancel_not_allowed";
+    }
+
+    if (currentStatus !== "LIVE" && currentStatus !== "IN_PROGRESS") {
+      return "cancel_not_allowed";
+    }
+
+    return {
+      action: "CANCEL",
+      nextStatus: "CANCELED",
+    };
+  }
+
+  if (currentStatus === "LIVE" && applicantCount > 0) {
+    return "live_has_applicants";
+  }
+
+  if (currentStatus !== "DRAFT" && currentStatus !== "LIVE") {
+    return "delete_not_allowed";
+  }
+
+  return {
+    action: "DELETE",
+    nextStatus: "DELETED",
+    deletedAt: new Date().toISOString(),
+  };
+}
+
 type VolunteerPostingRow = {
   id: string;
   title: string;
   description: string | null;
   imageKey: string | null;
-  rawStatus: "DRAFT" | "LIVE" | "IN_PROGRESS" | "COMPLETED";
+  rawStatus:
+    | "DRAFT"
+    | "LIVE"
+    | "IN_PROGRESS"
+    | "COMPLETED"
+    | "CANCELED"
+    | "DELETED";
   filled: boolean;
   totalView: number;
   applicantCount: number;
@@ -176,7 +247,13 @@ type ProjectPostingRow = {
   title: string;
   description: string | null;
   imageKey: string | null;
-  rawStatus: "DRAFT" | "LIVE" | "IN_PROGRESS" | "COMPLETED";
+  rawStatus:
+    | "DRAFT"
+    | "LIVE"
+    | "IN_PROGRESS"
+    | "COMPLETED"
+    | "CANCELED"
+    | "DELETED";
   totalView: number;
   applicantCount: number;
   capacity: number;
@@ -527,14 +604,6 @@ function matchesFilter(
     return posting.filled;
   }
 
-  if (filter === "active") {
-    return posting.status === "LIVE";
-  }
-
-  if (filter === "closed") {
-    return posting.status === "IN_PROGRESS";
-  }
-
   return posting.status.toLowerCase() === filter;
 }
 
@@ -551,7 +620,13 @@ function matchesPostingTitleSearch(
 
 async function findVolunteerManagePostings(
   userId: string,
+  options: { includeDeleted?: boolean } = {},
 ): Promise<ManagePostingItem[]> {
+  const postingFilters = [eq(volunteerOpportunity.createdBy, userId)];
+  if (!options.includeDeleted) {
+    postingFilters.push(isNull(volunteerOpportunity.deletedAt));
+  }
+
   const applicantGroups = db
     .select({
       opportunityId: volunteerApplication.opportunityId,
@@ -606,7 +681,7 @@ async function findVolunteerManagePostings(
       roleCapacities,
       eq(roleCapacities.opportunityId, volunteerOpportunity.id),
     )
-    .where(eq(volunteerOpportunity.createdBy, userId))
+    .where(and(...postingFilters))
     .orderBy(desc(volunteerOpportunity.createdAt));
 
   return rows.map((row) => {
@@ -634,7 +709,13 @@ async function findVolunteerManagePostings(
 
 async function findProjectManagePostings(
   userId: string,
+  options: { includeDeleted?: boolean } = {},
 ): Promise<ManagePostingItem[]> {
+  const postingFilters = [eq(launchpad.createdBy, userId)];
+  if (!options.includeDeleted) {
+    postingFilters.push(isNull(launchpad.deletedAt));
+  }
+
   const applicantGroups = db
     .select({
       launchpadId: launchpadApplication.launchpadId,
@@ -713,7 +794,7 @@ async function findProjectManagePostings(
     )
     .leftJoin(roleCapacities, eq(roleCapacities.launchpadId, launchpad.id))
     .leftJoin(filledLaunchpads, eq(filledLaunchpads.launchpadId, launchpad.id))
-    .where(eq(launchpad.createdBy, userId))
+    .where(and(...postingFilters))
     .orderBy(desc(launchpad.createdAt));
 
   return rows.map((row) => {
@@ -1403,10 +1484,10 @@ async function updateProjectManagePostingApplication(
   return detail ?? "not_found";
 }
 
-async function completeVolunteerManagePosting(
+async function updateVolunteerManagePostingAction(
   userId: string,
-  params: CompleteManagePostingParam,
-): Promise<ManagePostingCompletionResult> {
+  params: UpdateManagePostingActionParam,
+): Promise<ManagePostingActionResult> {
   const result = await db.transaction(async (tx) => {
     const [current] = await tx
       .select({
@@ -1418,6 +1499,7 @@ async function completeVolunteerManagePosting(
         and(
           eq(volunteerOpportunity.id, params.postingId),
           eq(volunteerOpportunity.createdBy, userId),
+          isNull(volunteerOpportunity.deletedAt),
         ),
       )
       .for("update")
@@ -1430,21 +1512,64 @@ async function completeVolunteerManagePosting(
     const derivedStatus = derivePostingStatus({
       rawStatus: current.status,
     });
+    const [{ applicantCount }] = await tx
+      .select({
+        applicantCount: sql<number>`count(*)::int`,
+      })
+      .from(volunteerApplication)
+      .where(
+        and(
+          eq(volunteerApplication.opportunityId, params.postingId),
+          sql`${volunteerApplication.status} <> 'WITHDRAWN'`,
+        ),
+      );
 
-    if (derivedStatus !== "IN_PROGRESS") {
-      return "not_in_progress" as const;
+    const normalizedApplicantCount = toInteger(applicantCount);
+    const decision = resolvePostingActionDecision({
+      postingAction: params.postingAction,
+      currentStatus: derivedStatus,
+      applicantCount: normalizedApplicantCount,
+    });
+
+    if (typeof decision === "string") {
+      return decision;
     }
 
     const [updated] = await tx
       .update(volunteerOpportunity)
-      .set({ status: "COMPLETED", updatedAt: sql`now()` })
+      .set({
+        status: decision.nextStatus,
+        ...(decision.deletedAt ? { deletedAt: decision.deletedAt } : {}),
+        updatedAt: sql`now()`,
+      })
       .where(
         and(
           eq(volunteerOpportunity.id, params.postingId),
           eq(volunteerOpportunity.status, current.status),
+          isNull(volunteerOpportunity.deletedAt),
         ),
       )
       .returning({ id: volunteerOpportunity.id });
+
+    if (!updated) {
+      return "not_found" as const;
+    }
+
+    await tx.insert(volunteerOpportunityActionLog).values({
+      opportunityId: params.postingId,
+      name: POSTING_ACTION_LOG_NAME[decision.action],
+      description: `Workspace posting ${decision.action.toLowerCase()} action`,
+      fromData: {
+        status: derivedStatus,
+        deletedAt: null,
+      },
+      toData: {
+        status: decision.nextStatus,
+        deletedAt: decision.deletedAt ?? null,
+      },
+      status: decision.nextStatus,
+      createdBy: userId,
+    });
 
     return updated ? ("updated" as const) : ("not_found" as const);
   });
@@ -1454,17 +1579,21 @@ async function completeVolunteerManagePosting(
   }
 
   const posting =
-    (await findVolunteerManagePostings(userId)).find(
+    (
+      await findVolunteerManagePostings(userId, {
+        includeDeleted: params.postingAction === "delete",
+      })
+    ).find(
       (item) => item.id === params.postingId,
     ) ?? null;
 
   return posting ?? "not_found";
 }
 
-async function completeProjectManagePosting(
+async function updateProjectManagePostingAction(
   userId: string,
-  params: CompleteManagePostingParam,
-): Promise<ManagePostingCompletionResult> {
+  params: UpdateManagePostingActionParam,
+): Promise<ManagePostingActionResult> {
   const result = await db.transaction(async (tx) => {
     const [current] = await tx
       .select({
@@ -1473,7 +1602,11 @@ async function completeProjectManagePosting(
       })
       .from(launchpad)
       .where(
-        and(eq(launchpad.id, params.postingId), eq(launchpad.createdBy, userId)),
+        and(
+          eq(launchpad.id, params.postingId),
+          eq(launchpad.createdBy, userId),
+          isNull(launchpad.deletedAt),
+        ),
       )
       .for("update")
       .limit(1);
@@ -1485,21 +1618,64 @@ async function completeProjectManagePosting(
     const derivedStatus = derivePostingStatus({
       rawStatus: current.status,
     });
+    const [{ applicantCount }] = await tx
+      .select({
+        applicantCount: sql<number>`count(*)::int`,
+      })
+      .from(launchpadApplication)
+      .where(
+        and(
+          eq(launchpadApplication.launchpadId, params.postingId),
+          sql`${launchpadApplication.status} <> 'WITHDRAWN'`,
+        ),
+      );
 
-    if (derivedStatus !== "IN_PROGRESS") {
-      return "not_in_progress" as const;
+    const normalizedApplicantCount = toInteger(applicantCount);
+    const decision = resolvePostingActionDecision({
+      postingAction: params.postingAction,
+      currentStatus: derivedStatus,
+      applicantCount: normalizedApplicantCount,
+    });
+
+    if (typeof decision === "string") {
+      return decision;
     }
 
     const [updated] = await tx
       .update(launchpad)
-      .set({ status: "COMPLETED", updatedAt: sql`now()` })
+      .set({
+        status: decision.nextStatus,
+        ...(decision.deletedAt ? { deletedAt: decision.deletedAt } : {}),
+        updatedAt: sql`now()`,
+      })
       .where(
         and(
           eq(launchpad.id, params.postingId),
           eq(launchpad.status, current.status),
+          isNull(launchpad.deletedAt),
         ),
       )
       .returning({ id: launchpad.id });
+
+    if (!updated) {
+      return "not_found" as const;
+    }
+
+    await tx.insert(launchpadActionLog).values({
+      launchpadId: params.postingId,
+      name: POSTING_ACTION_LOG_NAME[decision.action],
+      description: `Workspace posting ${decision.action.toLowerCase()} action`,
+      fromData: {
+        status: derivedStatus,
+        deletedAt: null,
+      },
+      toData: {
+        status: decision.nextStatus,
+        deletedAt: decision.deletedAt ?? null,
+      },
+      status: decision.nextStatus,
+      createdBy: userId,
+    });
 
     return updated ? ("updated" as const) : ("not_found" as const);
   });
@@ -1509,22 +1685,26 @@ async function completeProjectManagePosting(
   }
 
   const posting =
-    (await findProjectManagePostings(userId)).find(
+    (
+      await findProjectManagePostings(userId, {
+        includeDeleted: params.postingAction === "delete",
+      })
+    ).find(
       (item) => item.id === params.postingId,
     ) ?? null;
 
   return posting ?? "not_found";
 }
 
-export async function completeManagePosting(
+export async function updateManagePostingAction(
   userId: string,
-  params: CompleteManagePostingParam,
-): Promise<ManagePostingCompletionResult> {
+  params: UpdateManagePostingActionParam,
+): Promise<ManagePostingActionResult> {
   if (params.sourceType === "volunteer") {
-    return completeVolunteerManagePosting(userId, params);
+    return updateVolunteerManagePostingAction(userId, params);
   }
 
-  return completeProjectManagePosting(userId, params);
+  return updateProjectManagePostingAction(userId, params);
 }
 
 export async function updateManagePostingApplication(

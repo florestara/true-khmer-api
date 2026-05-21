@@ -8,6 +8,7 @@ import {
   ilike,
   inArray,
   isNotNull,
+  isNull,
   lt,
   or,
   sql,
@@ -26,6 +27,7 @@ import {
   volunteerApplicationLog,
   volunteerCategory,
   volunteerOpportunity,
+  volunteerOpportunityActionLog,
   volunteerOpportunitySave,
   volunteerRole,
   volunteerRoleRequirement,
@@ -327,6 +329,7 @@ export async function getVolunteerCategories(): Promise<
     .where(
       and(
         eq(volunteerOpportunity.status, "LIVE"),
+        isNull(volunteerOpportunity.deletedAt),
         isNotNull(volunteerOpportunity.publishedAt),
       ),
     )
@@ -821,6 +824,7 @@ function buildVolunteerOpportunitiesWhereClause({
 >) {
   const filters: SQL<unknown>[] = [
     eq(volunteerOpportunity.status, "LIVE"),
+    isNull(volunteerOpportunity.deletedAt),
     eq(volunteerCategory.status, "ACTIVE"),
     eq(city.isActive, true),
     isNotNull(volunteerOpportunity.publishedAt),
@@ -1264,6 +1268,7 @@ async function getVolunteerOrganizersByUserIds(
       and(
         inArray(volunteerOpportunity.createdBy, uniqueUserIds),
         eq(volunteerOpportunity.status, "LIVE"),
+        isNull(volunteerOpportunity.deletedAt),
         isNotNull(volunteerOpportunity.publishedAt),
       ),
     )
@@ -1424,6 +1429,7 @@ export async function getSavedVolunteerOpportunities(
   const filters: SQL<unknown>[] = [
     eq(volunteerOpportunitySaveList.saverId, userId),
     eq(volunteerOpportunity.status, "LIVE"),
+    isNull(volunteerOpportunity.deletedAt),
     eq(volunteerCategory.status, "ACTIVE"),
     eq(city.isActive, true),
     eq(country.isActive, true),
@@ -1483,6 +1489,7 @@ export async function getSavedVolunteerOpportunities(
       and(
         eq(volunteerOpportunitySaveList.saverId, userId),
         eq(volunteerOpportunity.status, "LIVE"),
+        isNull(volunteerOpportunity.deletedAt),
         eq(volunteerCategory.status, "ACTIVE"),
         eq(city.isActive, true),
         eq(country.isActive, true),
@@ -1555,6 +1562,7 @@ export async function getVolunteerOpportunityById(
       and(
         eq(volunteerOpportunity.id, opportunityId),
         eq(volunteerOpportunity.status, "LIVE"),
+        isNull(volunteerOpportunity.deletedAt),
         eq(volunteerCategory.status, "ACTIVE"),
         eq(city.isActive, true),
         eq(country.isActive, true),
@@ -1828,6 +1836,95 @@ async function syncVolunteerOpportunityFilled(
     .where(eq(volunteerOpportunity.id, opportunityId));
 }
 
+type VolunteerOpportunityPatchLogData = Record<string, unknown>;
+
+type VolunteerOpportunityRoleLogData = {
+  id: string;
+  title: string;
+  commitmentLabel: string;
+  capacity: number;
+  responsibilities: string[];
+  requirements: string[];
+  displayOrder: number;
+};
+
+async function getVolunteerOpportunityRoleLogData(
+  tx: VolunteerTransaction,
+  opportunityId: string,
+): Promise<VolunteerOpportunityRoleLogData[]> {
+  const roles = await tx
+    .select({
+      id: volunteerRole.id,
+      title: volunteerRole.title,
+      commitmentLabel: volunteerRole.commitmentLabel,
+      capacity: volunteerRole.capacity,
+      responsibilities: volunteerRole.responsibilities,
+      displayOrder: volunteerRole.displayOrder,
+    })
+    .from(volunteerRole)
+    .where(eq(volunteerRole.opportunityId, opportunityId))
+    .orderBy(
+      asc(volunteerRole.displayOrder),
+      asc(volunteerRole.createdAt),
+      asc(volunteerRole.id),
+    );
+
+  const roleIds = roles.map((role) => role.id);
+  const requirements =
+    roleIds.length === 0
+      ? []
+      : await tx
+          .select({
+            roleId: volunteerRoleRequirement.roleId,
+            requirementText: volunteerRoleRequirement.requirementText,
+          })
+          .from(volunteerRoleRequirement)
+          .where(inArray(volunteerRoleRequirement.roleId, roleIds))
+          .orderBy(
+            asc(volunteerRoleRequirement.displayOrder),
+            asc(volunteerRoleRequirement.createdAt),
+            asc(volunteerRoleRequirement.id),
+          );
+
+  const requirementsByRoleId = new Map<string, string[]>();
+  for (const requirement of requirements) {
+    const roleRequirements = requirementsByRoleId.get(requirement.roleId);
+    if (!roleRequirements) {
+      requirementsByRoleId.set(requirement.roleId, [
+        requirement.requirementText,
+      ]);
+      continue;
+    }
+
+    roleRequirements.push(requirement.requirementText);
+  }
+
+  return roles.map((role) => ({
+    id: role.id,
+    title: role.title,
+    commitmentLabel: role.commitmentLabel,
+    capacity: role.capacity,
+    responsibilities: role.responsibilities as string[],
+    requirements: requirementsByRoleId.get(role.id) ?? [],
+    displayOrder: role.displayOrder,
+  }));
+}
+
+function addVolunteerOpportunityPatchLogValue(
+  fromData: VolunteerOpportunityPatchLogData,
+  toData: VolunteerOpportunityPatchLogData,
+  key: string,
+  beforeValue: unknown,
+  afterValue: unknown,
+) {
+  if (JSON.stringify(beforeValue) === JSON.stringify(afterValue)) {
+    return;
+  }
+
+  fromData[key] = beforeValue;
+  toData[key] = afterValue;
+}
+
 export async function updateVolunteerOpportunity(
   opportunityId: string,
   ownerId: string,
@@ -1837,8 +1934,23 @@ export async function updateVolunteerOpportunity(
     const [existingOpportunity] = await tx
       .select({
         id: volunteerOpportunity.id,
+        categoryId: volunteerOpportunity.categoryId,
+        cityId: volunteerOpportunity.cityId,
+        title: volunteerOpportunity.title,
+        overview: volunteerOpportunity.overview,
+        communityImpact: volunteerOpportunity.communityImpact,
         startDate: volunteerOpportunity.startDate,
         endDate: volunteerOpportunity.endDate,
+        commitmentLabel: volunteerOpportunity.commitmentLabel,
+        commitmentDescription: volunteerOpportunity.commitmentDescription,
+        applicationDeadline: volunteerOpportunity.applicationDeadline,
+        coverImageKey: volunteerOpportunity.coverImageKey,
+        benefits: volunteerOpportunity.benefits,
+        status: volunteerOpportunity.status,
+        contactEmail: volunteerOpportunity.contactEmail,
+        contactTelegramUsername: volunteerOpportunity.contactTelegramUsername,
+        contactPhone: volunteerOpportunity.contactPhone,
+        contactWebsiteUrl: volunteerOpportunity.contactWebsiteUrl,
       })
       .from(volunteerOpportunity)
       .where(
@@ -1853,6 +1965,11 @@ export async function updateVolunteerOpportunity(
     if (!existingOpportunity) {
       return false;
     }
+
+    const beforeRoles =
+      data.roles !== undefined
+        ? await getVolunteerOpportunityRoleLogData(tx, opportunityId)
+        : null;
 
     const nextStartDate =
       data.startDate !== undefined
@@ -1932,6 +2049,113 @@ export async function updateVolunteerOpportunity(
     if (data.roles !== undefined) {
       await updateVolunteerOpportunityRoles(tx, opportunityId, data.roles);
       await syncVolunteerOpportunityFilled(tx, opportunityId, data.updatedBy);
+    }
+
+    const fromData: VolunteerOpportunityPatchLogData = {};
+    const toData: VolunteerOpportunityPatchLogData = {};
+
+    addVolunteerOpportunityPatchLogValue(
+      fromData,
+      toData,
+      "categoryId",
+      existingOpportunity.categoryId,
+      data.categoryId ?? existingOpportunity.categoryId,
+    );
+    addVolunteerOpportunityPatchLogValue(
+      fromData,
+      toData,
+      "locationId",
+      existingOpportunity.cityId,
+      data.locationId ?? existingOpportunity.cityId,
+    );
+
+    const patchableOpportunityFields = [
+      "title",
+      "overview",
+      "communityImpact",
+      "startDate",
+      "endDate",
+      "commitmentLabel",
+      "commitmentDescription",
+      "applicationDeadline",
+      "coverImageKey",
+      "benefits",
+    ] as const;
+
+    for (const field of patchableOpportunityFields) {
+      if (data[field] === undefined) {
+        continue;
+      }
+
+      addVolunteerOpportunityPatchLogValue(
+        fromData,
+        toData,
+        field,
+        existingOpportunity[field],
+        data[field],
+      );
+    }
+
+    if (data.contact !== undefined) {
+      const beforeContact = {
+        email: existingOpportunity.contactEmail,
+        telegramUsername: existingOpportunity.contactTelegramUsername,
+        phone: existingOpportunity.contactPhone,
+        websiteUrl: existingOpportunity.contactWebsiteUrl,
+      };
+      const afterContact = {
+        email:
+          data.contact.email !== undefined
+            ? data.contact.email
+            : existingOpportunity.contactEmail,
+        telegramUsername:
+          data.contact.telegramUsername !== undefined
+            ? data.contact.telegramUsername
+            : existingOpportunity.contactTelegramUsername,
+        phone:
+          data.contact.phone !== undefined
+            ? data.contact.phone
+            : existingOpportunity.contactPhone,
+        websiteUrl:
+          data.contact.websiteUrl !== undefined
+            ? data.contact.websiteUrl
+            : existingOpportunity.contactWebsiteUrl,
+      };
+
+      addVolunteerOpportunityPatchLogValue(
+        fromData,
+        toData,
+        "contact",
+        beforeContact,
+        afterContact,
+      );
+    }
+
+    if (beforeRoles) {
+      const afterRoles = await getVolunteerOpportunityRoleLogData(
+        tx,
+        opportunityId,
+      );
+
+      addVolunteerOpportunityPatchLogValue(
+        fromData,
+        toData,
+        "roles",
+        beforeRoles,
+        afterRoles,
+      );
+    }
+
+    if (Object.keys(toData).length > 0) {
+      await tx.insert(volunteerOpportunityActionLog).values({
+        opportunityId,
+        name: "Volunteer opportunity updated",
+        description: `Updated ${Object.keys(toData).join(", ")}`,
+        fromData,
+        toData,
+        status: existingOpportunity.status,
+        createdBy: data.updatedBy,
+      });
     }
 
     return true;
@@ -2236,6 +2460,7 @@ export async function saveVolunteerOpportunityForUser(
         and(
           eq(volunteerOpportunity.id, opportunityId),
           eq(volunteerOpportunity.status, "LIVE"),
+          isNull(volunteerOpportunity.deletedAt),
           eq(volunteerCategory.status, "ACTIVE"),
           eq(city.isActive, true),
           eq(country.isActive, true),

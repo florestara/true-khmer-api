@@ -83,6 +83,7 @@ const volunteerOpportunityStatusResponseSchema = z.enum([
   "LIVE",
   "IN_PROGRESS",
   "COMPLETED",
+  "CANCELED",
 ]);
 
 const volunteerApplicationOpportunitySchema = z
