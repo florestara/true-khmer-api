@@ -55,7 +55,6 @@ const volunteerOpportunityRoleResponseSchema = z
   .object({
     id: z.string(),
     title: z.string(),
-    commitmentLabel: z.string(),
     capacity: z.number(),
     responsibilities: z.array(z.string()),
     requirements: z.array(z.string()),
