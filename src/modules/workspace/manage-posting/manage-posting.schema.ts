@@ -45,9 +45,9 @@ export const getManagePostingsQuerySchema = z
   })
   .openapi("GetManagePostingsQuery");
 
-export const managePostingApplicantRangeSchema = z
-  .enum(["today", "this_week", "all_time"])
-  .openapi("ManagePostingApplicantRange");
+export const managePostingApplicantFilterSchema = z
+  .enum(["all", "new", "in_review", "approved", "confirmed", "declined"])
+  .openapi("ManagePostingApplicantFilter");
 
 export const getManagePostingDetailParamSchema = z
   .object({
@@ -86,7 +86,7 @@ export const changeManagePostingApplicationStatusParamSchema =
 
 export const getManagePostingDetailQuerySchema = z
   .object({
-    range: managePostingApplicantRangeSchema.default("all_time"),
+    filter: managePostingApplicantFilterSchema.default("all"),
     search: z
       .string()
       .trim()
@@ -306,6 +306,9 @@ export type GetManagePostingDetailQuery = z.infer<
   typeof getManagePostingDetailQuerySchema
 >;
 export type ManagePostingFilter = z.infer<typeof managePostingFilterSchema>;
+export type ManagePostingApplicantFilter = z.infer<
+  typeof managePostingApplicantFilterSchema
+>;
 export type ManagePostingStatus = z.infer<typeof managePostingStatusSchema>;
 export type ManagePostingStatusAction = z.infer<
   typeof managePostingStatusActionSchema

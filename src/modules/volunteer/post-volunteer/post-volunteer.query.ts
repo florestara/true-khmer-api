@@ -60,6 +60,7 @@ const ACTIVE_VOLUNTEER_APPLICATION_STATUSES = [
   "CONFIRMED",
   "COMPLETED",
 ] as const;
+const DEFAULT_VOLUNTEER_ROLE_COMMITMENT_LABEL = "Regular";
 
 type VolunteerCategoryRow = typeof volunteerCategory.$inferSelect;
 type VolunteerCategoryInsert = typeof volunteerCategory.$inferInsert;
@@ -86,7 +87,6 @@ type HydratedVolunteerRole = Pick<
   VolunteerRoleRow,
   | "id"
   | "title"
-  | "commitmentLabel"
   | "capacity"
   | "responsibilities"
   | "displayOrder"
@@ -189,7 +189,6 @@ export type VolunteerOpportunityDetail = {
   roles: Array<{
     id: string;
     title: string;
-    commitmentLabel: string;
     capacity: number;
     responsibilities: string[];
     requirements: string[];
@@ -780,7 +779,6 @@ function hydrateVolunteerOpportunityDetail(
     roles: roles.map((role) => ({
       id: role.id,
       title: role.title,
-      commitmentLabel: role.commitmentLabel,
       capacity: role.capacity,
       responsibilities: role.responsibilities as string[],
       requirements: (requirementsByRoleId.get(role.id) ?? []).map(
@@ -863,7 +861,6 @@ function buildVolunteerOpportunitiesWhereClause({
               eq(volunteerRoleSearch.opportunityId, volunteerOpportunity.id),
               or(
                 ilike(volunteerRoleSearch.title, searchPattern),
-                ilike(volunteerRoleSearch.commitmentLabel, searchPattern),
                 buildJsonbTextSearch(
                   volunteerRoleSearch.responsibilities,
                   searchPattern,
@@ -1696,6 +1693,7 @@ async function updateVolunteerOpportunityRoles(
   tx: VolunteerTransaction,
   opportunityId: string,
   roles: NonNullable<UpdateVolunteerOpportunityInput["roles"]>,
+  roleCommitmentLabel: string,
 ) {
   const existingRoles = await tx
     .select({
@@ -1759,7 +1757,7 @@ async function updateVolunteerOpportunityRoles(
         .update(volunteerRole)
         .set({
           title: roleInput.title,
-          commitmentLabel: roleInput.commitmentLabel,
+          commitmentLabel: roleCommitmentLabel,
           capacity: roleInput.capacity,
           responsibilities: roleInput.responsibilities,
           displayOrder: roleIndex,
@@ -1785,7 +1783,7 @@ async function updateVolunteerOpportunityRoles(
       .values({
         opportunityId,
         title: roleInput.title,
-        commitmentLabel: roleInput.commitmentLabel,
+        commitmentLabel: roleCommitmentLabel,
         capacity: roleInput.capacity,
         responsibilities: roleInput.responsibilities,
         displayOrder: roleIndex,
@@ -1841,7 +1839,6 @@ type VolunteerOpportunityPatchLogData = Record<string, unknown>;
 type VolunteerOpportunityRoleLogData = {
   id: string;
   title: string;
-  commitmentLabel: string;
   capacity: number;
   responsibilities: string[];
   requirements: string[];
@@ -1856,7 +1853,6 @@ async function getVolunteerOpportunityRoleLogData(
     .select({
       id: volunteerRole.id,
       title: volunteerRole.title,
-      commitmentLabel: volunteerRole.commitmentLabel,
       capacity: volunteerRole.capacity,
       responsibilities: volunteerRole.responsibilities,
       displayOrder: volunteerRole.displayOrder,
@@ -1902,7 +1898,6 @@ async function getVolunteerOpportunityRoleLogData(
   return roles.map((role) => ({
     id: role.id,
     title: role.title,
-    commitmentLabel: role.commitmentLabel,
     capacity: role.capacity,
     responsibilities: role.responsibilities as string[],
     requirements: requirementsByRoleId.get(role.id) ?? [],
@@ -2047,7 +2042,14 @@ export async function updateVolunteerOpportunity(
     }
 
     if (data.roles !== undefined) {
-      await updateVolunteerOpportunityRoles(tx, opportunityId, data.roles);
+      await updateVolunteerOpportunityRoles(
+        tx,
+        opportunityId,
+        data.roles,
+        data.commitmentLabel ??
+          existingOpportunity.commitmentLabel ??
+          DEFAULT_VOLUNTEER_ROLE_COMMITMENT_LABEL,
+      );
       await syncVolunteerOpportunityFilled(tx, opportunityId, data.updatedBy);
     }
 
@@ -2200,6 +2202,8 @@ export async function createVolunteerOpportunity(
     const createdRoles: Array<
       Omit<VolunteerOpportunityDetail["roles"][number], "viewerApplied">
     > = [];
+    const roleCommitmentLabel =
+      data.commitmentLabel ?? DEFAULT_VOLUNTEER_ROLE_COMMITMENT_LABEL;
 
     for (const [roleIndex, roleInput] of data.roles.entries()) {
       const [newRole] = await tx
@@ -2207,7 +2211,7 @@ export async function createVolunteerOpportunity(
         .values({
           opportunityId: newOpportunity.id,
           title: roleInput.title,
-          commitmentLabel: roleInput.commitmentLabel,
+          commitmentLabel: roleCommitmentLabel,
           capacity: roleInput.capacity,
           responsibilities: roleInput.responsibilities,
           displayOrder: roleIndex,
@@ -2231,7 +2235,6 @@ export async function createVolunteerOpportunity(
       createdRoles.push({
         id: newRole.id,
         title: newRole.title,
-        commitmentLabel: newRole.commitmentLabel,
         capacity: newRole.capacity,
         responsibilities: newRole.responsibilities as string[],
         requirements: insertedRequirements
@@ -2257,7 +2260,6 @@ export async function createVolunteerOpportunity(
       createdRoles.map((role) => ({
         id: role.id,
         title: role.title,
-        commitmentLabel: role.commitmentLabel,
         capacity: role.capacity,
         responsibilities: role.responsibilities,
         displayOrder: role.displayOrder,

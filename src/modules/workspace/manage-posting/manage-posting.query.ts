@@ -24,6 +24,7 @@ import type {
   GetManagePostingDetailParam,
   GetManagePostingDetailQuery,
   GetManagePostingsQuery,
+  ManagePostingApplicantFilter,
   ManagePostingFilter,
   ManagePostingStatusAction,
   ManagePostingStatus,
@@ -554,24 +555,28 @@ function buildProjectManagePostingApplicants(
   }));
 }
 
-function matchesAppliedRange(
-  range: GetManagePostingDetailQuery["range"],
-  appliedAt: string,
+function matchesApplicantStatusFilter(
+  filter: ManagePostingApplicantFilter,
+  applicantStatus: ManagePostingApplicantStatus,
 ): boolean {
-  if (range === "all_time") {
-    return true;
+  switch (filter) {
+    case "all":
+      return true;
+    case "new":
+      return applicantStatus === "SUBMITTED";
+    case "in_review":
+      return applicantStatus === "UNDER_REVIEW";
+    case "approved":
+      return applicantStatus === "APPROVED";
+    case "confirmed":
+      return applicantStatus === "CONFIRMED";
+    case "declined":
+      return applicantStatus === "DECLINED";
+    default: {
+      const exhaustiveFilter: never = filter;
+      return exhaustiveFilter;
+    }
   }
-
-  const now = new Date();
-  const start = new Date(now);
-
-  if (range === "today") {
-    start.setHours(0, 0, 0, 0);
-  } else {
-    start.setDate(start.getDate() - 7);
-  }
-
-  return Date.parse(appliedAt) >= start.getTime();
 }
 
 function matchesApplicantSearch(
@@ -946,7 +951,7 @@ function buildManagePostingDetail(
   const statuses = buildApplicantStatusCounts(statsStatuses);
   const filteredApplicants = applicants.filter(
     (applicant) =>
-      matchesAppliedRange(query.range, applicant.appliedAt) &&
+      matchesApplicantStatusFilter(query.filter, applicant.status) &&
       matchesApplicantSearch(query.search, applicant),
   );
   const { pageRows, pagination } = buildPagePagination({

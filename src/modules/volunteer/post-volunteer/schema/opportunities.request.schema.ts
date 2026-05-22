@@ -260,13 +260,6 @@ const volunteerOpportunityRoleSchema = z
           .min(1, "roles[].title is required and must be 1..255 characters")
           .max(255, "roles[].title is required and must be 1..255 characters"),
       ),
-    commitmentLabel: z
-      .string()
-      .transform((value) => normalizeText(value))
-      .refine(
-        (value) => isVolunteerCommitmentLabel(value),
-        `roles[].commitmentLabel must be one of: ${VOLUNTEER_COMMITMENT_LABELS.join(", ")}`,
-      ),
     capacity: z
       .number()
       .int("roles[].capacity must be an integer")
