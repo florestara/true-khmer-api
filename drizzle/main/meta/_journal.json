@@ -337,6 +337,13 @@
       "when": 1779423690408,
       "tag": "0047_famous_overlord",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1779450991627,
+      "tag": "0048_strange_captain_midlands",
+      "breakpoints": true
     }
   ]
 }

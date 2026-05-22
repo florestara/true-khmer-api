@@ -10,20 +10,23 @@ import { notificationEmitter } from "./notifications.query";
 import { authProtectedErrorResponseSchema } from "../auth/auth.schema";
 import {
   broadcastSchema,
-  errorResponseSchema,
   listNotificationsQuerySchema,
-  listNotificationsResponseSchema,
+  markAllReadQuerySchema,
   markReadSchema,
   registerTokenSchema,
-  sendResponseSchema,
   sendToUserSchema,
-  tokenResponseSchema,
   unregisterTokenSchema,
-} from "./notifications.schema";
+} from "./schema/notifications.request.schema";
+import {
+  errorResponseSchema,
+  listNotificationsResponseSchema,
+  sendResponseSchema,
+  tokenResponseSchema,
+} from "./schema/notifications.response.schema";
 import {
   handleBroadcast,
-  handleCountUnread,
   handleListNotifications,
+  handleMarkAllRead,
   handleMarkRead,
   handleRegisterToken,
   handleSendToUser,
@@ -206,38 +209,6 @@ notificationsRouter.openapi(listNotificationsRoute, async (c) => {
   return (await handleListNotifications(c, query)) as any;
 });
 
-const unreadCountRoute = createRoute({
-  method: "get",
-  path: "/unread-count",
-  tags: ["Notifications"],
-  middleware: [requireAccessToken],
-  security: [{ BearerAuth: [] }],
-  responses: {
-    200: {
-      description: "Unread notification count",
-      content: {
-        "application/json": {
-          schema: z.object({ ok: z.literal(true), unreadCount: z.number() }),
-        },
-      },
-    },
-    401: {
-      description: "Unauthorized",
-      content: {
-        "application/json": { schema: authProtectedErrorResponseSchema },
-      },
-    },
-    500: {
-      description: "Internal server error",
-      content: { "application/json": { schema: errorResponseSchema } },
-    },
-  },
-});
-
-notificationsRouter.openapi(unreadCountRoute, async (c) => {
-  return (await handleCountUnread(c)) as any;
-});
-
 const markReadRoute = createRoute({
   method: "patch",
   path: "/read",
@@ -271,6 +242,38 @@ const markReadRoute = createRoute({
 notificationsRouter.openapi(markReadRoute, async (c) => {
   const payload = c.req.valid("json");
   return (await handleMarkRead(c, payload)) as any;
+});
+
+const markAllReadRoute = createRoute({
+  method: "patch",
+  path: "/read/all",
+  tags: ["Notifications"],
+  middleware: [requireAccessToken],
+  security: [{ BearerAuth: [] }],
+  request: {
+    query: markAllReadQuerySchema,
+  },
+  responses: {
+    200: {
+      description: "All notifications marked as read",
+      content: { "application/json": { schema: tokenResponseSchema } },
+    },
+    401: {
+      description: "Unauthorized",
+      content: {
+        "application/json": { schema: authProtectedErrorResponseSchema },
+      },
+    },
+    500: {
+      description: "Internal server error",
+      content: { "application/json": { schema: errorResponseSchema } },
+    },
+  },
+});
+
+notificationsRouter.openapi(markAllReadRoute, async (c) => {
+  const query = c.req.valid("query");
+  return (await handleMarkAllRead(c, query)) as any;
 });
 
 notificationsRouter.get("/stream", requireAccessToken, (c) => {

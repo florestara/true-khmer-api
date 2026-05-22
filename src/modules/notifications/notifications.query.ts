@@ -6,7 +6,9 @@ import { and, count, eq, inArray, sql } from "drizzle-orm";
 import type {
   FcmTokenPlatform,
   ListNotificationsQuery,
-} from "./notifications.schema";
+  NotificationType,
+} from "./schema/notifications.request.schema";
+import { NOTIFICATION_ICON_MAP } from "./schema/notifications.request.schema";
 
 export const notificationEmitter = new EventEmitter();
 notificationEmitter.setMaxListeners(0);
@@ -75,8 +77,13 @@ export async function createNotification(opts: {
   title: string;
   body: string;
   imageUrl?: string;
+  type?: NotificationType;
   data?: Record<string, string>;
+  archived?: boolean;
+  webRoute?: string;
+  mobileRoute?: string;
 }) {
+  const type = opts.type ?? "system";
   const [row] = await db
     .insert(notification)
     .values({
@@ -84,7 +91,11 @@ export async function createNotification(opts: {
       title: opts.title,
       body: opts.body,
       imageUrl: opts.imageUrl ?? null,
+      type,
       data: opts.data ?? null,
+      archived: opts.archived ?? false,
+      webRoute: opts.webRoute ?? null,
+      mobileRoute: opts.mobileRoute ?? null,
     })
     .returning();
 
@@ -99,8 +110,13 @@ export async function createNotificationsForAllUsers(opts: {
   title: string;
   body: string;
   imageUrl?: string;
+  type?: NotificationType;
   data?: Record<string, string>;
+  archived?: boolean;
+  webRoute?: string;
+  mobileRoute?: string;
 }) {
+  const type = opts.type ?? "system";
   const { user } = await import("../../db/schema/user");
   const users = await db.select({ id: user.id }).from(user);
   if (users.length === 0) return;
@@ -115,7 +131,11 @@ export async function createNotificationsForAllUsers(opts: {
           title: opts.title,
           body: opts.body,
           imageUrl: opts.imageUrl ?? null,
+          type,
           data: opts.data ?? null,
+          archived: opts.archived ?? false,
+          webRoute: opts.webRoute ?? null,
+          mobileRoute: opts.mobileRoute ?? null,
         })),
       )
       .returning();
@@ -134,9 +154,16 @@ export async function listNotificationsForUser(
 ) {
   const offset = (query.page - 1) * query.limit;
 
+  // Ensure unreadOnly is properly handled as a boolean
+  const unreadOnly = query.unreadOnly === true;
+
   const whereClause = and(
     eq(notification.userId, userId),
-    query.unreadOnly ? eq(notification.isRead, false) : undefined,
+    unreadOnly ? eq(notification.isRead, false) : undefined,
+    query.type ? eq(notification.type, query.type) : undefined,
+    query.archived !== undefined
+      ? eq(notification.archived, query.archived)
+      : undefined,
   );
 
   const rows = await db
@@ -172,13 +199,40 @@ export async function markNotificationsRead(
     );
 }
 
-export async function countUnreadForUser(userId: string): Promise<number> {
-  const [{ value }] = await db
-    .select({ value: count() })
-    .from(notification)
-    .where(
-      and(eq(notification.userId, userId), eq(notification.isRead, false)),
-    );
+export async function markAllNotificationsRead(
+  userId: string,
+  opts: { archived?: boolean; type?: string } = {},
+) {
+  const whereClause = and(
+    eq(notification.userId, userId),
+    opts.archived !== undefined
+      ? eq(notification.archived, opts.archived)
+      : undefined,
+    opts.type ? eq(notification.type, opts.type) : undefined,
+    eq(notification.isRead, false), // only unread
+  );
 
-  return value;
+  await db
+    .update(notification)
+    .set({ isRead: true, readAt: new Date() })
+    .where(whereClause);
+}
+
+export async function countUnreadByTypeForUser(
+  userId: string,
+): Promise<Record<string, number>> {
+  const rows = await db
+    .select({
+      type: notification.type,
+      count: count(),
+    })
+    .from(notification)
+    .where(and(eq(notification.userId, userId), eq(notification.isRead, false)))
+    .groupBy(notification.type);
+
+  const result: Record<string, number> = {};
+  for (const row of rows) {
+    result[row.type] = Number(row.count);
+  }
+  return result;
 }
