@@ -310,6 +310,15 @@ function toInteger(value: unknown, fallback = 0): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function toIsoDateTimeString(value: string): string {
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : value;
+}
+
+function toNullableIsoDateTimeString(value: string | null): string | null {
+  return value === null ? null : toIsoDateTimeString(value);
+}
+
 function resolveVolunteerOpportunityStatus(
   status: VolunteerOpportunityStatus,
 ): VolunteerOpportunityStatus {
@@ -648,17 +657,19 @@ function hydrateVolunteerOpportunityListItem(
     id: row.opportunity.id,
     title: row.opportunity.title,
     overview: row.opportunity.overview,
-    startDate: row.opportunity.startDate,
-    endDate: row.opportunity.endDate,
+    startDate: toNullableIsoDateTimeString(row.opportunity.startDate),
+    endDate: toNullableIsoDateTimeString(row.opportunity.endDate),
     commitmentLabel: row.opportunity.commitmentLabel,
     commitmentDescription: row.opportunity.commitmentDescription,
-    applicationDeadline: row.opportunity.applicationDeadline,
+    applicationDeadline: toIsoDateTimeString(
+      row.opportunity.applicationDeadline,
+    ),
     applicationCount: toInteger(row.applicationCount),
     capacity: toInteger(row.capacity),
     filled: row.opportunity.filled,
     totalView: toInteger(row.opportunity.totalView),
     coverImageKey: row.opportunity.coverImageKey,
-    createdAt: row.opportunity.createdAt,
+    createdAt: toIsoDateTimeString(row.opportunity.createdAt),
     viewerSave: row.viewerSave,
     category: row.category,
     location: row.location,
@@ -683,6 +694,9 @@ function hydrateVolunteerApplication(
     id: application.id,
     opportunity: {
       ...opportunity,
+      applicationDeadline: toIsoDateTimeString(
+        opportunity.applicationDeadline,
+      ),
       status: resolveVolunteerOpportunityStatus(
         opportunity.status,
       ),
@@ -697,8 +711,8 @@ function hydrateVolunteerApplication(
       application.supportingDocuments as VolunteerSupportingDocument[],
     status: application.status,
     archived: application.archived,
-    createdAt: application.createdAt,
-    updatedAt: application.updatedAt,
+    createdAt: toIsoDateTimeString(application.createdAt),
+    updatedAt: toIsoDateTimeString(application.updatedAt),
   };
 }
 
@@ -747,11 +761,11 @@ function hydrateVolunteerOpportunityDetail(
     title: opportunity.title,
     overview: opportunity.overview,
     communityImpact: opportunity.communityImpact,
-    startDate: opportunity.startDate,
-    endDate: opportunity.endDate,
+    startDate: toNullableIsoDateTimeString(opportunity.startDate),
+    endDate: toNullableIsoDateTimeString(opportunity.endDate),
     commitmentLabel: opportunity.commitmentLabel,
     commitmentDescription: opportunity.commitmentDescription,
-    applicationDeadline: opportunity.applicationDeadline,
+    applicationDeadline: toIsoDateTimeString(opportunity.applicationDeadline),
     applicationCount,
     capacity,
     filled: opportunity.filled,
@@ -761,7 +775,7 @@ function hydrateVolunteerOpportunityDetail(
     status: resolveVolunteerOpportunityStatus(
       opportunity.status,
     ),
-    publishedAt: opportunity.publishedAt,
+    publishedAt: toNullableIsoDateTimeString(opportunity.publishedAt),
     organizer: {
       ...organizer,
       contact: {
@@ -772,8 +786,8 @@ function hydrateVolunteerOpportunityDetail(
       },
     },
     createdBy: opportunity.createdBy,
-    createdAt: opportunity.createdAt,
-    updatedAt: opportunity.updatedAt,
+    createdAt: toIsoDateTimeString(opportunity.createdAt),
+    updatedAt: toIsoDateTimeString(opportunity.updatedAt),
     viewerSave,
     viewerTopPicked,
     roles: roles.map((role) => ({
