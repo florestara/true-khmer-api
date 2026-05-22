@@ -48,7 +48,9 @@ export const launchpadApplicationSchema = z
     launchpadId: z.string(),
     launchpadRoleId: z.string(),
     motivation: z.string(),
+    relevantExperience: z.string(),
     portfolio: z.string().nullable(),
+    topPick: z.boolean(),
     status: launchpadApplicationStatusSchema,
     documentKeys: z.array(z.string()),
     documentNames: z.array(z.string()),
@@ -64,6 +66,13 @@ export const createLaunchpadApplicationResponseSchema = z
     application: launchpadApplicationSchema,
   })
   .openapi("CreateLaunchpadApplicationResponse");
+
+export const createLaunchpadApplicationBatchResponseSchema = z
+  .object({
+    ok: z.literal(true),
+    applications: z.array(launchpadApplicationSchema),
+  })
+  .openapi("CreateLaunchpadApplicationBatchResponse");
 
 export const getLaunchpadApplicationResponseSchema = z
   .object({

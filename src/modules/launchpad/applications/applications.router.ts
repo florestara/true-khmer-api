@@ -3,12 +3,14 @@ import type { AppBindings } from "../../../lib/types";
 import { requireAccessToken } from "../../../middlewares/auth.middleware";
 import { authProtectedErrorResponseSchema } from "../../auth/auth.schema";
 import {
+  createLaunchpadApplicationBatchSchema,
   createLaunchpadApplicationSchema,
   launchpadApplicationByIdParamSchema,
   launchpadApplicationParamSchema,
   presignLaunchpadApplicationDocumentUploadSchema,
 } from "./schema/applications.request.schema";
 import {
+  createLaunchpadApplicationBatchResponseSchema,
   createLaunchpadApplicationResponseSchema,
   getLaunchpadApplicationResponseSchema,
   launchpadApplicationOperationErrorResponseSchema,
@@ -16,6 +18,7 @@ import {
   presignLaunchpadApplicationDocumentUploadResponseSchema,
 } from "./schema/applications.response.schema";
 import {
+  handleCreateLaunchpadApplicationBatch,
   handleCreateLaunchpadApplication,
   handleGetLaunchpadApplication,
   handlePresignLaunchpadApplicationDocumentUpload,
@@ -159,6 +162,82 @@ const createApplicationRoute = createRoute({
   },
 });
 
+const createApplicationBatchRoute = createRoute({
+  method: "post",
+  path: "/{launchpadId}/applications/batch",
+  tags: ["Launchpad Applications"],
+  middleware: [requireAccessToken],
+  security: [{ BearerAuth: [] }],
+  request: {
+    params: launchpadApplicationParamSchema,
+    body: {
+      content: {
+        "application/json": {
+          schema: createLaunchpadApplicationBatchSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "Applications submitted successfully",
+      content: {
+        "application/json": {
+          schema: createLaunchpadApplicationBatchResponseSchema,
+        },
+      },
+    },
+    400: {
+      description: "Validation failed",
+      content: {
+        "application/json": {
+          schema: launchpadApplicationValidationErrorResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: "Unauthorized",
+      content: {
+        "application/json": {
+          schema: authProtectedErrorResponseSchema,
+        },
+      },
+    },
+    403: {
+      description: "Forbidden",
+      content: {
+        "application/json": {
+          schema: authProtectedErrorResponseSchema,
+        },
+      },
+    },
+    404: {
+      description: "Launchpad or role not found",
+      content: {
+        "application/json": {
+          schema: launchpadApplicationOperationErrorResponseSchema,
+        },
+      },
+    },
+    409: {
+      description: "Already applied for one or more roles",
+      content: {
+        "application/json": {
+          schema: launchpadApplicationOperationErrorResponseSchema,
+        },
+      },
+    },
+    500: {
+      description: "Internal server error",
+      content: {
+        "application/json": {
+          schema: launchpadApplicationOperationErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
 const getApplicationRoute = createRoute({
   method: "get",
   path: "/{launchpadId}/applications/{applicationId}",
@@ -225,6 +304,12 @@ launchpadApplicationsRouter.openapi(createApplicationRoute, async (c) => {
   const params = c.req.valid("param");
   const data = c.req.valid("json");
   return handleCreateLaunchpadApplication(c, params, data) as any;
+});
+
+launchpadApplicationsRouter.openapi(createApplicationBatchRoute, async (c) => {
+  const params = c.req.valid("param");
+  const data = c.req.valid("json");
+  return handleCreateLaunchpadApplicationBatch(c, params, data) as any;
 });
 
 launchpadApplicationsRouter.openapi(getApplicationRoute, async (c) => {
