@@ -183,6 +183,191 @@ export const createLaunchpadRequestSchema = z
   })
   .openapi("CreateLaunchpadRequest");
 
+const updateLaunchpadRoleSchema = z
+  .object({
+    id: z
+      .string()
+      .trim()
+      .regex(FORUM_UUID_RE, "role.id must be a valid UUID")
+      .optional(),
+    name: z
+      .string()
+      .trim()
+      .min(1, "role name is required")
+      .max(100, "role name must be <= 100 characters"),
+    description: z
+      .string()
+      .nullish()
+      .transform((value) => normalizeOptionalText(value)),
+    capacity: z
+      .number()
+      .int("capacity must be an integer")
+      .positive("capacity must be positive")
+      .max(1000, "capacity must be <= 1000")
+      .default(1),
+  })
+  .openapi("UpdateLaunchpadRoleRequest");
+
+export const updateLaunchpadRequestSchema = z
+  .object({
+    name: z
+      .string()
+      .transform((value) => normalizeText(value))
+      .pipe(
+        z
+          .string()
+          .min(1, "name must be 1..120 characters")
+          .max(120, "name must be 1..120 characters"),
+      )
+      .optional(),
+    description: z
+      .string()
+      .nullish()
+      .transform((value) => normalizeOptionalText(value))
+      .optional(),
+    categoryId: z
+      .string()
+      .trim()
+      .regex(FORUM_UUID_RE, "categoryId must be a valid UUID")
+      .optional(),
+    cityId: z
+      .string()
+      .trim()
+      .regex(FORUM_UUID_RE, "cityId must be a valid UUID")
+      .optional(),
+    deadline: z
+      .string()
+      .datetime("deadline must be a valid ISO datetime")
+      .refine(
+        (value) => Date.parse(value) > Date.now(),
+        "deadline must be in the future",
+      )
+      .optional(),
+    logoKey: z
+      .string()
+      .trim()
+      .min(1, "logoKey is required")
+      .max(255, "logoKey must be <= 255 characters")
+      .optional(),
+    coverKey: z
+      .string()
+      .trim()
+      .min(1, "coverKey is required")
+      .max(255, "coverKey must be <= 255 characters")
+      .optional(),
+    role: z
+      .array(updateLaunchpadRoleSchema)
+      .min(1, "At least one role is required")
+      .optional(),
+    materialDocumentKey: z
+      .array(
+        z
+          .string()
+          .trim()
+          .min(1, "materialDocumentKey is required")
+          .max(255, "materialDocumentKey must be <= 255 characters"),
+      )
+      .min(1, "At least one materialDocumentKey is required")
+      .max(5, "materialDocumentKey can have at most 5 documents")
+      .optional(),
+    materialDocumentName: z
+      .array(
+        z
+          .string()
+          .trim()
+          .min(1, "materialDocumentName is required")
+          .max(255, "materialDocumentName must be <= 255 characters"),
+      )
+      .min(1, "At least one materialDocumentName is required")
+      .max(5, "materialDocumentName can have at most 5 documents")
+      .optional(),
+    phoneNumber: z
+      .string()
+      .transform((value) => normalizeText(value))
+      .refine(
+        (value) => /^(?=.*\d)[0-9+()\-.\s]{7,20}$/.test(value),
+        "phoneNumber must be 7..20 characters, contain at least one digit, and use only digits, spaces, or + ( ) - .",
+      )
+      .optional(),
+    email: z
+      .string()
+      .trim()
+      .email("email must be a valid email address")
+      .max(255, "email must be <= 255 characters")
+      .optional(),
+    telegramUsername: z
+      .string()
+      .nullish()
+      .transform((value) => normalizeOptionalText(value))
+      .transform((value) => {
+        if (!value) {
+          return null;
+        }
+
+        return value.startsWith("@") ? value.slice(1) : value;
+      })
+      .refine(
+        (value) => value === null || /^[A-Za-z0-9_]{5,32}$/.test(value),
+        "telegramUsername must be 5..32 characters and contain only letters, numbers, or underscores",
+      )
+      .optional(),
+  })
+  .strict()
+  .superRefine((data, ctx) => {
+    if (Object.keys(data).length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "At least one launchpad field is required",
+      });
+    }
+
+    if (
+      (data.materialDocumentKey === undefined) !==
+      (data.materialDocumentName === undefined)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          "materialDocumentKey and materialDocumentName must be updated together",
+        path: ["materialDocumentName"],
+      });
+    }
+
+    if (
+      data.materialDocumentKey &&
+      data.materialDocumentName &&
+      data.materialDocumentKey.length !== data.materialDocumentName.length
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          "materialDocumentKey and materialDocumentName must have the same number of entries",
+        path: ["materialDocumentName"],
+      });
+    }
+
+    if (data.role) {
+      const seenRoleIds = new Set<string>();
+      data.role.forEach((role, index) => {
+        if (!role.id) {
+          return;
+        }
+
+        if (seenRoleIds.has(role.id)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["role", index, "id"],
+            message: "role.id must not contain duplicates",
+          });
+          return;
+        }
+
+        seenRoleIds.add(role.id);
+      });
+    }
+  })
+  .openapi("UpdateLaunchpadRequest");
+
 export const getLaunchpadQuerySchema = z.object({
   launchpadId: z
     .string()
@@ -367,6 +552,10 @@ export type GetLaunchpadQueryListInput = z.infer<
 
 export type CreateLaunchpadRequestInput = z.infer<
   typeof createLaunchpadRequestSchema
+>;
+
+export type UpdateLaunchpadRequestInput = z.infer<
+  typeof updateLaunchpadRequestSchema
 >;
 
 export type PresignLaunchpadImageUploadPayload = z.infer<
