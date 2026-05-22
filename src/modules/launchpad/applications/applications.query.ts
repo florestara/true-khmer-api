@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "../../../db";
 import {
   launchpad,
@@ -55,6 +55,54 @@ export async function findLaunchpadApplicationTarget(
   return row ?? null;
 }
 
+export async function findLaunchpadApplicationTargetsByRoleIds(
+  launchpadId: string,
+  roleIds: string[],
+): Promise<LaunchpadApplicationTarget[]> {
+  if (roleIds.length === 0) {
+    return [];
+  }
+
+  return db
+    .select({
+      launchpadId: launchpad.id,
+      launchpadName: launchpad.name,
+      deadline: launchpad.deadline,
+      status: launchpad.status,
+      roleId: launchpadRole.id,
+      roleTitle: launchpadRole.title,
+    })
+    .from(launchpadRole)
+    .innerJoin(launchpad, eq(launchpad.id, launchpadRole.launchpadId))
+    .where(
+      and(
+        inArray(launchpadRole.id, roleIds),
+        eq(launchpadRole.launchpadId, launchpadId),
+        isNull(launchpad.deletedAt),
+      ),
+    );
+}
+
+export async function findLaunchpadTopPickedRoleId(
+  launchpadId: string,
+  createdBy: string,
+): Promise<string | null> {
+  const [row] = await db
+    .select({ roleId: launchpadApplication.launchpadRoleId })
+    .from(launchpadApplication)
+    .where(
+      and(
+        eq(launchpadApplication.launchpadId, launchpadId),
+        eq(launchpadApplication.createdBy, createdBy),
+        eq(launchpadApplication.topPick, true),
+        sql`${launchpadApplication.status} in ('SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'CONFIRMED', 'COMPLETED')`,
+      ),
+    )
+    .limit(1);
+
+  return row?.roleId ?? null;
+}
+
 export async function createApplicationLog(
   txOrDb: Parameters<Parameters<typeof db.transaction>[0]>[0] | typeof db,
   options: {
@@ -81,9 +129,11 @@ export async function createLaunchpadApplication(data: {
   launchpadId: string;
   launchpadRoleId: string;
   motivation: string;
+  relevantExperience: string;
   portfolio?: string | null;
   documentKeys?: string[];
   documentNames?: string[];
+  topPickRoleId?: string | null;
   createdBy: string;
 }): Promise<LaunchpadApplicationDetail> {
   return db.transaction(async (tx) => {
@@ -93,7 +143,9 @@ export async function createLaunchpadApplication(data: {
         launchpadId: data.launchpadId,
         launchpadRoleId: data.launchpadRoleId,
         motivation: data.motivation,
+        relevantExperience: data.relevantExperience,
         portfolio: data.portfolio ?? null,
+        topPick: data.topPickRoleId === data.launchpadRoleId,
         documentKeys: data.documentKeys ?? [],
         documentNames: data.documentNames ?? [],
         status: "SUBMITTED",
@@ -108,6 +160,70 @@ export async function createLaunchpadApplication(data: {
     });
 
     return { ...application, logs: [log] };
+  });
+}
+
+export async function createLaunchpadApplicationsBatch(data: {
+  launchpadId: string;
+  roles: Array<{
+    roleId: string;
+    roleTitle: string;
+  }>;
+  motivation: string;
+  relevantExperience: string;
+  portfolio?: string | null;
+  documentKeys?: string[];
+  documentNames?: string[];
+  topPickRoleId?: string | null;
+  createdBy: string;
+}): Promise<LaunchpadApplicationDetail[]> {
+  return db.transaction(async (tx) => {
+    const applications = await tx
+      .insert(launchpadApplication)
+      .values(
+        data.roles.map((role) => ({
+          launchpadId: data.launchpadId,
+          launchpadRoleId: role.roleId,
+          motivation: data.motivation,
+          relevantExperience: data.relevantExperience,
+          portfolio: data.portfolio ?? null,
+          topPick: data.topPickRoleId === role.roleId,
+          documentKeys: data.documentKeys ?? [],
+          documentNames: data.documentNames ?? [],
+          status: "SUBMITTED" as const,
+          createdBy: data.createdBy,
+        })),
+      )
+      .returning();
+
+    const logs = await tx
+      .insert(launchpadApplicationLog)
+      .values(
+        applications.map((application) => ({
+          launchpadApplicationId: application.id,
+          status: "SUBMITTED" as const,
+          declinedBy: null,
+          createdBy: data.createdBy,
+        })),
+      )
+      .returning();
+
+    const logsByApplicationId = new Map(
+      logs.map((log) => [log.launchpadApplicationId, log]),
+    );
+    const applicationByRoleId = new Map(
+      applications.map((application) => [application.launchpadRoleId, application]),
+    );
+
+    return data.roles
+      .map((role) => applicationByRoleId.get(role.roleId))
+      .filter((application) => application !== undefined)
+      .map((application) => ({
+        ...application,
+        logs: logsByApplicationId.has(application.id)
+          ? [logsByApplicationId.get(application.id)!]
+          : [],
+      }));
   });
 }
 
@@ -148,6 +264,7 @@ export async function findExistingApplication(
       and(
         eq(launchpadApplication.launchpadRoleId, launchpadRoleId),
         eq(launchpadApplication.createdBy, createdBy),
+        sql`${launchpadApplication.status} in ('SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'CONFIRMED', 'COMPLETED')`,
       ),
     )
     .limit(1);
