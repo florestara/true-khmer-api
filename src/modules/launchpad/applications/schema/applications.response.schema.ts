@@ -100,3 +100,10 @@ export const launchpadApplicationOperationErrorResponseSchema = z
     error: z.string(),
   })
   .openapi("LaunchpadApplicationOperationErrorResponse");
+
+export const launchpadApplicationBatchErrorResponseSchema = z
+  .union([
+    launchpadApplicationValidationErrorResponseSchema,
+    launchpadApplicationOperationErrorResponseSchema,
+  ])
+  .openapi("LaunchpadApplicationBatchErrorResponse");

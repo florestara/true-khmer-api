@@ -13,6 +13,7 @@ import {
   createLaunchpadApplicationBatchResponseSchema,
   createLaunchpadApplicationResponseSchema,
   getLaunchpadApplicationResponseSchema,
+  launchpadApplicationBatchErrorResponseSchema,
   launchpadApplicationOperationErrorResponseSchema,
   launchpadApplicationValidationErrorResponseSchema,
   presignLaunchpadApplicationDocumentUploadResponseSchema,
@@ -188,10 +189,10 @@ const createApplicationBatchRoute = createRoute({
       },
     },
     400: {
-      description: "Validation failed",
+      description: "Validation or business rule failed",
       content: {
         "application/json": {
-          schema: launchpadApplicationValidationErrorResponseSchema,
+          schema: launchpadApplicationBatchErrorResponseSchema,
         },
       },
     },
