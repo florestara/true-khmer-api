@@ -68,12 +68,12 @@ export const listNotificationsQuerySchema = z.object({
   unreadOnly: z
     .enum(["true", "false"])
     .optional()
-    .transform((v) => v === "true"),
-  type: z.string().optional(),
+    .transform((v) => v === "false"),
+  type: notificationTypeEnum.optional(),
   archived: z
     .enum(["true", "false"])
     .optional()
-    .transform((v) => v === "true"),
+    .transform((v) => v === "false"),
 });
 export type ListNotificationsQuery = z.infer<
   typeof listNotificationsQuerySchema
@@ -88,7 +88,7 @@ export const markAllReadQuerySchema = z.object({
   archived: z
     .enum(["true", "false"])
     .optional()
-    .transform((v) => v === "true"),
-  type: z.string().optional(),
+    .transform((v) => v === "false"),
+  type: notificationTypeEnum.optional(),
 });
 export type MarkAllReadQuery = z.infer<typeof markAllReadQuerySchema>;
