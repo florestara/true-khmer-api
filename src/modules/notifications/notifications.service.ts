@@ -2,13 +2,14 @@ import type { Context } from "hono";
 import { getAuthUserId } from "../auth/utils/get-auth";
 import { getMessaging } from "../../lib/firebase";
 import {
-  countUnreadForUser,
+  countUnreadByTypeForUser,
   createNotification,
   createNotificationsForAllUsers,
   deleteFcmToken,
   getAllFcmTokens,
   getFcmTokensByUserId,
   listNotificationsForUser,
+  markAllNotificationsRead,
   markNotificationsRead,
   upsertFcmToken,
 } from "./notifications.query";
@@ -16,10 +17,13 @@ import type {
   BroadcastPayload,
   ListNotificationsQuery,
   MarkReadPayload,
+  MarkAllReadQuery,
+  NotificationType,
   RegisterTokenPayload,
   SendToUserPayload,
   UnregisterTokenPayload,
-} from "./notifications.schema";
+} from "./schema/notifications.request.schema";
+import { NOTIFICATION_ICON_MAP } from "./schema/notifications.request.schema";
 
 export async function handleRegisterToken(
   c: Context,
@@ -67,7 +71,11 @@ export async function handleSendToUser(c: Context, payload: SendToUserPayload) {
       title: payload.title,
       body: payload.body,
       imageUrl: payload.imageUrl,
+      type: payload.type,
+      archived: payload.archived,
       data: payload.data,
+      webRoute: payload.webRoute,
+      mobileRoute: payload.mobileRoute,
     });
 
     const allTokens = await getFcmTokensByUserId(payload.userId);
@@ -86,6 +94,10 @@ export async function handleSendToUser(c: Context, payload: SendToUserPayload) {
 
     for (let i = 0; i < mobileTokens.length; i += CHUNK_SIZE) {
       const chunk = mobileTokens.slice(i, i + CHUNK_SIZE);
+      // For mobile FCM, include mobileRoute in data payload
+      const fcmData = payload.mobileRoute
+        ? { ...payload.data, route: payload.mobileRoute }
+        : payload.data;
       const result = await messaging.sendEachForMulticast({
         tokens: chunk.map((t) => t.token),
         notification: {
@@ -93,7 +105,7 @@ export async function handleSendToUser(c: Context, payload: SendToUserPayload) {
           body: payload.body,
           imageUrl: payload.imageUrl,
         },
-        data: payload.data,
+        data: fcmData,
       });
       successCount += result.successCount;
       failureCount += result.failureCount;
@@ -112,7 +124,11 @@ export async function handleBroadcast(c: Context, payload: BroadcastPayload) {
       title: payload.title,
       body: payload.body,
       imageUrl: payload.imageUrl,
+      type: payload.type,
+      archived: payload.archived,
       data: payload.data,
+      webRoute: payload.webRoute,
+      mobileRoute: payload.mobileRoute,
     });
 
     const allTokens = await getAllFcmTokens();
@@ -131,6 +147,10 @@ export async function handleBroadcast(c: Context, payload: BroadcastPayload) {
 
     for (let i = 0; i < mobileTokens.length; i += CHUNK_SIZE) {
       const chunk = mobileTokens.slice(i, i + CHUNK_SIZE);
+      // For mobile FCM, include mobileRoute in data payload
+      const fcmData = payload.mobileRoute
+        ? { ...payload.data, route: payload.mobileRoute }
+        : payload.data;
       const result = await messaging.sendEachForMulticast({
         tokens: chunk.map((t) => t.token),
         notification: {
@@ -138,7 +158,7 @@ export async function handleBroadcast(c: Context, payload: BroadcastPayload) {
           body: payload.body,
           imageUrl: payload.imageUrl,
         },
-        data: payload.data,
+        data: fcmData,
       });
       successCount += result.successCount;
       failureCount += result.failureCount;
@@ -164,36 +184,58 @@ export async function handleListNotifications(
       query,
     );
 
+    // Get unread counts by type
+    const countsByType = await countUnreadByTypeForUser(authResult.userId);
+
+    // Get all notification types from the enum
+    const allTypes = [
+      "profile_view",
+      "new_message",
+      "achievement",
+      "event_reminder",
+      "application",
+      "launchpad_update",
+      "points",
+      "system",
+    ];
+
+    // Ensure all types are included, even if count is 0
+    const unreadCounts: Record<string, number> = {};
+    for (const type of allTypes) {
+      unreadCounts[type] = countsByType[type] || 0;
+    }
+
     const notifications = rows.map((n) => ({
       id: n.id,
       title: n.title,
       body: n.body,
       imageUrl: n.imageUrl,
+      icon:
+        NOTIFICATION_ICON_MAP[n.type as NotificationType] ??
+        NOTIFICATION_ICON_MAP.system,
+      type: n.type,
       data: n.data as Record<string, string> | null,
       isRead: n.isRead,
       readAt: n.readAt ? n.readAt.toISOString() : null,
+      archived: n.archived,
       createdAt: n.createdAt.toISOString(),
+      webRoute: n.webRoute,
+      mobileRoute: n.mobileRoute,
     }));
 
     return c.json(
-      { ok: true, notifications, total, page: query.page, limit: query.limit },
+      {
+        ok: true,
+        notifications,
+        total,
+        page: query.page,
+        limit: query.limit,
+        unreadCounts,
+      },
       200,
     );
   } catch (err) {
     console.error("Failed to list notifications", err);
-    return c.json({ ok: false, error: "Internal server error" }, 500);
-  }
-}
-
-export async function handleCountUnread(c: Context) {
-  const authResult = getAuthUserId(c);
-  if (!authResult.ok) return authResult.response;
-
-  try {
-    const count = await countUnreadForUser(authResult.userId);
-    return c.json({ ok: true, unreadCount: count }, 200);
-  } catch (err) {
-    console.error("Failed to count unread notifications", err);
     return c.json({ ok: false, error: "Internal server error" }, 500);
   }
 }
@@ -207,6 +249,25 @@ export async function handleMarkRead(c: Context, payload: MarkReadPayload) {
     return c.json({ ok: true, message: "Notifications marked as read" }, 200);
   } catch (err) {
     console.error("Failed to mark notifications as read", err);
+    return c.json({ ok: false, error: "Internal server error" }, 500);
+  }
+}
+
+export async function handleMarkAllRead(c: Context, query: MarkAllReadQuery) {
+  const authResult = getAuthUserId(c);
+  if (!authResult.ok) return authResult.response;
+
+  try {
+    await markAllNotificationsRead(authResult.userId, {
+      archived: query.archived,
+      type: query.type,
+    });
+    return c.json(
+      { ok: true, message: "All notifications marked as read" },
+      200,
+    );
+  } catch (err) {
+    console.error("Failed to mark all notifications as read", err);
     return c.json({ ok: false, error: "Internal server error" }, 500);
   }
 }
