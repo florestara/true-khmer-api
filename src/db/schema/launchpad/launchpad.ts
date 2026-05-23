@@ -162,6 +162,11 @@ export const launchpadSave = pgTable(
       table.saverId,
     ),
     index("launchpad_save_launchpad_idx").using("btree", table.launchpadId),
-    index("launchpad_save_saver_idx").using("btree", table.saverId),
+    index("launchpad_save_saver_created_launchpad_idx").using(
+      "btree",
+      table.saverId,
+      table.createdAt,
+      table.launchpadId,
+    ),
   ],
 );

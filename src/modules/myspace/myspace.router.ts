@@ -14,6 +14,12 @@ import {
   recentActivityErrorResponseSchema,
 } from "../recent-activity/recent-activity.schema";
 import { handleGetRecentActivities } from "../recent-activity/recent-activity.service";
+import {
+  getSavedItemsQuerySchema,
+  getSavedItemsResponseSchema,
+  savedItemsErrorResponseSchema,
+} from "./schema/saved.schema";
+import { handleGetSavedItems } from "./saved.service";
 
 export const myspaceRouter = new OpenAPIHono<AppBindings>();
 
@@ -176,6 +182,60 @@ const getRecentActivitiesRoute = createRoute({
   },
 });
 
+const getSavedItemsRoute = createRoute({
+  method: "get",
+  path: "/saved",
+  tags: ["My Space"],
+  middleware: [requireAccessToken],
+  security: [{ BearerAuth: [] }],
+  request: {
+    query: getSavedItemsQuerySchema,
+  },
+  responses: {
+    200: {
+      description:
+        "Unified list of saved projects, volunteer opportunities, and forum questions",
+      content: {
+        "application/json": {
+          schema: getSavedItemsResponseSchema,
+        },
+      },
+    },
+    400: {
+      description: "Validation failed",
+      content: {
+        "application/json": {
+          schema: savedItemsErrorResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: "Unauthorized",
+      content: {
+        "application/json": {
+          schema: authProtectedErrorResponseSchema,
+        },
+      },
+    },
+    403: {
+      description: "Onboarding required",
+      content: {
+        "application/json": {
+          schema: authProtectedErrorResponseSchema,
+        },
+      },
+    },
+    500: {
+      description: "Internal server error",
+      content: {
+        "application/json": {
+          schema: savedItemsErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
 myspaceRouter.openapi(getProfileRoute, async (c) => {
   return (await handleGetProfile(c)) as any;
 });
@@ -187,4 +247,9 @@ myspaceRouter.openapi(updateProfileRoute, async (c) => {
 
 myspaceRouter.openapi(getRecentActivitiesRoute, async (c) => {
   return (await handleGetRecentActivities(c)) as any;
+});
+
+myspaceRouter.openapi(getSavedItemsRoute, async (c) => {
+  const query = c.req.valid("query");
+  return (await handleGetSavedItems(c, query)) as any;
 });
