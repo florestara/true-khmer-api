@@ -174,9 +174,11 @@ export const volunteerOpportunitySave = pgTable(
       "btree",
       table.opportunityId,
     ),
-    index("volunteer_opportunity_save_saver_idx").using(
+    index("volunteer_opportunity_save_saver_created_opportunity_idx").using(
       "btree",
       table.saverId,
+      table.createdAt,
+      table.opportunityId,
     ),
   ],
 );
