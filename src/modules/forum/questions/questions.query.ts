@@ -695,7 +695,7 @@ function buildQuestionsWhereClause(
   isUnanswered = false,
   isTrending = false,
   trendingRankingTimestampSql: SQL = sql`statement_timestamp()`,
-  sortBy: QuestionSortBy = "newest",
+  sortBy: QuestionSortBy = "mostRelevant",
   cursor?: QuestionsPageCursor,
 ) {
   const filters = [inArray(forumQuestion.status, VISIBLE_QUESTION_STATUSES)];

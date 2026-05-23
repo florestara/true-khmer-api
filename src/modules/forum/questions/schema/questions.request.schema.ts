@@ -27,7 +27,7 @@ const questionSortBySchema = z
   .openapi({
     description:
       "Question ordering. Allowed values: mostRelevant, newest, oldest, mostVoted, mostAnswered.",
-    example: "newest",
+    example: "mostRelevant",
   });
 export type QuestionSortBy = z.infer<typeof questionSortBySchema>;
 
@@ -436,7 +436,7 @@ export const getQuestionsQuerySchema = z
       .min(1, "limit must be between 1 and 50")
       .max(MAX_QUESTIONS_PAGE_SIZE, "limit must be between 1 and 50")
       .default(DEFAULT_QUESTIONS_PAGE_SIZE),
-    sortBy: questionSortBySchema.default("newest"),
+    sortBy: questionSortBySchema.default("mostRelevant"),
     cursor: z
       .string()
       .optional()
