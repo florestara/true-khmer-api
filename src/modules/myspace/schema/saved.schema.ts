@@ -154,6 +154,13 @@ const savedPaginationSchema = z.object({
   total: z.number().int().nonnegative(),
 });
 
+const savedCountsSchema = z.object({
+  all: z.number().int().nonnegative(),
+  project: z.number().int().nonnegative(),
+  volunteer: z.number().int().nonnegative(),
+  forum: z.number().int().nonnegative(),
+});
+
 export const getSavedItemsResponseSchema = z
   .object({
     ok: z.literal(true),
@@ -177,6 +184,7 @@ export const getSavedItemsResponseSchema = z
       ]),
     ),
     pagination: savedPaginationSchema,
+    counts: savedCountsSchema,
   })
   .openapi("GetSavedItemsResponse");
 
