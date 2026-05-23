@@ -1,6 +1,6 @@
 {
-  "id": "f501278c-e0a9-4546-87c7-bb233c059b56",
-  "prevId": "19b24130-fff6-4f05-9c95-67824cbed85c",
+  "id": "f2048c57-d6f9-492f-b9e1-90f6004cffee",
+  "prevId": "8acae9b1-b4ed-4baa-aee9-ea1b76598a18",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2525,11 +2525,23 @@
           "method": "btree",
           "with": {}
         },
-        "forum_question_save_saver_idx": {
-          "name": "forum_question_save_saver_idx",
+        "forum_question_save_saver_created_question_idx": {
+          "name": "forum_question_save_saver_created_question_idx",
           "columns": [
             {
               "expression": "saver_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "question_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -4198,11 +4210,23 @@
           "method": "btree",
           "with": {}
         },
-        "volunteer_opportunity_save_saver_idx": {
-          "name": "volunteer_opportunity_save_saver_idx",
+        "volunteer_opportunity_save_saver_created_opportunity_idx": {
+          "name": "volunteer_opportunity_save_saver_created_opportunity_idx",
           "columns": [
             {
               "expression": "saver_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "opportunity_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -5546,11 +5570,23 @@
           "method": "btree",
           "with": {}
         },
-        "launchpad_save_saver_idx": {
-          "name": "launchpad_save_saver_idx",
+        "launchpad_save_saver_created_launchpad_idx": {
+          "name": "launchpad_save_saver_created_launchpad_idx",
           "columns": [
             {
               "expression": "saver_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "launchpad_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -5840,11 +5876,25 @@
           "primaryKey": false,
           "notNull": true
         },
+        "relevant_experience": {
+          "name": "relevant_experience",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
         "portfolio": {
           "name": "portfolio",
           "type": "varchar(255)",
           "primaryKey": false,
           "notNull": false
+        },
+        "top_pick": {
+          "name": "top_pick",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
         },
         "status": {
           "name": "status",
@@ -5938,6 +5988,28 @@
             }
           ],
           "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "launchpad_application_created_by_launchpad_top_pick_active_unique_idx": {
+          "name": "launchpad_application_created_by_launchpad_top_pick_active_unique_idx",
+          "columns": [
+            {
+              "expression": "created_by",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "launchpad_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"launchpad_application\".\"top_pick\" = true and \"launchpad_application\".\"status\" in ('SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'CONFIRMED', 'COMPLETED')",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -6088,6 +6160,198 @@
           "tableTo": "user",
           "columnsFrom": [
             "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.fcm_token": {
+      "name": "fcm_token",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "token": {
+          "name": "token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "platform": {
+          "name": "platform",
+          "type": "fcm_token_platform",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'web'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "fcm_token_userId_idx": {
+          "name": "fcm_token_userId_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "fcm_token_user_id_user_id_fk": {
+          "name": "fcm_token_user_id_user_id_fk",
+          "tableFrom": "fcm_token",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "fcm_token_unique": {
+          "name": "fcm_token_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "token"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.notification": {
+      "name": "notification",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "body": {
+          "name": "body",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "image_url": {
+          "name": "image_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "data": {
+          "name": "data",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_read": {
+          "name": "is_read",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "read_at": {
+          "name": "read_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "notification_userId_idx": {
+          "name": "notification_userId_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "notification_user_id_user_id_fk": {
+          "name": "notification_user_id_user_id_fk",
+          "tableFrom": "notification",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
           ],
           "columnsTo": [
             "id"
@@ -6317,6 +6581,15 @@
         "CONFIRMED",
         "COMPLETED",
         "WITHDRAWN"
+      ]
+    },
+    "public.fcm_token_platform": {
+      "name": "fcm_token_platform",
+      "schema": "public",
+      "values": [
+        "web",
+        "android",
+        "ios"
       ]
     }
   },
