@@ -166,6 +166,12 @@ export type SavedItem =
 export type SavedItemsResult = {
   items: Array<Omit<SavedItem, "id">>;
   pagination: CursorPagination;
+  counts: {
+    all: number;
+    project: number;
+    volunteer: number;
+    forum: number;
+  };
 };
 
 function toInteger(value: unknown, fallback = 0): number {
@@ -237,7 +243,7 @@ function buildPagination(
   rows: SavedItem[],
   limit: number,
   total: number,
-): SavedItemsResult {
+): Pick<SavedItemsResult, "items" | "pagination"> {
   const sortedRows = [...rows].sort(compareSavedItems);
   const hasMore = sortedRows.length > limit;
   const pageRows = hasMore ? sortedRows.slice(0, limit) : sortedRows;
@@ -722,8 +728,14 @@ export async function getSavedItems(
     query.filter === "all" || query.filter === "volunteer";
   const shouldFetchForum = query.filter === "all" || query.filter === "forum";
 
-  const [projects, volunteers, forumQuestions, projectTotal, volunteerTotal, forumTotal] =
-    await Promise.all([
+  const [
+    projects,
+    volunteers,
+    forumQuestions,
+    projectTotal,
+    volunteerTotal,
+    forumTotal,
+  ] = await Promise.all([
       shouldFetchProject
         ? findSavedProjects(userId, fetchLimit, query.cursor)
         : Promise.resolve([]),
@@ -733,16 +745,30 @@ export async function getSavedItems(
       shouldFetchForum
         ? findSavedForumQuestions(userId, fetchLimit, query.cursor)
         : Promise.resolve([]),
-      shouldFetchProject ? countSavedProjects(userId) : Promise.resolve(0),
-      shouldFetchVolunteer
-        ? countSavedVolunteerOpportunities(userId)
-        : Promise.resolve(0),
-      shouldFetchForum ? countSavedForumQuestions(userId) : Promise.resolve(0),
+      countSavedProjects(userId),
+      countSavedVolunteerOpportunities(userId),
+      countSavedForumQuestions(userId),
     ]);
 
-  return buildPagination(
-    [...projects, ...volunteers, ...forumQuestions],
-    query.limit,
-    projectTotal + volunteerTotal + forumTotal,
-  );
+  const counts = {
+    project: projectTotal,
+    volunteer: volunteerTotal,
+    forum: forumTotal,
+  };
+  const totalByFilter =
+    query.filter === "all"
+      ? counts.project + counts.volunteer + counts.forum
+      : counts[query.filter];
+
+  return {
+    ...buildPagination(
+      [...projects, ...volunteers, ...forumQuestions],
+      query.limit,
+      totalByFilter,
+    ),
+    counts: {
+      all: counts.project + counts.volunteer + counts.forum,
+      ...counts,
+    },
+  };
 }
