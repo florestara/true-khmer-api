@@ -167,7 +167,12 @@ export const forumQuestionSave = pgTable(
       table.saverId,
     ),
     index("forum_question_save_question_idx").using("btree", table.questionId),
-    index("forum_question_save_saver_idx").using("btree", table.saverId),
+    index("forum_question_save_saver_created_question_idx").using(
+      "btree",
+      table.saverId,
+      table.createdAt,
+      table.questionId,
+    ),
   ],
 );
 
