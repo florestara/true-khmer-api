@@ -4,18 +4,7 @@ import { eq, and, lt, isNull } from "drizzle-orm";
 
 export async function runStatusUpdateCron() {
   const now = new Date();
-  const cambodiaTime = new Date(
-    now.toLocaleString("en-US", {
-      timeZone: "Asia/Phnom_Penh",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: false,
-    }),
-  );
+  const nowIso = now.toISOString();
 
   let updatedVolunteerOpportunities = 0;
   let updatedLaunchpadPosts = 0;
@@ -25,15 +14,12 @@ export async function runStatusUpdateCron() {
       .update(volunteerOpportunity)
       .set({
         status: "IN_PROGRESS",
-        updatedAt: cambodiaTime.toISOString(),
+        updatedAt: nowIso,
       })
       .where(
         and(
           eq(volunteerOpportunity.status, "LIVE"),
-          lt(
-            volunteerOpportunity.applicationDeadline,
-            cambodiaTime.toISOString(),
-          ), // Compare with Cambodia time
+          lt(volunteerOpportunity.applicationDeadline, nowIso),
           isNull(volunteerOpportunity.deletedAt),
         ),
       )
@@ -45,12 +31,12 @@ export async function runStatusUpdateCron() {
       .update(launchpad)
       .set({
         status: "IN_PROGRESS",
-        updatedAt: cambodiaTime.toISOString(),
+        updatedAt: nowIso,
       })
       .where(
         and(
           eq(launchpad.status, "LIVE"),
-          lt(launchpad.deadline, cambodiaTime.toISOString()),
+          lt(launchpad.deadline, nowIso),
           isNull(launchpad.deletedAt),
         ),
       )
