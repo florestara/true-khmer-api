@@ -48,6 +48,13 @@ export class LaunchpadRoleCapacityError extends Error {
   }
 }
 
+export class LaunchpadPatchStatusError extends Error {
+  constructor() {
+    super("Launchpad can only be edited while it is live or draft");
+    this.name = "LaunchpadPatchStatusError";
+  }
+}
+
 export type LaunchpadRole = {
   id: string;
   title: string;
@@ -260,11 +267,12 @@ export async function findLaunchpadCityById(
 
 export async function findLaunchpadEditTargetById(
   launchpadId: string,
-): Promise<{ id: string; createdBy: string } | null> {
+): Promise<{ id: string; createdBy: string; status: LaunchpadStatus } | null> {
   const [row] = await db
     .select({
       id: launchpad.id,
       createdBy: launchpad.createdBy,
+      status: launchpad.status,
     })
     .from(launchpad)
     .where(and(eq(launchpad.id, launchpadId), isNull(launchpad.deletedAt)))
@@ -512,6 +520,13 @@ export async function updateLaunchpad(
 
     if (!existingLaunchpad) {
       return false;
+    }
+
+    if (
+      existingLaunchpad.status !== "LIVE" &&
+      existingLaunchpad.status !== "DRAFT"
+    ) {
+      throw new LaunchpadPatchStatusError();
     }
 
     const beforeRoles =
