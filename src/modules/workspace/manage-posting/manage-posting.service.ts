@@ -1,6 +1,7 @@
 import type { Context } from "hono";
 import { getAuthUserId } from "../../auth/utils/get-auth";
 import {
+  extendManagePostingDeadline,
   findManagePostingApplication,
   findManagePostingDetail,
   findManagePostings,
@@ -9,6 +10,7 @@ import {
 } from "./manage-posting.query";
 import type {
   ChangeManagePostingApplicationStatusParam,
+  ExtendManagePostingDeadlineBody,
   GetManagePostingApplicationParam,
   GetManagePostingDetailParam,
   GetManagePostingDetailQuery,
@@ -113,6 +115,16 @@ export async function handleUpdateManagePostingAction(
       );
     }
 
+    if (result === "close_not_allowed") {
+      return c.json(
+        {
+          ok: false,
+          error: "Posting can only be closed early while it is live",
+        },
+        409,
+      );
+    }
+
     if (result === "delete_not_allowed") {
       return c.json(
         {
@@ -138,6 +150,54 @@ export async function handleUpdateManagePostingAction(
     return c.json({ ok: true, posting: result }, 200);
   } catch (error) {
     console.error("Failed to update manage posting action", error);
+    return c.json({ ok: false, error: "Internal server error" }, 500);
+  }
+}
+
+export async function handleExtendManagePostingDeadline(
+  c: Context,
+  params: GetManagePostingDetailParam,
+  body: ExtendManagePostingDeadlineBody,
+) {
+  const authResult = getAuthUserId(c);
+  if (!authResult.ok) {
+    return authResult.response;
+  }
+
+  try {
+    const result = await extendManagePostingDeadline(
+      authResult.userId,
+      params,
+      body,
+    );
+
+    if (result === "not_found") {
+      return c.json({ ok: false, error: "Posting not found" }, 404);
+    }
+
+    if (result === "deadline_extension_not_allowed") {
+      return c.json(
+        {
+          ok: false,
+          error: "Posting deadline can only be extended while it is in progress",
+        },
+        409,
+      );
+    }
+
+    if (result === "deadline_not_later") {
+      return c.json(
+        {
+          ok: false,
+          error: "New deadline must be later than the current deadline",
+        },
+        409,
+      );
+    }
+
+    return c.json({ ok: true, posting: result }, 200);
+  } catch (error) {
+    console.error("Failed to extend manage posting deadline", error);
     return c.json({ ok: false, error: "Internal server error" }, 500);
   }
 }

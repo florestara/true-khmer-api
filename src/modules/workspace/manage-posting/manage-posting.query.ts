@@ -20,6 +20,7 @@ import {
 } from "../../../utils/page-pagination.helper";
 import type {
   ChangeManagePostingApplicationStatusParam,
+  ExtendManagePostingDeadlineBody,
   GetManagePostingApplicationParam,
   GetManagePostingDetailParam,
   GetManagePostingDetailQuery,
@@ -53,6 +54,7 @@ export type ManagePostingItem = {
   capacity: number;
   views: number;
   deadline: string | null;
+  isEditable: boolean;
   createdAt: string;
 };
 
@@ -130,21 +132,38 @@ type ManagePostingActionFailure =
   | "not_found"
   | "not_in_progress"
   | "cancel_not_allowed"
+  | "close_not_allowed"
   | "delete_not_allowed"
   | "live_has_applicants";
 type ManagePostingActionResult = ManagePostingActionFailure | ManagePostingItem;
-type PostingLogAction = "CANCEL" | "DELETE" | "COMPLETE";
+type ManagePostingDeadlineUpdateFailure =
+  | "not_found"
+  | "deadline_extension_not_allowed"
+  | "deadline_not_later";
+type ManagePostingDeadlineUpdateResult =
+  | ManagePostingDeadlineUpdateFailure
+  | ManagePostingItem;
+type PostingLogAction = "CANCEL" | "CLOSE" | "DELETE" | "COMPLETE";
 type PostingActionDecision = {
   action: PostingLogAction;
   nextStatus: ManagePostingStatus;
+  deadline?: string;
   deletedAt?: string;
 };
 
 const POSTING_ACTION_LOG_NAME: Record<PostingLogAction, string> = {
   CANCEL: "Posting canceled",
+  CLOSE: "Posting closed",
   DELETE: "Posting deleted",
   COMPLETE: "Posting completed",
 };
+const POSTING_DEADLINE_EXTENSION_LOG_NAME = "Posting deadline extended";
+const MANAGE_POSTING_EDITABLE_STATUSES = new Set<ManagePostingStatus>([
+  "LIVE",
+  "DRAFT",
+]);
+const DEADLINE_EXTENSION_SOURCE_STATUS: ManagePostingStatus = "IN_PROGRESS";
+const DEADLINE_EXTENSION_REOPEN_STATUS: ManagePostingStatus = "LIVE";
 
 const POSTER_LOCKED_APPLICATION_STATUSES = new Set<ManagePostingApplicantStatus>(
   ["CONFIRMED", "DECLINED", "COMPLETED", "WITHDRAWN"],
@@ -190,6 +209,18 @@ function resolvePostingActionDecision(input: {
     return {
       action: "COMPLETE",
       nextStatus: "COMPLETED",
+    };
+  }
+
+  if (postingAction === "close") {
+    if (currentStatus !== "LIVE") {
+      return "close_not_allowed";
+    }
+
+    return {
+      action: "CLOSE",
+      nextStatus: "IN_PROGRESS",
+      deadline: new Date().toISOString(),
     };
   }
 
@@ -597,6 +628,24 @@ function derivePostingStatus(input: {
   return input.rawStatus ?? "LIVE";
 }
 
+function isManagePostingEditable(status: ManagePostingStatus): boolean {
+  return MANAGE_POSTING_EDITABLE_STATUSES.has(status);
+}
+
+function canExtendManagePostingDeadline(status: ManagePostingStatus): boolean {
+  return status === DEADLINE_EXTENSION_SOURCE_STATUS;
+}
+
+function isDeadlineExtensionLater(
+  currentDeadline: string | null,
+  nextDeadline: string,
+): boolean {
+  return (
+    currentDeadline !== null &&
+    Date.parse(nextDeadline) > Date.parse(currentDeadline)
+  );
+}
+
 function matchesFilter(
   posting: ManagePostingItem,
   filter: ManagePostingFilter,
@@ -692,6 +741,9 @@ async function findVolunteerManagePostings(
   return rows.map((row) => {
     const applicantCount = toInteger(row.applicantCount);
     const capacity = toInteger(row.capacity);
+    const status = derivePostingStatus({
+      rawStatus: row.rawStatus,
+    });
 
     return {
       id: row.id,
@@ -699,14 +751,13 @@ async function findVolunteerManagePostings(
       title: row.title,
       description: row.description,
       imageKey: row.imageKey,
-      status: derivePostingStatus({
-        rawStatus: row.rawStatus,
-      }),
+      status,
       filled: row.filled,
       applicantCount,
       capacity,
       views: toInteger(row.totalView),
       deadline: row.deadline,
+      isEditable: isManagePostingEditable(status),
       createdAt: row.createdAt,
     };
   });
@@ -805,6 +856,9 @@ async function findProjectManagePostings(
   return rows.map((row) => {
     const applicantCount = toInteger(row.applicantCount);
     const capacity = toInteger(row.capacity);
+    const status = derivePostingStatus({
+      rawStatus: row.rawStatus,
+    });
 
     return {
       id: row.id,
@@ -812,14 +866,13 @@ async function findProjectManagePostings(
       title: row.title,
       description: row.description,
       imageKey: row.imageKey,
-      status: derivePostingStatus({
-        rawStatus: row.rawStatus,
-      }),
+      status,
       filled: row.filled,
       applicantCount,
       capacity,
       views: toInteger(row.totalView),
       deadline: row.deadline,
+      isEditable: isManagePostingEditable(status),
       createdAt: row.createdAt,
     };
   });
@@ -1498,6 +1551,7 @@ async function updateVolunteerManagePostingAction(
       .select({
         id: volunteerOpportunity.id,
         status: volunteerOpportunity.status,
+        deadline: volunteerOpportunity.applicationDeadline,
       })
       .from(volunteerOpportunity)
       .where(
@@ -1544,6 +1598,9 @@ async function updateVolunteerManagePostingAction(
       .update(volunteerOpportunity)
       .set({
         status: decision.nextStatus,
+        ...(decision.deadline
+          ? { applicationDeadline: decision.deadline }
+          : {}),
         ...(decision.deletedAt ? { deletedAt: decision.deletedAt } : {}),
         updatedAt: sql`now()`,
       })
@@ -1566,10 +1623,12 @@ async function updateVolunteerManagePostingAction(
       description: `Workspace posting ${decision.action.toLowerCase()} action`,
       fromData: {
         status: derivedStatus,
+        ...(decision.deadline ? { deadline: current.deadline } : {}),
         deletedAt: null,
       },
       toData: {
         status: decision.nextStatus,
+        ...(decision.deadline ? { deadline: decision.deadline } : {}),
         deletedAt: decision.deletedAt ?? null,
       },
       status: decision.nextStatus,
@@ -1604,6 +1663,7 @@ async function updateProjectManagePostingAction(
       .select({
         id: launchpad.id,
         status: launchpad.status,
+        deadline: launchpad.deadline,
       })
       .from(launchpad)
       .where(
@@ -1650,6 +1710,7 @@ async function updateProjectManagePostingAction(
       .update(launchpad)
       .set({
         status: decision.nextStatus,
+        ...(decision.deadline ? { deadline: decision.deadline } : {}),
         ...(decision.deletedAt ? { deletedAt: decision.deletedAt } : {}),
         updatedAt: sql`now()`,
       })
@@ -1672,10 +1733,12 @@ async function updateProjectManagePostingAction(
       description: `Workspace posting ${decision.action.toLowerCase()} action`,
       fromData: {
         status: derivedStatus,
+        ...(decision.deadline ? { deadline: current.deadline } : {}),
         deletedAt: null,
       },
       toData: {
         status: decision.nextStatus,
+        ...(decision.deadline ? { deadline: decision.deadline } : {}),
         deletedAt: decision.deletedAt ?? null,
       },
       status: decision.nextStatus,
@@ -1710,6 +1773,194 @@ export async function updateManagePostingAction(
   }
 
   return updateProjectManagePostingAction(userId, params);
+}
+
+async function extendVolunteerManagePostingDeadline(
+  userId: string,
+  postingId: string,
+  body: ExtendManagePostingDeadlineBody,
+): Promise<ManagePostingDeadlineUpdateResult> {
+  const result = await db.transaction(async (tx) => {
+    const [current] = await tx
+      .select({
+        id: volunteerOpportunity.id,
+        status: volunteerOpportunity.status,
+        deadline: volunteerOpportunity.applicationDeadline,
+      })
+      .from(volunteerOpportunity)
+      .where(
+        and(
+          eq(volunteerOpportunity.id, postingId),
+          eq(volunteerOpportunity.createdBy, userId),
+          isNull(volunteerOpportunity.deletedAt),
+        ),
+      )
+      .for("update")
+      .limit(1);
+
+    if (!current) {
+      return "not_found" as const;
+    }
+
+    if (!canExtendManagePostingDeadline(current.status)) {
+      return "deadline_extension_not_allowed" as const;
+    }
+
+    if (!isDeadlineExtensionLater(current.deadline, body.deadline)) {
+      return "deadline_not_later" as const;
+    }
+
+    const nextStatus = DEADLINE_EXTENSION_REOPEN_STATUS;
+    const [updated] = await tx
+      .update(volunteerOpportunity)
+      .set({
+        applicationDeadline: body.deadline,
+        status: nextStatus,
+        updatedBy: userId,
+        updatedAt: sql`now()`,
+      })
+      .where(
+        and(
+          eq(volunteerOpportunity.id, postingId),
+          eq(volunteerOpportunity.status, current.status),
+          isNull(volunteerOpportunity.deletedAt),
+        ),
+      )
+      .returning({ id: volunteerOpportunity.id });
+
+    if (!updated) {
+      return "not_found" as const;
+    }
+
+    await tx.insert(volunteerOpportunityActionLog).values({
+      opportunityId: postingId,
+      name: POSTING_DEADLINE_EXTENSION_LOG_NAME,
+      description: "Workspace posting deadline extension",
+      fromData: {
+        status: derivePostingStatus({ rawStatus: current.status }),
+        deadline: current.deadline,
+      },
+      toData: {
+        status: nextStatus,
+        deadline: body.deadline,
+      },
+      status: nextStatus,
+      createdBy: userId,
+    });
+
+    return "updated" as const;
+  });
+
+  if (result !== "updated") {
+    return result;
+  }
+
+  const posting =
+    (await findVolunteerManagePostings(userId)).find(
+      (item) => item.id === postingId,
+    ) ?? null;
+
+  return posting ?? "not_found";
+}
+
+async function extendProjectManagePostingDeadline(
+  userId: string,
+  postingId: string,
+  body: ExtendManagePostingDeadlineBody,
+): Promise<ManagePostingDeadlineUpdateResult> {
+  const result = await db.transaction(async (tx) => {
+    const [current] = await tx
+      .select({
+        id: launchpad.id,
+        status: launchpad.status,
+        deadline: launchpad.deadline,
+      })
+      .from(launchpad)
+      .where(
+        and(
+          eq(launchpad.id, postingId),
+          eq(launchpad.createdBy, userId),
+          isNull(launchpad.deletedAt),
+        ),
+      )
+      .for("update")
+      .limit(1);
+
+    if (!current) {
+      return "not_found" as const;
+    }
+
+    if (!canExtendManagePostingDeadline(current.status)) {
+      return "deadline_extension_not_allowed" as const;
+    }
+
+    if (!isDeadlineExtensionLater(current.deadline, body.deadline)) {
+      return "deadline_not_later" as const;
+    }
+
+    const nextStatus = DEADLINE_EXTENSION_REOPEN_STATUS;
+    const [updated] = await tx
+      .update(launchpad)
+      .set({
+        deadline: body.deadline,
+        status: nextStatus,
+        updatedBy: userId,
+        updatedAt: sql`now()`,
+      })
+      .where(
+        and(
+          eq(launchpad.id, postingId),
+          eq(launchpad.status, current.status),
+          isNull(launchpad.deletedAt),
+        ),
+      )
+      .returning({ id: launchpad.id });
+
+    if (!updated) {
+      return "not_found" as const;
+    }
+
+    await tx.insert(launchpadActionLog).values({
+      launchpadId: postingId,
+      name: POSTING_DEADLINE_EXTENSION_LOG_NAME,
+      description: "Workspace posting deadline extension",
+      fromData: {
+        status: derivePostingStatus({ rawStatus: current.status }),
+        deadline: current.deadline,
+      },
+      toData: {
+        status: nextStatus,
+        deadline: body.deadline,
+      },
+      status: nextStatus,
+      createdBy: userId,
+    });
+
+    return "updated" as const;
+  });
+
+  if (result !== "updated") {
+    return result;
+  }
+
+  const posting =
+    (await findProjectManagePostings(userId)).find(
+      (item) => item.id === postingId,
+    ) ?? null;
+
+  return posting ?? "not_found";
+}
+
+export async function extendManagePostingDeadline(
+  userId: string,
+  params: GetManagePostingDetailParam,
+  body: ExtendManagePostingDeadlineBody,
+): Promise<ManagePostingDeadlineUpdateResult> {
+  if (params.sourceType === "volunteer") {
+    return extendVolunteerManagePostingDeadline(userId, params.postingId, body);
+  }
+
+  return extendProjectManagePostingDeadline(userId, params.postingId, body);
 }
 
 export async function updateManagePostingApplication(

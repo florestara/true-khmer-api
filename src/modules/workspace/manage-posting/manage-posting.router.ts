@@ -4,6 +4,8 @@ import { requireAccessToken } from "../../../middlewares/auth.middleware";
 import { authProtectedErrorResponseSchema } from "../../auth/auth.schema";
 import {
   changeManagePostingApplicationStatusParamSchema,
+  extendManagePostingDeadlineBodySchema,
+  extendManagePostingDeadlineResponseSchema,
   getManagePostingApplicationParamSchema,
   getManagePostingDetailParamSchema,
   getManagePostingDetailQuerySchema,
@@ -17,6 +19,7 @@ import {
   managePostingsResponseSchema,
 } from "./manage-posting.schema";
 import {
+  handleExtendManagePostingDeadline,
   handleGetManagePostingApplication,
   handleGetManagePostingDetail,
   handleGetManagePostings,
@@ -240,6 +243,82 @@ const updateManagePostingActionRoute = createRoute({
   },
 });
 
+const extendManagePostingDeadlineRoute = createRoute({
+  method: "post",
+  path: "/{sourceType}/{postingId}/extend-deadline",
+  tags: ["Workspace"],
+  middleware: [requireAccessToken],
+  security: [{ BearerAuth: [] }],
+  request: {
+    params: getManagePostingDetailParamSchema,
+    body: {
+      content: {
+        "application/json": {
+          schema: extendManagePostingDeadlineBodySchema,
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Posting deadline extended and posting reopened",
+      content: {
+        "application/json": {
+          schema: extendManagePostingDeadlineResponseSchema,
+        },
+      },
+    },
+    400: {
+      description: "Validation failed",
+      content: {
+        "application/json": {
+          schema: managePostingsErrorResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: "Unauthorized",
+      content: {
+        "application/json": {
+          schema: authProtectedErrorResponseSchema,
+        },
+      },
+    },
+    403: {
+      description: "Onboarding required",
+      content: {
+        "application/json": {
+          schema: authProtectedErrorResponseSchema,
+        },
+      },
+    },
+    404: {
+      description: "Posting not found",
+      content: {
+        "application/json": {
+          schema: managePostingsErrorResponseSchema,
+        },
+      },
+    },
+    409: {
+      description: "Posting deadline cannot be extended from the current state",
+      content: {
+        "application/json": {
+          schema: managePostingsErrorResponseSchema,
+        },
+      },
+    },
+    500: {
+      description: "Internal server error",
+      content: {
+        "application/json": {
+          schema: managePostingsErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
 const updateManagePostingApplicationRoute = createRoute({
   method: "post",
   path: "/{sourceType}/{postingId}/{applicationId}/change-status/{statusAction}",
@@ -314,6 +393,12 @@ managePostingRouter.openapi(getManagePostingApplicationRoute, async (c) => {
 managePostingRouter.openapi(updateManagePostingActionRoute, async (c) => {
   const params = c.req.valid("param");
   return (await handleUpdateManagePostingAction(c, params)) as any;
+});
+
+managePostingRouter.openapi(extendManagePostingDeadlineRoute, async (c) => {
+  const params = c.req.valid("param");
+  const body = c.req.valid("json");
+  return (await handleExtendManagePostingDeadline(c, params, body)) as any;
 });
 
 managePostingRouter.openapi(updateManagePostingApplicationRoute, async (c) => {

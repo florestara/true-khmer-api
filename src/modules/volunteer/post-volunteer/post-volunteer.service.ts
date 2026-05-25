@@ -27,6 +27,7 @@ import {
   unsaveVolunteerOpportunityForUser,
   updateVolunteerOpportunity,
   VolunteerOpportunityDateRangeError,
+  VolunteerOpportunityPatchStatusError,
   VolunteerOpportunityRoleCapacityError,
   VolunteerOpportunityRoleNotFoundError,
   VolunteerOpportunityRoleRemovalBlockedError,
@@ -916,6 +917,17 @@ export async function handleUpdateVolunteerOpportunity(
       );
     }
 
+    if (target.status !== "LIVE" && target.status !== "DRAFT") {
+      return c.json(
+        {
+          ok: false,
+          error:
+            "Volunteer opportunity can only be edited while it is live or draft",
+        },
+        409,
+      );
+    }
+
     let coverImageKey = data.coverImageKey;
     if (data.coverImageKey !== undefined) {
       const normalizedCoverImageKey = normalizeOwnedCoverImageKey(
@@ -977,6 +989,10 @@ export async function handleUpdateVolunteerOpportunity(
   } catch (error) {
     if (error instanceof VolunteerOpportunityDateRangeError) {
       return c.json({ ok: false, error: error.message }, 400);
+    }
+
+    if (error instanceof VolunteerOpportunityPatchStatusError) {
+      return c.json({ ok: false, error: error.message }, 409);
     }
 
     if (error instanceof VolunteerOpportunityRoleNotFoundError) {

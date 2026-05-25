@@ -21,6 +21,7 @@ import {
   findLaunchpadById,
   findLaunchpads,
   incrementLaunchpadViewCount,
+  LaunchpadPatchStatusError,
   LaunchpadRoleCapacityError,
   LaunchpadRoleNotFoundError,
   LaunchpadRoleRemovalBlockedError,
@@ -269,6 +270,16 @@ export async function handleUpdateLaunchpad(
       );
     }
 
+    if (target.status !== "LIVE" && target.status !== "DRAFT") {
+      return c.json(
+        {
+          ok: false,
+          error: "Launchpad can only be edited while it is live or draft",
+        },
+        409,
+      );
+    }
+
     let logoKey = data.logoKey;
     if (data.logoKey !== undefined) {
       const normalizedLogoKey = normalizeOwnedLaunchpadLogoKey(
@@ -379,6 +390,10 @@ export async function handleUpdateLaunchpad(
 
     return c.json({ ok: true, launchpad }, 200);
   } catch (error) {
+    if (error instanceof LaunchpadPatchStatusError) {
+      return c.json({ ok: false, error: error.message }, 409);
+    }
+
     if (error instanceof LaunchpadRoleNotFoundError) {
       return c.json({ ok: false, error: error.message }, 404);
     }

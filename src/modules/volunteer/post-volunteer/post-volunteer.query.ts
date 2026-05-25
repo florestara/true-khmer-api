@@ -249,6 +249,13 @@ export class VolunteerOpportunityRoleCapacityError extends Error {
   }
 }
 
+export class VolunteerOpportunityPatchStatusError extends Error {
+  constructor() {
+    super("Volunteer opportunity can only be edited while it is live or draft");
+    this.name = "VolunteerOpportunityPatchStatusError";
+  }
+}
+
 type VolunteerOpportunitiesListResult = {
   opportunities: VolunteerOpportunityListItem[];
   pagination: CursorPagination;
@@ -500,14 +507,24 @@ export async function findVolunteerOpportunityApplicationTargetById(
 
 export async function findVolunteerOpportunityEditTargetById(
   opportunityId: string,
-): Promise<{ id: string; createdBy: string } | null> {
+): Promise<{
+  id: string;
+  createdBy: string;
+  status: VolunteerOpportunityStatus;
+} | null> {
   const [row] = await db
     .select({
       id: volunteerOpportunity.id,
       createdBy: volunteerOpportunity.createdBy,
+      status: volunteerOpportunity.status,
     })
     .from(volunteerOpportunity)
-    .where(eq(volunteerOpportunity.id, opportunityId))
+    .where(
+      and(
+        eq(volunteerOpportunity.id, opportunityId),
+        isNull(volunteerOpportunity.deletedAt),
+      ),
+    )
     .limit(1);
 
   return row ?? null;
@@ -1966,6 +1983,7 @@ export async function updateVolunteerOpportunity(
         and(
           eq(volunteerOpportunity.id, opportunityId),
           eq(volunteerOpportunity.createdBy, ownerId),
+          isNull(volunteerOpportunity.deletedAt),
         ),
       )
       .for("update")
@@ -1973,6 +1991,13 @@ export async function updateVolunteerOpportunity(
 
     if (!existingOpportunity) {
       return false;
+    }
+
+    if (
+      existingOpportunity.status !== "LIVE" &&
+      existingOpportunity.status !== "DRAFT"
+    ) {
+      throw new VolunteerOpportunityPatchStatusError();
     }
 
     const beforeRoles =
@@ -2051,6 +2076,7 @@ export async function updateVolunteerOpportunity(
           and(
             eq(volunteerOpportunity.id, opportunityId),
             eq(volunteerOpportunity.createdBy, ownerId),
+            isNull(volunteerOpportunity.deletedAt),
           ),
         );
     }
