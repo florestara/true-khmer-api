@@ -175,6 +175,26 @@ export async function handleExtendManagePostingDeadline(
       return c.json({ ok: false, error: "Posting not found" }, 404);
     }
 
+    if (result === "deadline_extension_not_allowed") {
+      return c.json(
+        {
+          ok: false,
+          error: "Posting deadline can only be extended while it is in progress",
+        },
+        409,
+      );
+    }
+
+    if (result === "deadline_not_later") {
+      return c.json(
+        {
+          ok: false,
+          error: "New deadline must be later than the current deadline",
+        },
+        409,
+      );
+    }
+
     return c.json({ ok: true, posting: result }, 200);
   } catch (error) {
     console.error("Failed to extend manage posting deadline", error);

@@ -136,7 +136,13 @@ type ManagePostingActionFailure =
   | "delete_not_allowed"
   | "live_has_applicants";
 type ManagePostingActionResult = ManagePostingActionFailure | ManagePostingItem;
-type ManagePostingDeadlineUpdateResult = "not_found" | ManagePostingItem;
+type ManagePostingDeadlineUpdateFailure =
+  | "not_found"
+  | "deadline_extension_not_allowed"
+  | "deadline_not_later";
+type ManagePostingDeadlineUpdateResult =
+  | ManagePostingDeadlineUpdateFailure
+  | ManagePostingItem;
 type PostingLogAction = "CANCEL" | "CLOSE" | "DELETE" | "COMPLETE";
 type PostingActionDecision = {
   action: PostingLogAction;
@@ -152,6 +158,12 @@ const POSTING_ACTION_LOG_NAME: Record<PostingLogAction, string> = {
   COMPLETE: "Posting completed",
 };
 const POSTING_DEADLINE_EXTENSION_LOG_NAME = "Posting deadline extended";
+const MANAGE_POSTING_EDITABLE_STATUSES = new Set<ManagePostingStatus>([
+  "LIVE",
+  "DRAFT",
+]);
+const DEADLINE_EXTENSION_SOURCE_STATUS: ManagePostingStatus = "IN_PROGRESS";
+const DEADLINE_EXTENSION_REOPEN_STATUS: ManagePostingStatus = "LIVE";
 
 const POSTER_LOCKED_APPLICATION_STATUSES = new Set<ManagePostingApplicantStatus>(
   ["CONFIRMED", "DECLINED", "COMPLETED", "WITHDRAWN"],
@@ -617,7 +629,21 @@ function derivePostingStatus(input: {
 }
 
 function isManagePostingEditable(status: ManagePostingStatus): boolean {
-  return status === "LIVE" || status === "DRAFT";
+  return MANAGE_POSTING_EDITABLE_STATUSES.has(status);
+}
+
+function canExtendManagePostingDeadline(status: ManagePostingStatus): boolean {
+  return status === DEADLINE_EXTENSION_SOURCE_STATUS;
+}
+
+function isDeadlineExtensionLater(
+  currentDeadline: string | null,
+  nextDeadline: string,
+): boolean {
+  return (
+    currentDeadline !== null &&
+    Date.parse(nextDeadline) > Date.parse(currentDeadline)
+  );
 }
 
 function matchesFilter(
@@ -1776,7 +1802,15 @@ async function extendVolunteerManagePostingDeadline(
       return "not_found" as const;
     }
 
-    const nextStatus = "LIVE" as const;
+    if (!canExtendManagePostingDeadline(current.status)) {
+      return "deadline_extension_not_allowed" as const;
+    }
+
+    if (!isDeadlineExtensionLater(current.deadline, body.deadline)) {
+      return "deadline_not_later" as const;
+    }
+
+    const nextStatus = DEADLINE_EXTENSION_REOPEN_STATUS;
     const [updated] = await tx
       .update(volunteerOpportunity)
       .set({
@@ -1856,7 +1890,15 @@ async function extendProjectManagePostingDeadline(
       return "not_found" as const;
     }
 
-    const nextStatus = "LIVE" as const;
+    if (!canExtendManagePostingDeadline(current.status)) {
+      return "deadline_extension_not_allowed" as const;
+    }
+
+    if (!isDeadlineExtensionLater(current.deadline, body.deadline)) {
+      return "deadline_not_later" as const;
+    }
+
+    const nextStatus = DEADLINE_EXTENSION_REOPEN_STATUS;
     const [updated] = await tx
       .update(launchpad)
       .set({

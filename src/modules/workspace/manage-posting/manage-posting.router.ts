@@ -300,6 +300,14 @@ const extendManagePostingDeadlineRoute = createRoute({
         },
       },
     },
+    409: {
+      description: "Posting deadline cannot be extended from the current state",
+      content: {
+        "application/json": {
+          schema: managePostingsErrorResponseSchema,
+        },
+      },
+    },
     500: {
       description: "Internal server error",
       content: {

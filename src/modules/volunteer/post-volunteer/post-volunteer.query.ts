@@ -519,7 +519,12 @@ export async function findVolunteerOpportunityEditTargetById(
       status: volunteerOpportunity.status,
     })
     .from(volunteerOpportunity)
-    .where(eq(volunteerOpportunity.id, opportunityId))
+    .where(
+      and(
+        eq(volunteerOpportunity.id, opportunityId),
+        isNull(volunteerOpportunity.deletedAt),
+      ),
+    )
     .limit(1);
 
   return row ?? null;
@@ -1978,6 +1983,7 @@ export async function updateVolunteerOpportunity(
         and(
           eq(volunteerOpportunity.id, opportunityId),
           eq(volunteerOpportunity.createdBy, ownerId),
+          isNull(volunteerOpportunity.deletedAt),
         ),
       )
       .for("update")
@@ -2070,6 +2076,7 @@ export async function updateVolunteerOpportunity(
           and(
             eq(volunteerOpportunity.id, opportunityId),
             eq(volunteerOpportunity.createdBy, ownerId),
+            isNull(volunteerOpportunity.deletedAt),
           ),
         );
     }
