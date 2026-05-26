@@ -92,6 +92,7 @@ export const forumQuestion = pgTable(
     answerCount: integer("answer_count").default(0).notNull(),
     upvoteCount: integer("upvote_count").default(0).notNull(),
     downvoteCount: integer("downvote_count").default(0).notNull(),
+    viewCount: integer("view_count").default(0).notNull(),
     bestAnswerId: uuid("best_answer_id").references(
       (): AnyPgColumn => forumAnswer.id,
       { onDelete: "set null" },

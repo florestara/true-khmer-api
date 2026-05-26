@@ -351,6 +351,13 @@
       "when": 1779450991627,
       "tag": "0049_strange_captain_midlands",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1779760375963,
+      "tag": "0050_strong_bill_hollister",
+      "breakpoints": true
     }
   ]
 }
