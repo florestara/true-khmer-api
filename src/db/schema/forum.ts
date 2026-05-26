@@ -1,6 +1,7 @@
 import { relations, sql } from "drizzle-orm";
 import {
   AnyPgColumn,
+  check,
   index,
   integer,
   pgEnum,
@@ -92,6 +93,7 @@ export const forumQuestion = pgTable(
     answerCount: integer("answer_count").default(0).notNull(),
     upvoteCount: integer("upvote_count").default(0).notNull(),
     downvoteCount: integer("downvote_count").default(0).notNull(),
+    viewCount: integer("view_count").default(0).notNull(),
     bestAnswerId: uuid("best_answer_id").references(
       (): AnyPgColumn => forumAnswer.id,
       { onDelete: "set null" },
@@ -113,6 +115,10 @@ export const forumQuestion = pgTable(
     index("forum_question_author_idx").using("btree", table.authorId),
     index("forum_question_status_idx").using("btree", table.status),
     index("forum_question_created_idx").using("btree", table.createdAt),
+    check(
+      "chk_forum_question_view_count_nonneg",
+      sql`${table.viewCount} >= 0`,
+    ),
   ],
 );
 

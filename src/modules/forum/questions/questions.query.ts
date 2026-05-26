@@ -119,12 +119,12 @@ const MAX_TRENDING_TAG_AMOUNT = env.FORUM_MAX_TRENDING_TAG_AMOUNT;
 const QUESTION_SCORE_SQL = sql<number>`${forumQuestion.upvoteCount} - ${forumQuestion.downvoteCount}`;
 const QUESTION_VOTE_COUNT_SQL = sql<number>`${forumQuestion.upvoteCount} + ${forumQuestion.downvoteCount}`;
 const TRENDING_WINDOW_HOURS = env.FORUM_TRENDING_WINDOW_HOURS;
-const MIN_TRENDING_ENGAGEMENT_SCORE =
-  env.FORUM_MIN_TRENDING_ENGAGEMENT_SCORE;
 const TRENDING_WINDOW_SQL = sql`${TRENDING_WINDOW_HOURS} * interval '1 hour'`;
 const TRENDING_UPVOTE_WEIGHT = 3;
+const TRENDING_DOWNVOTE_WEIGHT = 5;
 const TRENDING_ANSWER_WEIGHT = 10;
 const TRENDING_UNIQUE_PARTICIPANT_WEIGHT = 5;
+const TRENDING_VIEW_WEIGHT = 1;
 const TRENDING_DECAY_OFFSET_HOURS = 2;
 const TRENDING_DECAY_EXPONENT = 1.2;
 const forumQuestionTagSearch = aliasedTable(
@@ -242,6 +242,16 @@ function buildTrendingRecentUpvotesSql(rankingTimestampSql: SQL) {
   )`;
 }
 
+function buildTrendingRecentDownvotesSql(rankingTimestampSql: SQL) {
+  return sql<number>`(
+    select count(*)::int
+    from ${forumQuestionVote}
+    where ${forumQuestionVote.questionId} = ${forumQuestion.id}
+      and ${forumQuestionVote.voteType} = 'DOWNVOTE'
+      and ${forumQuestionVote.createdAt} >= ${rankingTimestampSql} - ${TRENDING_WINDOW_SQL}
+  )`;
+}
+
 function buildTrendingRecentAnswersSql(rankingTimestampSql: SQL) {
   return sql<number>`(
     select count(*)::int
@@ -273,19 +283,23 @@ function buildTrendingRecentUniqueParticipantsSql(rankingTimestampSql: SQL) {
 
 function buildTrendingRecentEngagementScoreSql(rankingTimestampSql: SQL) {
   const recentUpvotesSql = buildTrendingRecentUpvotesSql(rankingTimestampSql);
+  const recentDownvotesSql =
+    buildTrendingRecentDownvotesSql(rankingTimestampSql);
   const recentAnswersSql = buildTrendingRecentAnswersSql(rankingTimestampSql);
   const uniqueParticipantsSql =
     buildTrendingRecentUniqueParticipantsSql(rankingTimestampSql);
 
   return sql<number>`(
     (${recentUpvotesSql} * ${TRENDING_UPVOTE_WEIGHT}) +
+    (${forumQuestion.viewCount} * ${TRENDING_VIEW_WEIGHT}) +
     (${recentAnswersSql} * ${TRENDING_ANSWER_WEIGHT}) +
-    (${uniqueParticipantsSql} * ${TRENDING_UNIQUE_PARTICIPANT_WEIGHT})
+    (${uniqueParticipantsSql} * ${TRENDING_UNIQUE_PARTICIPANT_WEIGHT}) -
+    (${recentDownvotesSql} * ${TRENDING_DOWNVOTE_WEIGHT})
   )`;
 }
 
 function buildTrendingLastActivitySql(rankingTimestampSql: SQL) {
-  return sql<string | null>`greatest(
+  return sql<string>`greatest(
     coalesce(
       (
         select max(${forumAnswer.createdAt})
@@ -294,7 +308,7 @@ function buildTrendingLastActivitySql(rankingTimestampSql: SQL) {
           and ${forumAnswer.status} = 'PUBLISHED'
           and ${forumAnswer.createdAt} >= ${rankingTimestampSql} - ${TRENDING_WINDOW_SQL}
       ),
-      '-infinity'::timestamptz
+      ${forumQuestion.createdAt}
     ),
     coalesce(
       (
@@ -304,8 +318,9 @@ function buildTrendingLastActivitySql(rankingTimestampSql: SQL) {
           and ${forumQuestionVote.voteType} = 'UPVOTE'
           and ${forumQuestionVote.createdAt} >= ${rankingTimestampSql} - ${TRENDING_WINDOW_SQL}
       ),
-      '-infinity'::timestamptz
-    )
+      ${forumQuestion.createdAt}
+    ),
+    ${forumQuestion.createdAt}
   )::text`;
 }
 
@@ -315,9 +330,7 @@ function buildTrendingScoreSql(rankingTimestampSql: SQL) {
   const lastActivitySql = buildTrendingLastActivitySql(rankingTimestampSql);
 
   return sql<number>`case
-    when ${engagementScoreSql} <= 0
-      or ${lastActivitySql} = '-infinity'
-    then 0
+    when ${engagementScoreSql} <= 0 then 0
     else (
       ${engagementScoreSql}::double precision /
       power(
@@ -339,8 +352,7 @@ function buildNextQuestionsCursor(
   if (isTrending) {
     if (
       !row.trendingRankingTimestamp ||
-      !row.trendingLastActivityAt ||
-      row.trendingLastActivityAt === "-infinity"
+      !row.trendingLastActivityAt
     ) {
       throw new Error("Cannot build trending cursor without last activity");
     }
@@ -748,12 +760,6 @@ function buildQuestionsWhereClause(
     filters.push(gt(forumQuestion.answerCount, 0));
   }
 
-  if (isTrending) {
-    filters.push(
-      sql`${buildTrendingRecentEngagementScoreSql(trendingRankingTimestampSql)} >= ${MIN_TRENDING_ENGAGEMENT_SCORE}`,
-    );
-  }
-
   const cursorFilter = buildQuestionsCursorFilter(
     sortBy,
     isTrending,
@@ -1044,6 +1050,29 @@ export async function findQuestionByIdPublic(
   );
 
   return hydratePublicQuestion(questionRow, tags);
+}
+
+export async function incrementQuestionViewCount(
+  questionId: string,
+): Promise<number> {
+  const [updatedQuestion] = await db
+    .update(forumQuestion)
+    .set({
+      viewCount: sql`${forumQuestion.viewCount} + 1`,
+    })
+    .where(
+      and(
+        eq(forumQuestion.id, questionId),
+        inArray(forumQuestion.status, VISIBLE_QUESTION_STATUSES),
+      ),
+    )
+    .returning({ viewCount: forumQuestion.viewCount });
+
+  if (!updatedQuestion) {
+    throw new Error("Forum question view count update returned no rows");
+  }
+
+  return toInteger(updatedQuestion.viewCount);
 }
 
 export async function findQuestions(

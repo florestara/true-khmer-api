@@ -19,6 +19,7 @@ import {
   findQuestions,
   findQuestionsPublic,
   getTrendingTags,
+  incrementQuestionViewCount,
   saveQuestionForUser,
   setQuestionVote,
   softDeleteQuestion,
@@ -170,6 +171,14 @@ export async function handleGetQuestion(
       : await findQuestionById(params.questionId, userId as string);
     if (!question) {
       return c.json({ ok: false, error: "Question not found" }, 404);
+    }
+    try {
+      question.viewCount = await incrementQuestionViewCount(params.questionId);
+    } catch (error) {
+      console.warn("Failed to increment forum question view count", {
+        error,
+        questionId: params.questionId,
+      });
     }
     return c.json({ ok: true, question }, 200);
   } catch (err) {

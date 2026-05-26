@@ -224,7 +224,7 @@ const cursorLastActivityAtSchema = z
 const trendingQuestionsPageCursorSchema = z.object({
   sortBy: z.literal("trending"),
   trendingScore: z.number(),
-  engagementScore: z.number().int().nonnegative(),
+  engagementScore: z.number().int(),
   rankingTimestamp: cursorCreatedAtSchema,
   lastActivityAt: cursorLastActivityAtSchema,
   createdAt: cursorCreatedAtSchema,
