@@ -2428,58 +2428,6 @@ export async function createVolunteerApplicationsBatch(
   });
 }
 
-export async function findVolunteerApplicationsByApplicantId(
-  applicantId: string,
-): Promise<VolunteerApplicationDetail[]> {
-  const rows = await db
-    .select({
-      application: volunteerApplication,
-      roleTitle: volunteerRole.title,
-      opportunityId: volunteerOpportunity.id,
-      opportunityTitle: volunteerOpportunity.title,
-      coverImageKey: volunteerOpportunity.coverImageKey,
-      applicationDeadline: volunteerOpportunity.applicationDeadline,
-      opportunityStatus: volunteerOpportunity.status,
-      filled: volunteerOpportunity.filled,
-      categoryId: volunteerCategory.id,
-      categoryName: volunteerCategory.name,
-      cityId: city.id,
-      cityName: city.name,
-    })
-    .from(volunteerApplication)
-    .innerJoin(volunteerRole, eq(volunteerRole.id, volunteerApplication.roleId))
-    .innerJoin(
-      volunteerOpportunity,
-      eq(volunteerOpportunity.id, volunteerApplication.opportunityId),
-    )
-    .innerJoin(
-      volunteerCategory,
-      eq(volunteerCategory.id, volunteerOpportunity.categoryId),
-    )
-    .innerJoin(city, eq(city.id, volunteerOpportunity.cityId))
-    .where(eq(volunteerApplication.applicantId, applicantId))
-    .orderBy(desc(volunteerApplication.createdAt));
-
-  return rows.map((row) =>
-    hydrateVolunteerApplication(row.application, row.roleTitle, {
-      id: row.opportunityId,
-      title: row.opportunityTitle,
-      coverImageKey: row.coverImageKey,
-      applicationDeadline: row.applicationDeadline,
-      status: row.opportunityStatus,
-      filled: row.filled,
-      category: {
-        id: row.categoryId,
-        name: row.categoryName,
-      },
-      location: {
-        id: row.cityId,
-        name: row.cityName,
-      },
-    }),
-  );
-}
-
 export async function saveVolunteerOpportunityForUser(
   opportunityId: string,
   userId: string,

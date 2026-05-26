@@ -7,13 +7,6 @@ const myApplicationReferenceSchema = z
   })
   .openapi("MyApplicationReference");
 
-const myApplicationOpportunitySchema = z
-  .object({
-    id: z.string(),
-    title: z.string(),
-  })
-  .openapi("MyApplicationOpportunity");
-
 export const myApplicationStatusGroupSchema = z
   .enum([
     "SUBMITTED",
@@ -28,15 +21,27 @@ export const myApplicationStatusGroupSchema = z
 
 export const myApplicationItemSchema = z
   .object({
-    id: z.string(),
     sourceType: z.enum(["VOLUNTEER", "PROJECT"]),
+    opportunityId: z.string(),
     title: z.string(),
     imageKey: z.string().nullable(),
     appliedAt: z.string(),
     deadline: z.string().nullable(),
     status: myApplicationStatusGroupSchema,
-    filled: z.boolean(),
-    opportunity: myApplicationOpportunitySchema.nullable(),
+    roles: z.array(
+      z.object({
+        applicationId: z.string(),
+        roleId: z.string(),
+        title: z.string(),
+        description: z.string().nullable(),
+        status: myApplicationStatusGroupSchema,
+        appliedAt: z.string(),
+        updatedAt: z.string(),
+        archived: z.boolean(),
+      }),
+    ),
+    topPick: z.string().nullable(),
+    updatedAt: z.string(),
     category: myApplicationReferenceSchema.nullable(),
     location: myApplicationReferenceSchema.nullable(),
   })

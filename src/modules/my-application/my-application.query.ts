@@ -20,7 +20,6 @@ import type {
   ChangeMyApplicationArchiveParam,
   ChangeMyApplicationStatusParam,
 } from "./schema/my-application.request.schema";
-import { findVolunteerApplicationsByApplicantId } from "../volunteer/post-volunteer/post-volunteer.query";
 
 export type MySpaceVolunteerApplication =
   Awaited<ReturnType<typeof findVolunteerApplicationsByApplicantId>>[number];
@@ -28,6 +27,70 @@ export type MySpaceVolunteerApplication =
 export type MySpaceProjectApplication = Awaited<
   ReturnType<typeof findProjectApplicationsByApplicantId>
 >[number];
+
+function toIsoDateTimeString(value: string): string {
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : value;
+}
+
+async function findVolunteerApplicationsByApplicantId(applicantId: string) {
+  const rows = await db
+    .select({
+      application: volunteerApplication,
+      role: {
+        id: volunteerRole.id,
+        title: volunteerRole.title,
+      },
+      opportunity: {
+        id: volunteerOpportunity.id,
+        title: volunteerOpportunity.title,
+        coverImageKey: volunteerOpportunity.coverImageKey,
+        applicationDeadline: volunteerOpportunity.applicationDeadline,
+      },
+      category: {
+        id: volunteerCategory.id,
+        name: volunteerCategory.name,
+      },
+      location: {
+        id: city.id,
+        name: city.name,
+      },
+    })
+    .from(volunteerApplication)
+    .innerJoin(volunteerRole, eq(volunteerRole.id, volunteerApplication.roleId))
+    .innerJoin(
+      volunteerOpportunity,
+      eq(volunteerOpportunity.id, volunteerApplication.opportunityId),
+    )
+    .innerJoin(
+      volunteerCategory,
+      eq(volunteerCategory.id, volunteerOpportunity.categoryId),
+    )
+    .innerJoin(city, eq(city.id, volunteerOpportunity.cityId))
+    .where(eq(volunteerApplication.applicantId, applicantId))
+    .orderBy(desc(volunteerApplication.createdAt));
+
+  return rows.map((row) => ({
+    id: row.application.id,
+    opportunity: {
+      ...row.opportunity,
+      applicationDeadline: toIsoDateTimeString(
+        row.opportunity.applicationDeadline,
+      ),
+      category: row.category,
+      location: row.location,
+    },
+    role: row.role,
+    availability: row.application.availability,
+    relevantExperience: row.application.relevantExperience,
+    supportingDocuments: row.application.supportingDocuments,
+    topPick: row.application.topPick,
+    status: row.application.status,
+    archived: row.application.archived,
+    createdAt: toIsoDateTimeString(row.application.createdAt),
+    updatedAt: toIsoDateTimeString(row.application.updatedAt),
+  }));
+}
 
 export async function findMyVolunteerApplications(userId: string) {
   return findVolunteerApplicationsByApplicantId(userId);
@@ -38,11 +101,21 @@ export async function findProjectApplicationsByApplicantId(applicantId: string) 
     .select({
       id: launchpadApplication.id,
       title: launchpadRole.title,
+      role: {
+        id: launchpadRole.id,
+        title: launchpadRole.title,
+        description: launchpadRole.description,
+      },
       imageKey: launchpad.coverKey,
       appliedAt: launchpadApplication.createdAt,
+      updatedAt: launchpadApplication.updatedAt,
       deadline: launchpad.deadline,
       status: launchpadApplication.status,
       archived: launchpadApplication.archived,
+      topPick: launchpadApplication.topPick,
+      motivation: launchpadApplication.motivation,
+      portfolio: launchpadApplication.portfolio,
+      documentKeys: launchpadApplication.documentKeys,
       opportunity: {
         id: launchpad.id,
         title: launchpad.name,
