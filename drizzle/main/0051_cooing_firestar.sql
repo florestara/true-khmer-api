@@ -1,0 +1,1 @@
+ALTER TABLE "forum_question" ADD CONSTRAINT "chk_forum_question_view_count_nonneg" CHECK ("forum_question"."view_count" >= 0);

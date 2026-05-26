@@ -1060,7 +1060,12 @@ export async function incrementQuestionViewCount(
     .set({
       viewCount: sql`${forumQuestion.viewCount} + 1`,
     })
-    .where(eq(forumQuestion.id, questionId))
+    .where(
+      and(
+        eq(forumQuestion.id, questionId),
+        inArray(forumQuestion.status, VISIBLE_QUESTION_STATUSES),
+      ),
+    )
     .returning({ viewCount: forumQuestion.viewCount });
 
   if (!updatedQuestion) {
