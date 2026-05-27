@@ -2,19 +2,21 @@ import type { Context } from "hono";
 import { getAuthUserId } from "../../auth/utils/get-auth";
 import {
   extendManagePostingDeadline,
-  findManagePostingApplication,
+  findManagePostingCandidate,
   findManagePostingDetail,
   findManagePostings,
   updateManagePostingAction,
   updateManagePostingApplication,
+  upsertManagePostingCandidateNote,
 } from "./manage-posting.query";
 import type {
   ChangeManagePostingApplicationStatusParam,
   ExtendManagePostingDeadlineBody,
-  GetManagePostingApplicationParam,
+  GetManagePostingCandidateParam,
   GetManagePostingDetailParam,
   GetManagePostingDetailQuery,
   GetManagePostingsQuery,
+  UpsertManagePostingCandidateNoteBody,
   UpdateManagePostingActionParam,
 } from "./manage-posting.schema";
 
@@ -202,9 +204,9 @@ export async function handleExtendManagePostingDeadline(
   }
 }
 
-export async function handleGetManagePostingApplication(
+export async function handleGetManagePostingCandidate(
   c: Context,
-  params: GetManagePostingApplicationParam,
+  params: GetManagePostingCandidateParam,
 ) {
   const authResult = getAuthUserId(c);
   if (!authResult.ok) {
@@ -212,10 +214,10 @@ export async function handleGetManagePostingApplication(
   }
 
   try {
-    const detail = await findManagePostingApplication(authResult.userId, params);
+    const detail = await findManagePostingCandidate(authResult.userId, params);
 
     if (!detail) {
-      return c.json({ ok: false, error: "Application not found" }, 404);
+      return c.json({ ok: false, error: "Candidate not found" }, 404);
     }
 
     return c.json(
@@ -226,7 +228,35 @@ export async function handleGetManagePostingApplication(
       200,
     );
   } catch (error) {
-    console.error("Failed to get manage posting application", error);
+    console.error("Failed to get manage posting candidate", error);
+    return c.json({ ok: false, error: "Internal server error" }, 500);
+  }
+}
+
+export async function handleUpsertManagePostingCandidateNote(
+  c: Context,
+  params: GetManagePostingCandidateParam,
+  body: UpsertManagePostingCandidateNoteBody,
+) {
+  const authResult = getAuthUserId(c);
+  if (!authResult.ok) {
+    return authResult.response;
+  }
+
+  try {
+    const detail = await upsertManagePostingCandidateNote(
+      authResult.userId,
+      params,
+      body,
+    );
+
+    if (!detail) {
+      return c.json({ ok: false, error: "Candidate not found" }, 404);
+    }
+
+    return c.json({ ok: true, applicant: detail.applicant }, 200);
+  } catch (error) {
+    console.error("Failed to upsert manage posting applicant note", error);
     return c.json({ ok: false, error: "Internal server error" }, 500);
   }
 }

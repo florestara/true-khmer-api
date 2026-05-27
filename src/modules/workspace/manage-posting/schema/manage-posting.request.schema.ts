@@ -55,6 +55,20 @@ export const getManagePostingDetailParamSchema = z
   })
   .openapi("GetManagePostingDetailParam");
 
+export const getManagePostingCandidateParamSchema = z
+  .object({
+    sourceType: managePostingSourceParamSchema,
+    postingId: z
+      .string()
+      .trim()
+      .regex(UUID_RE, "postingId must be a valid UUID"),
+    candidateId: z
+      .string()
+      .trim()
+      .regex(UUID_RE, "candidateId must be a valid UUID"),
+  })
+  .openapi("GetManagePostingCandidateParam");
+
 export const getManagePostingApplicationParamSchema = z
   .object({
     sourceType: managePostingSourceParamSchema,
@@ -79,6 +93,15 @@ export const changeManagePostingApplicationStatusParamSchema =
       statusAction: managePostingStatusActionSchema,
     })
     .openapi("ChangeManagePostingApplicationStatusParam");
+
+export const upsertManagePostingCandidateNoteBodySchema = z
+  .object({
+    note: z
+      .string()
+      .trim()
+      .max(5000, "note must be <= 5000 characters"),
+  })
+  .openapi("UpsertManagePostingCandidateNoteRequest");
 
 export const getManagePostingDetailQuerySchema = z
   .object({
@@ -133,8 +156,14 @@ export type GetManagePostingDetailParam = z.infer<
 export type GetManagePostingApplicationParam = z.infer<
   typeof getManagePostingApplicationParamSchema
 >;
+export type GetManagePostingCandidateParam = z.infer<
+  typeof getManagePostingCandidateParamSchema
+>;
 export type ChangeManagePostingApplicationStatusParam = z.infer<
   typeof changeManagePostingApplicationStatusParamSchema
+>;
+export type UpsertManagePostingCandidateNoteBody = z.infer<
+  typeof upsertManagePostingCandidateNoteBodySchema
 >;
 export type UpdateManagePostingActionParam = z.infer<
   typeof updateManagePostingActionParamSchema

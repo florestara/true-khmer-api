@@ -1182,6 +1182,46 @@ export async function findVolunteerTopPickedRoleId(
   return topPickedRoleByOpportunityId.get(opportunityId) ?? null;
 }
 
+export async function findVolunteerAppliedRoleIds(
+  roleIds: string[],
+  applicantId: string,
+): Promise<string[]> {
+  if (roleIds.length === 0) {
+    return [];
+  }
+
+  const rows = await db
+    .select({ roleId: volunteerApplication.roleId })
+    .from(volunteerApplication)
+    .where(
+      and(
+        eq(volunteerApplication.applicantId, applicantId),
+        inArray(volunteerApplication.roleId, roleIds),
+      ),
+    );
+
+  return rows.map((row) => row.roleId);
+}
+
+export async function hasVolunteerApprovedOrConfirmedApplication(
+  opportunityId: string,
+  applicantId: string,
+): Promise<boolean> {
+  const [row] = await db
+    .select({ id: volunteerApplication.id })
+    .from(volunteerApplication)
+    .where(
+      and(
+        eq(volunteerApplication.opportunityId, opportunityId),
+        eq(volunteerApplication.applicantId, applicantId),
+        sql`${volunteerApplication.status} in ('APPROVED', 'CONFIRMED')`,
+      ),
+    )
+    .limit(1);
+
+  return row !== undefined;
+}
+
 async function hydrateVolunteerOpportunityDetails(
   rows: VolunteerOpportunityBaseRow[],
   viewerId?: string,

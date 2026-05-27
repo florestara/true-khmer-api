@@ -264,10 +264,49 @@ export async function findExistingApplication(
       and(
         eq(launchpadApplication.launchpadRoleId, launchpadRoleId),
         eq(launchpadApplication.createdBy, createdBy),
-        sql`${launchpadApplication.status} in ('SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'CONFIRMED', 'COMPLETED')`,
       ),
     )
     .limit(1);
 
   return row ?? null;
+}
+
+export async function findExistingApplicationRoleIds(
+  launchpadRoleIds: string[],
+  createdBy: string,
+): Promise<string[]> {
+  if (launchpadRoleIds.length === 0) {
+    return [];
+  }
+
+  const rows = await db
+    .select({ roleId: launchpadApplication.launchpadRoleId })
+    .from(launchpadApplication)
+    .where(
+      and(
+        eq(launchpadApplication.createdBy, createdBy),
+        inArray(launchpadApplication.launchpadRoleId, launchpadRoleIds),
+      ),
+    );
+
+  return rows.map((row) => row.roleId);
+}
+
+export async function hasLaunchpadApprovedOrConfirmedApplication(
+  launchpadId: string,
+  createdBy: string,
+): Promise<boolean> {
+  const [row] = await db
+    .select({ id: launchpadApplication.id })
+    .from(launchpadApplication)
+    .where(
+      and(
+        eq(launchpadApplication.launchpadId, launchpadId),
+        eq(launchpadApplication.createdBy, createdBy),
+        sql`${launchpadApplication.status} in ('APPROVED', 'CONFIRMED')`,
+      ),
+    )
+    .limit(1);
+
+  return row !== undefined;
 }
