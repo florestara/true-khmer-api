@@ -1,6 +1,6 @@
 import { db } from "../../db/index";
 import { volunteerOpportunity, launchpad } from "../../db/schema";
-import { eq, and, lt, isNull, sql } from "drizzle-orm";
+import { eq, and, lte, isNull, sql } from "drizzle-orm";
 
 export async function runStatusUpdateCron() {
   let updatedVolunteerOpportunities = 0;
@@ -31,7 +31,7 @@ export async function runStatusUpdateCron() {
         .where(
           and(
             eq(volunteerOpportunity.status, "LIVE"),
-            lt(volunteerOpportunity.applicationDeadline, nowIso),
+            lte(volunteerOpportunity.applicationDeadline, nowIso),
             isNull(volunteerOpportunity.deletedAt),
           ),
         )
@@ -48,7 +48,7 @@ export async function runStatusUpdateCron() {
         .where(
           and(
             eq(launchpad.status, "LIVE"),
-            lt(launchpad.deadline, nowIso),
+            lte(launchpad.deadline, nowIso),
             isNull(launchpad.deletedAt),
           ),
         )
