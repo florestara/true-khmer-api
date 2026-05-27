@@ -119,9 +119,9 @@ export const managePostingApplicantSchema = z
     }),
     submissions: z.array(managePostingSubmissionSchema),
     submissionCount: z.number().int().nonnegative(),
-    roleCount: z.number().int().nonnegative(),
+    totalRoleApplied: z.number().int().nonnegative(),
     overallStatus: managePostingApplicantStatusSchema,
-    appliedAt: z.string(),
+    lastAppliedAt: z.string(),
     updatedAt: z.string(),
     contact: z.object({
       email: z.string(),

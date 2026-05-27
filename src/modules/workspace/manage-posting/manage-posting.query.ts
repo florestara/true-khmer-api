@@ -119,9 +119,9 @@ type ManagePostingApplicant = {
   };
   submissions: ManagePostingSubmission[];
   submissionCount: number;
-  roleCount: number;
+  totalRoleApplied: number;
   overallStatus: ManagePostingApplicantStatus;
-  appliedAt: string;
+  lastAppliedAt: string;
   updatedAt: string;
   contact: {
     email: string;
@@ -502,10 +502,10 @@ function buildVolunteerManagePostingApplicants(
         candidate: row.candidate,
         submissions: [],
         submissionCount: 0,
-        roleCount: 0,
+        totalRoleApplied: 0,
         overallStatus: row.application.status,
         effectiveStatus: row.application.status,
-        appliedAt: row.application.createdAt,
+        lastAppliedAt: row.application.createdAt,
         updatedAt: row.application.updatedAt,
         contact: {
           email: row.candidate.email,
@@ -552,8 +552,11 @@ function buildVolunteerManagePostingApplicants(
       applicant.effectiveStatus,
       row.application.status,
     );
-    if (Date.parse(row.application.createdAt) > Date.parse(applicant.appliedAt)) {
-      applicant.appliedAt = row.application.createdAt;
+    if (
+      Date.parse(row.application.createdAt) >
+      Date.parse(applicant.lastAppliedAt)
+    ) {
+      applicant.lastAppliedAt = row.application.createdAt;
     }
     if (Date.parse(row.application.updatedAt) > Date.parse(applicant.updatedAt)) {
       applicant.updatedAt = row.application.updatedAt;
@@ -581,12 +584,12 @@ function buildVolunteerManagePostingApplicants(
       candidate: applicant.candidate,
       submissions,
       submissionCount: submissions.length,
-      roleCount: submissions.reduce(
+      totalRoleApplied: submissions.reduce(
         (count, submission) => count + submission.roles.length,
         0,
       ),
       overallStatus: resolveApplicantOverallStatus(roleStatuses),
-      appliedAt: applicant.appliedAt,
+      lastAppliedAt: applicant.lastAppliedAt,
       updatedAt: applicant.updatedAt,
       contact: applicant.contact,
       privateNote: applicant.privateNote,
@@ -729,10 +732,10 @@ function buildProjectManagePostingApplicants(
         candidate: row.candidate,
         submissions: [],
         submissionCount: 0,
-        roleCount: 0,
+        totalRoleApplied: 0,
         overallStatus: row.application.status,
         effectiveStatus: row.application.status,
-        appliedAt: row.application.createdAt,
+        lastAppliedAt: row.application.createdAt,
         updatedAt: row.application.updatedAt,
         contact: {
           email: row.candidate.email,
@@ -777,8 +780,11 @@ function buildProjectManagePostingApplicants(
       applicant.effectiveStatus,
       row.application.status,
     );
-    if (Date.parse(row.application.createdAt) > Date.parse(applicant.appliedAt)) {
-      applicant.appliedAt = row.application.createdAt;
+    if (
+      Date.parse(row.application.createdAt) >
+      Date.parse(applicant.lastAppliedAt)
+    ) {
+      applicant.lastAppliedAt = row.application.createdAt;
     }
     if (Date.parse(row.application.updatedAt) > Date.parse(applicant.updatedAt)) {
       applicant.updatedAt = row.application.updatedAt;
@@ -806,12 +812,12 @@ function buildProjectManagePostingApplicants(
       candidate: applicant.candidate,
       submissions,
       submissionCount: submissions.length,
-      roleCount: submissions.reduce(
+      totalRoleApplied: submissions.reduce(
         (count, submission) => count + submission.roles.length,
         0,
       ),
       overallStatus: resolveApplicantOverallStatus(roleStatuses),
-      appliedAt: applicant.appliedAt,
+      lastAppliedAt: applicant.lastAppliedAt,
       updatedAt: applicant.updatedAt,
       contact: applicant.contact,
       privateNote: applicant.privateNote,
