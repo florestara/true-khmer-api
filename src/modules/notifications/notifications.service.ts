@@ -25,6 +25,97 @@ import type {
 } from "./schema/notifications.request.schema";
 import { NOTIFICATION_ICON_MAP } from "./schema/notifications.request.schema";
 
+type NotificationSendResult = {
+  successCount: number;
+  failureCount: number;
+};
+
+export type SendNotificationToUserPayload = {
+  userId: string;
+  title: string;
+  body: string;
+  imageUrl?: string;
+  type?: NotificationType;
+  archived?: boolean;
+  data?: Record<string, string>;
+  webRoute?: string;
+  mobileRoute?: string;
+};
+
+function withMobileRouteData(
+  data: Record<string, string> | undefined,
+  mobileRoute: string | undefined,
+) {
+  return mobileRoute ? { ...data, route: mobileRoute } : data;
+}
+
+async function sendMobilePushToUser(
+  userId: string,
+  payload: {
+    title: string;
+    body: string;
+    imageUrl?: string;
+    data?: Record<string, string>;
+    mobileRoute?: string;
+  },
+): Promise<NotificationSendResult> {
+  const allTokens = await getFcmTokensByUserId(userId);
+  const mobileTokens = allTokens.filter(
+    (t) => t.platform === "android" || t.platform === "ios",
+  );
+
+  if (mobileTokens.length === 0) {
+    return { successCount: 0, failureCount: 0 };
+  }
+
+  const messaging = getMessaging();
+  const CHUNK_SIZE = 500;
+  let successCount = 0;
+  let failureCount = 0;
+
+  for (let i = 0; i < mobileTokens.length; i += CHUNK_SIZE) {
+    const chunk = mobileTokens.slice(i, i + CHUNK_SIZE);
+    const result = await messaging.sendEachForMulticast({
+      tokens: chunk.map((t) => t.token),
+      notification: {
+        title: payload.title,
+        body: payload.body,
+        imageUrl: payload.imageUrl,
+      },
+      data: withMobileRouteData(payload.data, payload.mobileRoute),
+    });
+    successCount += result.successCount;
+    failureCount += result.failureCount;
+  }
+
+  return { successCount, failureCount };
+}
+
+/**
+ * Internal backend helper for system-triggered notifications.
+ *
+ * This stores the notification row, emits the realtime SSE event via
+ * createNotification, then sends mobile FCM to the recipient's android/ios
+ * tokens. Callers should pass trusted server-computed title/body/routes.
+ */
+export async function sendNotificationToUser(
+  payload: SendNotificationToUserPayload,
+): Promise<NotificationSendResult> {
+  await createNotification({
+    userId: payload.userId,
+    title: payload.title,
+    body: payload.body,
+    imageUrl: payload.imageUrl,
+    type: payload.type,
+    archived: payload.archived,
+    data: payload.data,
+    webRoute: payload.webRoute,
+    mobileRoute: payload.mobileRoute,
+  });
+
+  return sendMobilePushToUser(payload.userId, payload);
+}
+
 export async function handleRegisterToken(
   c: Context,
   payload: RegisterTokenPayload,
@@ -189,6 +280,7 @@ export async function handleListNotifications(
 
     // Get all notification types from the enum
     const allTypes = [
+      "forum",
       "profile_view",
       "new_message",
       "achievement",

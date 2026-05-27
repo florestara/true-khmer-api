@@ -4,6 +4,7 @@ export const fcmPlatformEnum = z.enum(["web", "android", "ios"]);
 export type FcmTokenPlatform = z.infer<typeof fcmPlatformEnum>;
 
 export const notificationTypeEnum = z.enum([
+  "forum", // MessageCircle
   "profile_view", // User
   "new_message", // MessageSquare
   "achievement", // Trophy
@@ -16,6 +17,7 @@ export const notificationTypeEnum = z.enum([
 export type NotificationType = z.infer<typeof notificationTypeEnum>;
 
 export const NOTIFICATION_ICON_MAP: Record<NotificationType, string> = {
+  forum: "MessageCircle",
   profile_view: "User",
   new_message: "MessageSquare",
   achievement: "Trophy",
