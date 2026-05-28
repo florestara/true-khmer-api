@@ -97,7 +97,9 @@ export type ManagePostingItem = {
   imageKey: string | null;
   status: ManagePostingStatus;
   filled: boolean;
+  roleCount: number;
   applicantCount: number;
+  confirmedCount: number;
   capacity: number;
   views: number;
   deadline: string | null;
@@ -321,7 +323,9 @@ type VolunteerPostingRow = {
     | "DELETED";
   filled: boolean;
   totalView: number;
+  roleCount: number;
   applicantCount: number;
+  confirmedCount: number;
   capacity: number;
   deadline: string;
   createdAt: string;
@@ -340,7 +344,9 @@ type ProjectPostingRow = {
     | "CANCELED"
     | "DELETED";
   totalView: number;
+  roleCount: number;
   applicantCount: number;
+  confirmedCount: number;
   capacity: number;
   filled: boolean;
   deadline: string | null;
@@ -938,6 +944,10 @@ async function findVolunteerManagePostings(
         sql<number>`count(distinct ${volunteerApplication.applicantId})::int`.as(
           "applicant_count",
         ),
+      confirmedCount:
+        sql<number>`count(*) filter (where ${volunteerApplication.status} = 'CONFIRMED')::int`.as(
+          "confirmed_count",
+        ),
     })
     .from(volunteerApplication)
     .where(sql`${volunteerApplication.status} <> 'WITHDRAWN'`)
@@ -947,6 +957,7 @@ async function findVolunteerManagePostings(
   const roleCapacities = db
     .select({
       opportunityId: volunteerRole.opportunityId,
+      roleCount: sql<number>`count(*)::int`.as("role_count"),
       capacity:
         sql<number>`coalesce(sum(${volunteerRole.capacity}), 0)::int`.as(
           "capacity",
@@ -965,7 +976,9 @@ async function findVolunteerManagePostings(
       rawStatus: volunteerOpportunity.status,
       filled: volunteerOpportunity.filled,
       totalView: volunteerOpportunity.totalView,
+      roleCount: sql<number>`coalesce(${roleCapacities.roleCount}, 0)`,
       applicantCount: sql<number>`coalesce(${applicantGroups.applicantCount}, 0)`,
+      confirmedCount: sql<number>`coalesce(${applicantGroups.confirmedCount}, 0)`,
       capacity: sql<number>`coalesce(${roleCapacities.capacity}, 0)`,
       deadline: volunteerOpportunity.applicationDeadline,
       createdAt: volunteerOpportunity.createdAt,
@@ -997,7 +1010,9 @@ async function findVolunteerManagePostings(
       imageKey: row.imageKey,
       status,
       filled: row.filled,
+      roleCount: toInteger(row.roleCount),
       applicantCount,
+      confirmedCount: toInteger(row.confirmedCount),
       capacity,
       views: toInteger(row.totalView),
       deadline: row.deadline,
@@ -1023,6 +1038,10 @@ async function findProjectManagePostings(
         sql<number>`count(distinct ${launchpadApplication.createdBy})::int`.as(
           "applicant_count",
         ),
+      confirmedCount:
+        sql<number>`count(*) filter (where ${launchpadApplication.status} = 'CONFIRMED')::int`.as(
+          "confirmed_count",
+        ),
     })
     .from(launchpadApplication)
     .where(sql`${launchpadApplication.status} <> 'WITHDRAWN'`)
@@ -1032,6 +1051,7 @@ async function findProjectManagePostings(
   const roleCapacities = db
     .select({
       launchpadId: launchpadRole.launchpadId,
+      roleCount: sql<number>`count(*)::int`.as("role_count"),
       capacity:
         sql<number>`coalesce(sum(${launchpadRole.capacity}), 0)::int`.as(
           "capacity",
@@ -1075,7 +1095,9 @@ async function findProjectManagePostings(
       imageKey: launchpad.coverKey,
       rawStatus: launchpad.status,
       totalView: launchpad.totalView,
+      roleCount: sql<number>`coalesce(${roleCapacities.roleCount}, 0)`,
       applicantCount: sql<number>`coalesce(${applicantGroups.applicantCount}, 0)`,
+      confirmedCount: sql<number>`coalesce(${applicantGroups.confirmedCount}, 0)`,
       capacity: sql<number>`coalesce(${roleCapacities.capacity}, 0)`,
       filled: sql<boolean>`coalesce(${filledLaunchpads.filled}, false)`,
       deadline: launchpad.deadline,
@@ -1106,7 +1128,9 @@ async function findProjectManagePostings(
       imageKey: row.imageKey,
       status,
       filled: row.filled,
+      roleCount: toInteger(row.roleCount),
       applicantCount,
+      confirmedCount: toInteger(row.confirmedCount),
       capacity,
       views: toInteger(row.totalView),
       deadline: row.deadline,

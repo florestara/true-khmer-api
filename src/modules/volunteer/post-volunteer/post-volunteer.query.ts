@@ -187,6 +187,7 @@ export type VolunteerOpportunityDetail = {
   updatedAt: string;
   viewerSave: boolean;
   viewerTopPicked: string | null;
+  viewerBlocked: boolean;
   roles: Array<{
     id: string;
     title: string;
@@ -766,6 +767,7 @@ function hydrateVolunteerOpportunityDetail(
   viewerSave: boolean,
   appliedRoleIds: Set<string>,
   viewerTopPicked: string | null,
+  viewerBlocked: boolean,
 ): VolunteerOpportunityDetail {
   const capacity = roles.reduce(
     (total, role) => total + toInteger(role.capacity),
@@ -808,6 +810,7 @@ function hydrateVolunteerOpportunityDetail(
     updatedAt: toIsoDateTimeString(opportunity.updatedAt),
     viewerSave,
     viewerTopPicked,
+    viewerBlocked,
     roles: roles.map((role) => ({
       id: role.id,
       title: role.title,
@@ -1240,6 +1243,31 @@ export async function hasVolunteerApplicationBlock(
   return row !== undefined;
 }
 
+async function getBlockedOpportunityIdsByOpportunityIds(
+  executor: VolunteerQueryExecutor,
+  opportunityIds: string[],
+  viewerId?: string,
+): Promise<Set<string>> {
+  const uniqueOpportunityIds = [...new Set(opportunityIds)];
+  if (!viewerId || uniqueOpportunityIds.length === 0) {
+    return new Set();
+  }
+
+  const rows = await executor
+    .select({ postingId: workspaceCandidateBlock.postingId })
+    .from(workspaceCandidateBlock)
+    .where(
+      and(
+        eq(workspaceCandidateBlock.sourceType, "VOLUNTEER"),
+        inArray(workspaceCandidateBlock.postingId, uniqueOpportunityIds),
+        eq(workspaceCandidateBlock.candidateId, viewerId),
+        eq(workspaceCandidateBlock.status, "ACTIVE"),
+      ),
+    );
+
+  return new Set(rows.map((row) => row.postingId));
+}
+
 async function hydrateVolunteerOpportunityDetails(
   rows: VolunteerOpportunityBaseRow[],
   viewerId?: string,
@@ -1304,12 +1332,14 @@ async function hydrateVolunteerOpportunityDetails(
     savedOpportunityIds,
     appliedRoleIds,
     topPickedRoleIdByOpportunityId,
+    blockedOpportunityIds,
   ] = await Promise.all([
-      getAcceptedApplicationCountsByOpportunityIds(db, opportunityIds),
-      getSavedOpportunityIdsByOpportunityIds(db, opportunityIds, viewerId),
-      getAppliedRoleIdsByRoleIds(db, roleIds, viewerId),
-      getTopPickedRoleIdByOpportunityIds(db, opportunityIds, viewerId),
-    ]);
+    getAcceptedApplicationCountsByOpportunityIds(db, opportunityIds),
+    getSavedOpportunityIdsByOpportunityIds(db, opportunityIds, viewerId),
+    getAppliedRoleIdsByRoleIds(db, roleIds, viewerId),
+    getTopPickedRoleIdByOpportunityIds(db, opportunityIds, viewerId),
+    getBlockedOpportunityIdsByOpportunityIds(db, opportunityIds, viewerId),
+  ]);
 
   return rows.map((row) => {
     const organizer = organizerById.get(row.opportunity.createdBy);
@@ -1331,6 +1361,7 @@ async function hydrateVolunteerOpportunityDetails(
       savedOpportunityIds.has(row.opportunity.id),
       appliedRoleIds,
       topPickedRoleIdByOpportunityId.get(row.opportunity.id) ?? null,
+      blockedOpportunityIds.has(row.opportunity.id),
     );
   });
 }
@@ -2374,6 +2405,7 @@ export async function createVolunteerOpportunity(
       false,
       new Set(),
       null,
+      false,
     );
   });
 }
