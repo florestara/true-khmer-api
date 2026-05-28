@@ -26,19 +26,32 @@ export const myApplicationStatusGroupSchema = z
   ])
   .openapi("MyApplicationStatusGroup");
 
+const myApplicationRoleSchema = z
+  .object({
+    applicationId: z.string(),
+    roleId: z.string(),
+    title: z.string(),
+    status: myApplicationStatusGroupSchema,
+    appliedAt: z.string(),
+  })
+  .openapi("MyApplicationRole");
+
 export const myApplicationItemSchema = z
   .object({
-    id: z.string(),
+    opportunityId: z.string(),
+    opportunityTitle: z.string(),
     sourceType: z.enum(["VOLUNTEER", "PROJECT"]),
-    title: z.string(),
     imageKey: z.string().nullable(),
     appliedAt: z.string(),
     deadline: z.string().nullable(),
     status: myApplicationStatusGroupSchema,
+    needAttention: z.boolean(),
+    totalRoleApplied: z.number().int().nonnegative(),
     filled: z.boolean(),
-    opportunity: myApplicationOpportunitySchema.nullable(),
     category: myApplicationReferenceSchema.nullable(),
     location: myApplicationReferenceSchema.nullable(),
+    roles: z.array(myApplicationRoleSchema),
+    approvedRole: myApplicationRoleSchema.nullable(),
   })
   .openapi("MyApplicationItem");
 
@@ -66,7 +79,7 @@ const myApplicationTimelineSchema = z
   .object({
     submitted: z.string().nullable(),
     underReview: z.string().nullable(),
-    passed: z.string().nullable(),
+    approved: z.string().nullable(),
     declined: z.object({
       at: z.string().nullable(),
       by: z.enum(["POSTER", "APPLICANT"]).nullable(),
@@ -75,6 +88,26 @@ const myApplicationTimelineSchema = z
     completed: z.string().nullable(),
   })
   .openapi("MyApplicationTimeline");
+
+const myApplicationRoleDetailSchema = z
+  .object({
+    applicationId: z.string(),
+    roleId: z.string(),
+    title: z.string(),
+    description: z.string().nullable(),
+    responsibilities: z.array(z.string()),
+    requirements: z.array(z.string()),
+    status: myApplicationStatusGroupSchema,
+    appliedAt: z.string(),
+    archived: z.boolean(),
+    actions: z.object({
+      canConfirm: z.boolean(),
+      canDecline: z.boolean(),
+      canWithdraw: z.boolean(),
+    }),
+    timeline: myApplicationTimelineSchema,
+  })
+  .openapi("MyApplicationRoleDetail");
 
 export const myApplicationDetailSchema = z
   .object({
@@ -86,6 +119,9 @@ export const myApplicationDetailSchema = z
     appliedAt: z.string(),
     deadline: z.string().nullable(),
     archived: z.boolean(),
+    needAttention: z.boolean(),
+    totalRoleApplied: z.number().int().nonnegative(),
+    canArchive: z.boolean(),
     opportunity: z.object({
       id: z.string(),
       title: z.string(),
@@ -99,13 +135,6 @@ export const myApplicationDetailSchema = z
       filled: z.boolean(),
       impactRewardPoints: z.number().int().nonnegative().nullable(),
     }),
-    role: z.object({
-      id: z.string(),
-      title: z.string(),
-      description: z.string().nullable(),
-      responsibilities: z.array(z.string()),
-      requirements: z.array(z.string()),
-    }),
     owner: z.object({
       id: z.string(),
       name: z.string(),
@@ -118,7 +147,8 @@ export const myApplicationDetailSchema = z
         telegramUsername: z.string().nullable(),
       }),
     }),
-    timeline: myApplicationTimelineSchema,
+    roles: z.array(myApplicationRoleDetailSchema),
+    approvedRole: myApplicationRoleSchema.nullable(),
   })
   .openapi("MyApplicationDetail");
 

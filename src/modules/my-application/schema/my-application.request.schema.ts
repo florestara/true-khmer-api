@@ -32,7 +32,7 @@ export const changeMyApplicationStatusParamSchema = z
 export const changeMyApplicationArchiveParamSchema = z
   .object({
     sourceType: myApplicationSourceParamSchema,
-    applicationId: z.string().uuid(),
+    opportunityId: z.string().uuid(),
     archiveAction: myApplicationArchiveActionSchema,
   })
   .openapi("ChangeMyApplicationArchiveParam");
@@ -40,7 +40,7 @@ export const changeMyApplicationArchiveParamSchema = z
 export const getMyApplicationDetailParamSchema = z
   .object({
     sourceType: myApplicationSourceParamSchema,
-    applicationId: z.string().uuid(),
+    postingId: z.string().uuid(),
   })
   .openapi("GetMyApplicationDetailParam");
 

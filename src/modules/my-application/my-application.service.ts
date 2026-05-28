@@ -27,18 +27,16 @@ type MyApplicationStatus =
   | "WITHDRAWN";
 
 type MyApplicationItem = {
-  id: string;
+  opportunityId: string;
+  opportunityTitle: string;
   sourceType: "VOLUNTEER" | "PROJECT";
-  title: string;
   imageKey: string | null;
   appliedAt: string;
   deadline: string | null;
   status: MyApplicationStatus;
+  needAttention: boolean;
+  totalRoleApplied: number;
   filled: boolean;
-  opportunity: {
-    id: string;
-    title: string;
-  } | null;
   category: {
     id: string;
     name: string;
@@ -47,9 +45,33 @@ type MyApplicationItem = {
     id: string;
     name: string;
   } | null;
+  roles: MyApplicationRole[];
+  approvedRole: MyApplicationRole | null;
 };
 
-type MyApplicationRecord = MyApplicationItem & {
+type MyApplicationOpportunity = {
+  id: string;
+  title: string;
+};
+
+type MyApplicationRole = {
+  applicationId: string;
+  roleId: string;
+  title: string;
+  status: MyApplicationStatus;
+  appliedAt: string;
+};
+
+type MyApplicationRecord = Omit<
+  MyApplicationItem,
+  "needAttention" | "totalRoleApplied" | "roles" | "approvedRole"
+> & {
+  opportunity: MyApplicationOpportunity;
+  role: MyApplicationRole;
+  archived: boolean;
+};
+
+type MyApplicationGroup = MyApplicationItem & {
   archived: boolean;
 };
 
@@ -70,9 +92,9 @@ function mapVolunteerApplication(
   application: MySpaceVolunteerApplication,
 ): MyApplicationRecord {
   return {
-    id: application.id,
+    opportunityId: application.opportunity.id,
+    opportunityTitle: application.opportunity.title,
     sourceType: "VOLUNTEER",
-    title: application.role.title,
     imageKey: application.opportunity.coverImageKey,
     appliedAt: application.createdAt,
     deadline: application.opportunity.applicationDeadline,
@@ -85,16 +107,27 @@ function mapVolunteerApplication(
     },
     category: application.opportunity.category,
     location: application.opportunity.location,
+    role: {
+      applicationId: application.id,
+      roleId: application.role.id,
+      title: application.role.title,
+      status: application.status,
+      appliedAt: application.createdAt,
+    },
   };
 }
 
 function mapProjectApplication(
   application: MySpaceProjectApplication,
 ): MyApplicationRecord {
+  if (!application.opportunity) {
+    throw new Error("Project application is missing opportunity");
+  }
+
   return {
-    id: application.id,
+    opportunityId: application.opportunity.id,
+    opportunityTitle: application.opportunity.title,
     sourceType: "PROJECT",
-    title: application.title,
     imageKey: application.imageKey,
     appliedAt: application.appliedAt,
     deadline: application.deadline,
@@ -104,10 +137,111 @@ function mapProjectApplication(
     opportunity: application.opportunity,
     category: mapReference(application.category),
     location: mapReference(application.location),
+    role: {
+      applicationId: application.id,
+      roleId: application.roleId,
+      title: application.title,
+      status: application.status,
+      appliedAt: application.appliedAt,
+    },
   };
 }
 
-function buildSummary(applications: MyApplicationRecord[]) {
+function resolveOpportunityStatus(statuses: MyApplicationStatus[]) {
+  if (statuses.some((status) => status === "COMPLETED")) {
+    return "COMPLETED";
+  }
+
+  if (statuses.some((status) => status === "CONFIRMED")) {
+    return "CONFIRMED";
+  }
+
+  if (statuses.some((status) => status === "APPROVED")) {
+    return "APPROVED";
+  }
+
+  if (statuses.some((status) => status === "UNDER_REVIEW")) {
+    return "UNDER_REVIEW";
+  }
+
+  if (statuses.some((status) => status === "SUBMITTED")) {
+    return "SUBMITTED";
+  }
+
+  if (statuses.every((status) => status === "DECLINED")) {
+    return "DECLINED";
+  }
+
+  if (statuses.every((status) => status === "WITHDRAWN")) {
+    return "WITHDRAWN";
+  }
+
+  return "DECLINED";
+}
+
+function buildMyApplicationGroups(
+  applications: MyApplicationRecord[],
+): MyApplicationGroup[] {
+  const groupByOpportunity = new Map<string, MyApplicationGroup>();
+
+  for (const application of applications) {
+    const groupKey = `${application.sourceType}:${application.opportunity.id}`;
+    const existing = groupByOpportunity.get(groupKey);
+
+    if (!existing) {
+      groupByOpportunity.set(groupKey, {
+        opportunityId: application.opportunity.id,
+        opportunityTitle: application.opportunity.title,
+        sourceType: application.sourceType,
+        imageKey: application.imageKey,
+        appliedAt: application.appliedAt,
+        deadline: application.deadline,
+        status: application.status,
+        needAttention: application.status === "APPROVED",
+        totalRoleApplied: 1,
+        filled: application.filled,
+        category: application.category,
+        location: application.location,
+        roles: [application.role],
+        approvedRole:
+          application.status === "APPROVED" ? application.role : null,
+        archived: application.archived,
+      });
+      continue;
+    }
+
+    existing.roles.push(application.role);
+    existing.totalRoleApplied = existing.roles.length;
+    existing.status = resolveOpportunityStatus(
+      existing.roles.map((role) => role.status),
+    );
+    existing.needAttention = existing.roles.some(
+      (role) => role.status === "APPROVED",
+    );
+    existing.approvedRole =
+      existing.roles.find((role) => role.status === "APPROVED") ?? null;
+    existing.archived = existing.archived && application.archived;
+
+    if (Date.parse(application.appliedAt) > Date.parse(existing.appliedAt)) {
+      existing.appliedAt = application.appliedAt;
+    }
+  }
+
+  return [...groupByOpportunity.values()]
+    .map((application) => ({
+      ...application,
+      roles: application.roles.sort(
+        (left, right) =>
+          Date.parse(right.appliedAt) - Date.parse(left.appliedAt),
+      ),
+    }))
+    .sort(
+      (left, right) =>
+        Date.parse(right.appliedAt) - Date.parse(left.appliedAt),
+    );
+}
+
+function buildSummary(applications: MyApplicationGroup[]) {
   return applications.reduce(
     (summary, application) => {
       if (application.archived) {
@@ -145,7 +279,7 @@ function buildSummary(applications: MyApplicationRecord[]) {
 }
 
 function matchesFilter(
-  application: MyApplicationRecord,
+  application: MyApplicationGroup,
   filter: GetMyApplicationsQuery["filter"],
 ) {
   if (filter === "archived") {
@@ -178,6 +312,31 @@ function matchesFilter(
   return application.status === "COMPLETED";
 }
 
+function toResponseApplication({
+  archived,
+  ...application
+}: MyApplicationGroup): MyApplicationItem {
+  return application;
+}
+
+function findApplicationGroupByOpportunityId(
+  applications: MyApplicationGroup[],
+  opportunityId: string,
+) {
+  return applications.find(
+    (application) => application.opportunityId === opportunityId,
+  );
+}
+
+function findApplicationGroupByRoleApplicationId(
+  applications: MyApplicationGroup[],
+  applicationId: string,
+) {
+  return applications.find((application) =>
+    application.roles.some((role) => role.applicationId === applicationId),
+  );
+}
+
 export async function handleGetMyApplications(
   c: Context,
   query: GetMyApplicationsQuery,
@@ -196,19 +355,15 @@ export async function handleGetMyApplications(
         ? Promise.resolve([])
         : findMyProjectApplications(authResult.userId),
     ]);
-    const applications = [
+    const applicationRecords = [
       ...volunteerApplications.map(mapVolunteerApplication),
       ...projectApplications.map(mapProjectApplication),
-    ].sort(
-      (left, right) =>
-        Date.parse(right.appliedAt) - Date.parse(left.appliedAt),
-    );
+    ];
+    const applications = buildMyApplicationGroups(applicationRecords);
     const filteredApplications = applications.filter((application) =>
       matchesFilter(application, query.filter),
     );
-    const responseApplications = filteredApplications.map(
-      ({ archived, ...application }) => application,
-    );
+    const responseApplications = filteredApplications.map(toResponseApplication);
 
     return c.json(
       {
@@ -238,15 +393,18 @@ export async function handleGetMyApplicationDetail(
       params.sourceType === "volunteer"
         ? await findMyVolunteerApplicationDetail(
             authResult.userId,
-            params.applicationId,
+            params.postingId,
           )
         : await findMyProjectApplicationDetail(
             authResult.userId,
-            params.applicationId,
+            params.postingId,
           );
 
     if (!application) {
-      return c.json({ ok: false, error: "Application not found" }, 404);
+      return c.json(
+        { ok: false, error: "Posting application not found" },
+        404,
+      );
     }
 
     return c.json(
@@ -288,7 +446,7 @@ export async function handleChangeMyApplicationStatus(
       );
     }
 
-    const applications =
+    const applicationRecords =
       params.sourceType === "volunteer"
         ? (await findMyVolunteerApplications(authResult.userId)).map(
             mapVolunteerApplication,
@@ -296,8 +454,9 @@ export async function handleChangeMyApplicationStatus(
         : (await findMyProjectApplications(authResult.userId)).map(
             mapProjectApplication,
           );
-    const application = applications.find(
-      (item) => item.id === params.applicationId,
+    const application = findApplicationGroupByRoleApplicationId(
+      buildMyApplicationGroups(applicationRecords),
+      params.applicationId,
     );
 
     if (!application) {
@@ -307,7 +466,7 @@ export async function handleChangeMyApplicationStatus(
     return c.json(
       {
         ok: true,
-        application,
+        application: toResponseApplication(application),
       },
       200,
     );
@@ -330,7 +489,10 @@ export async function handleChangeMyApplicationArchived(
     const result = await updateMyApplicationArchived(authResult.userId, params);
 
     if (result === "not_found") {
-      return c.json({ ok: false, error: "Application not found" }, 404);
+      return c.json(
+        { ok: false, error: "Opportunity application group not found" },
+        404,
+      );
     }
 
     if (result === "conflict") {
@@ -338,13 +500,13 @@ export async function handleChangeMyApplicationArchived(
         {
           ok: false,
           error:
-            "Only declined, withdrawn, and completed applications can be archived",
+            "Only completed groups or groups containing only declined/withdrawn roles can be archived",
         },
         409,
       );
     }
 
-    const applications =
+    const applicationRecords =
       params.sourceType === "volunteer"
         ? (await findMyVolunteerApplications(authResult.userId)).map(
             mapVolunteerApplication,
@@ -352,18 +514,25 @@ export async function handleChangeMyApplicationArchived(
         : (await findMyProjectApplications(authResult.userId)).map(
             mapProjectApplication,
           );
-    const application = applications.find(
-      (item) => item.id === params.applicationId,
+    const application = findApplicationGroupByOpportunityId(
+      buildMyApplicationGroups(applicationRecords),
+      params.opportunityId,
     );
 
     if (!application) {
-      return c.json({ ok: false, error: "Application not found" }, 404);
+      return c.json(
+        { ok: false, error: "Opportunity application group not found" },
+        404,
+      );
     }
 
     return c.json(
       {
         ok: true,
-        application,
+        application: {
+          ...toResponseApplication(application),
+          archived: application.archived,
+        },
       },
       200,
     );
