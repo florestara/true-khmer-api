@@ -1,6 +1,7 @@
 import type { Context } from "hono";
 import { getAuthUserId } from "../../auth/utils/get-auth";
 import {
+  declineManagePostingApplication,
   extendManagePostingDeadline,
   findManagePostingCandidate,
   findManagePostingDetail,
@@ -11,7 +12,9 @@ import {
 } from "./manage-posting.query";
 import type {
   ChangeManagePostingApplicationStatusParam,
+  DeclineManagePostingApplicationQuery,
   ExtendManagePostingDeadlineBody,
+  GetManagePostingApplicationParam,
   GetManagePostingCandidateParam,
   GetManagePostingDetailParam,
   GetManagePostingDetailQuery,
@@ -159,7 +162,7 @@ export async function handleUpdateManagePostingAction(
 export async function handleExtendManagePostingDeadline(
   c: Context,
   params: GetManagePostingDetailParam,
-  body: ExtendManagePostingDeadlineBody,
+  query: ExtendManagePostingDeadlineBody,
 ) {
   const authResult = getAuthUserId(c);
   if (!authResult.ok) {
@@ -170,7 +173,7 @@ export async function handleExtendManagePostingDeadline(
     const result = await extendManagePostingDeadline(
       authResult.userId,
       params,
-      body,
+      query,
     );
 
     if (result === "not_found") {
@@ -236,7 +239,7 @@ export async function handleGetManagePostingCandidate(
 export async function handleUpsertManagePostingCandidateNote(
   c: Context,
   params: GetManagePostingCandidateParam,
-  body: UpsertManagePostingCandidateNoteBody,
+  query: UpsertManagePostingCandidateNoteBody,
 ) {
   const authResult = getAuthUserId(c);
   if (!authResult.ok) {
@@ -247,7 +250,7 @@ export async function handleUpsertManagePostingCandidateNote(
     const detail = await upsertManagePostingCandidateNote(
       authResult.userId,
       params,
-      body,
+      query,
     );
 
     if (!detail) {
@@ -305,7 +308,7 @@ export async function handleUpdateManagePostingApplication(
         {
           ok: false,
           error:
-            "Applicant already has an approved or confirmed role for this opportunity",
+            "Applicant already has an approved or confirmed role for this posting",
         },
         409,
       );
@@ -320,6 +323,50 @@ export async function handleUpdateManagePostingApplication(
     );
   } catch (error) {
     console.error("Failed to update manage posting application", error);
+    return c.json({ ok: false, error: "Internal server error" }, 500);
+  }
+}
+
+export async function handleDeclineManagePostingApplication(
+  c: Context,
+  params: GetManagePostingApplicationParam,
+  query: DeclineManagePostingApplicationQuery,
+) {
+  const authResult = getAuthUserId(c);
+  if (!authResult.ok) {
+    return authResult.response;
+  }
+
+  try {
+    const result = await declineManagePostingApplication(
+      authResult.userId,
+      params,
+      query,
+    );
+
+    if (result === "not_found") {
+      return c.json({ ok: false, error: "Application not found" }, 404);
+    }
+
+    if (result === "conflict") {
+      return c.json(
+        {
+          ok: false,
+          error: "Application can no longer be declined by poster",
+        },
+        409,
+      );
+    }
+
+    return c.json(
+      {
+        ok: true,
+        applicant: result.applicant,
+      },
+      200,
+    );
+  } catch (error) {
+    console.error("Failed to decline manage posting application", error);
     return c.json({ ok: false, error: "Internal server error" }, 500);
   }
 }

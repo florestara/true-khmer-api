@@ -84,7 +84,7 @@ export const getManagePostingApplicationParamSchema = z
   .openapi("GetManagePostingApplicationParam");
 
 export const managePostingStatusActionSchema = z
-  .enum(["under_review", "approve", "decline"])
+  .enum(["under_review", "approve"])
   .openapi("ManagePostingStatusAction");
 
 export const changeManagePostingApplicationStatusParamSchema =
@@ -102,6 +102,13 @@ export const upsertManagePostingCandidateNoteBodySchema = z
       .max(5000, "note must be <= 5000 characters"),
   })
   .openapi("UpsertManagePostingCandidateNoteRequest");
+
+export const declineManagePostingApplicationQuerySchema = z
+  .object({
+    declineAll: z.coerce.boolean().optional().default(false),
+    blockFutureApply: z.coerce.boolean().optional().default(false),
+  })
+  .openapi("DeclineManagePostingApplicationQuery");
 
 export const getManagePostingDetailQuerySchema = z
   .object({
@@ -164,6 +171,9 @@ export type ChangeManagePostingApplicationStatusParam = z.infer<
 >;
 export type UpsertManagePostingCandidateNoteBody = z.infer<
   typeof upsertManagePostingCandidateNoteBodySchema
+>;
+export type DeclineManagePostingApplicationQuery = z.infer<
+  typeof declineManagePostingApplicationQuerySchema
 >;
 export type UpdateManagePostingActionParam = z.infer<
   typeof updateManagePostingActionParamSchema

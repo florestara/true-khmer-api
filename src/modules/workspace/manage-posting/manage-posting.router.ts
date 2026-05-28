@@ -4,8 +4,10 @@ import { requireAccessToken } from "../../../middlewares/auth.middleware";
 import { authProtectedErrorResponseSchema } from "../../auth/auth.schema";
 import {
   changeManagePostingApplicationStatusParamSchema,
+  declineManagePostingApplicationQuerySchema,
   extendManagePostingDeadlineBodySchema,
   extendManagePostingDeadlineResponseSchema,
+  getManagePostingApplicationParamSchema,
   getManagePostingCandidateParamSchema,
   getManagePostingDetailParamSchema,
   getManagePostingDetailQuerySchema,
@@ -22,6 +24,7 @@ import {
 } from "./manage-posting.schema";
 import {
   handleExtendManagePostingDeadline,
+  handleDeclineManagePostingApplication,
   handleGetManagePostingCandidate,
   handleGetManagePostingDetail,
   handleGetManagePostings,
@@ -134,7 +137,7 @@ const getManagePostingDetailRoute = createRoute({
 
 const getManagePostingCandidateRoute = createRoute({
   method: "get",
-  path: "/{sourceType}/{postingId}/candidates/{candidateId}",
+  path: "/{sourceType}/{postingId}/{candidateId}",
   tags: ["Workspace"],
   middleware: [requireAccessToken],
   security: [{ BearerAuth: [] }],
@@ -187,7 +190,7 @@ const getManagePostingCandidateRoute = createRoute({
 
 const upsertManagePostingCandidateNoteRoute = createRoute({
   method: "post",
-  path: "/{sourceType}/{postingId}/candidates/{candidateId}/note",
+  path: "/{sourceType}/{postingId}/{candidateId}/note",
   tags: ["Workspace"],
   middleware: [requireAccessToken],
   security: [{ BearerAuth: [] }],
@@ -451,6 +454,68 @@ const updateManagePostingApplicationRoute = createRoute({
   },
 });
 
+const declineManagePostingApplicationRoute = createRoute({
+  method: "post",
+  path: "/{sourceType}/{postingId}/{applicationId}/decline",
+  tags: ["Workspace"],
+  middleware: [requireAccessToken],
+  security: [{ BearerAuth: [] }],
+  request: {
+    params: getManagePostingApplicationParamSchema,
+    query: declineManagePostingApplicationQuerySchema,
+  },
+  responses: {
+    200: {
+      description: "Application declined",
+      content: {
+        "application/json": {
+          schema: managePostingApplicationActionResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: "Unauthorized",
+      content: {
+        "application/json": {
+          schema: authProtectedErrorResponseSchema,
+        },
+      },
+    },
+    403: {
+      description: "Onboarding required",
+      content: {
+        "application/json": {
+          schema: authProtectedErrorResponseSchema,
+        },
+      },
+    },
+    404: {
+      description: "Application not found",
+      content: {
+        "application/json": {
+          schema: managePostingsErrorResponseSchema,
+        },
+      },
+    },
+    409: {
+      description: "Application cannot be declined from the current state",
+      content: {
+        "application/json": {
+          schema: managePostingsErrorResponseSchema,
+        },
+      },
+    },
+    500: {
+      description: "Internal server error",
+      content: {
+        "application/json": {
+          schema: managePostingsErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
 managePostingRouter.openapi(getManagePostingsRoute, async (c) => {
   const query = c.req.valid("query");
   return (await handleGetManagePostings(c, query)) as any;
@@ -481,6 +546,12 @@ managePostingRouter.openapi(extendManagePostingDeadlineRoute, async (c) => {
 managePostingRouter.openapi(updateManagePostingApplicationRoute, async (c) => {
   const params = c.req.valid("param");
   return (await handleUpdateManagePostingApplication(c, params)) as any;
+});
+
+managePostingRouter.openapi(declineManagePostingApplicationRoute, async (c) => {
+  const params = c.req.valid("param");
+  const query = c.req.valid("query");
+  return (await handleDeclineManagePostingApplication(c, params, query)) as any;
 });
 
 managePostingRouter.openapi(getManagePostingDetailRoute, async (c) => {

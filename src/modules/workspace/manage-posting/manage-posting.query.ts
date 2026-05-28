@@ -14,6 +14,7 @@ import {
   volunteerOpportunityActionLog,
   volunteerRole,
   workspaceApplicantNote,
+  workspaceCandidateBlock,
 } from "../../../db/schema";
 import {
   buildPagePagination,
@@ -21,7 +22,9 @@ import {
 } from "../../../utils/page-pagination.helper";
 import type {
   ChangeManagePostingApplicationStatusParam,
+  DeclineManagePostingApplicationQuery,
   ExtendManagePostingDeadlineBody,
+  GetManagePostingApplicationParam,
   GetManagePostingCandidateParam,
   GetManagePostingDetailParam,
   GetManagePostingDetailQuery,
@@ -153,12 +156,16 @@ type ManagePostingCandidateDetail = {
   applicant: ManagePostingApplicant;
 };
 
-type PosterApplicationStatusChange = "UNDER_REVIEW" | "APPROVED" | "DECLINED";
+type PosterApplicationStatusChange = "UNDER_REVIEW" | "APPROVED";
 type ManagePostingApplicationUpdateResult =
   | "not_found"
   | "conflict"
   | "role_filled"
   | "applicant_already_approved"
+  | ManagePostingCandidateDetail;
+type ManagePostingApplicationDeclineResult =
+  | "not_found"
+  | "conflict"
   | ManagePostingCandidateDetail;
 type ManagePostingActionFailure =
   | "not_found"
@@ -208,7 +215,7 @@ function getPosterApplicationStatusChange(
     return "UNDER_REVIEW";
   }
 
-  return statusAction === "approve" ? "APPROVED" : "DECLINED";
+  return "APPROVED";
 }
 
 function buildPosterStatusLogSequence(
@@ -224,6 +231,20 @@ function buildPosterStatusLogSequence(
   }
 
   return [nextStatus];
+}
+
+function buildPosterDeclineLogSequence(
+  currentStatus: ManagePostingApplicantStatus,
+): Array<"UNDER_REVIEW" | "DECLINED"> {
+  if (currentStatus === "DECLINED") {
+    return [];
+  }
+
+  if (currentStatus === "SUBMITTED") {
+    return ["UNDER_REVIEW", "DECLINED"];
+  }
+
+  return ["DECLINED"];
 }
 
 function resolvePostingActionDecision(input: {
@@ -410,7 +431,7 @@ function resolveApplicantOverallStatus(
   if (statusSet.has("UNDER_REVIEW")) {
     return "UNDER_REVIEW";
   }
-  if (statuses.every((status) => status === "SUBMITTED")) {
+  if (statusSet.has("SUBMITTED")) {
     return "SUBMITTED";
   }
   if (statuses.every((status) => status === "DECLINED")) {
@@ -426,29 +447,32 @@ function resolveApplicantOverallStatus(
 function resolveApplicantFilterStatuses(
   statuses: ManagePostingApplicantStatus[],
 ): ManagePostingCandidateFilterStatus[] {
-  const statusSet = new Set(statuses);
-  const filters: ManagePostingCandidateFilterStatus[] = [];
+  if (statuses.length === 0) {
+    return [];
+  }
 
-  if (statusSet.has("SUBMITTED")) {
-    filters.push("new");
+  const overallStatus = resolveApplicantOverallStatus(statuses);
+
+  if (overallStatus === "CONFIRMED") {
+    return ["confirmed"];
   }
-  if (statusSet.has("UNDER_REVIEW")) {
-    filters.push("in_review");
+  if (overallStatus === "APPROVED") {
+    return ["approved"];
   }
-  if (statusSet.has("APPROVED")) {
-    filters.push("approved");
+  if (statuses.every((status) => status === "DECLINED")) {
+    return ["declined"];
   }
-  if (statusSet.has("CONFIRMED")) {
-    filters.push("confirmed");
+  if (overallStatus === "UNDER_REVIEW") {
+    return ["in_review"];
   }
   if (
-    statuses.length > 0 &&
-    statuses.every((status) => status === "DECLINED")
+    overallStatus === "SUBMITTED" &&
+    statuses.every((status) => status === "SUBMITTED")
   ) {
-    filters.push("declined");
+    return ["new"];
   }
 
-  return filters;
+  return [];
 }
 
 type VolunteerManagePostingRow = {
@@ -1381,7 +1405,7 @@ export async function findManagePostingCandidate(
 export async function upsertManagePostingCandidateNote(
   userId: string,
   params: GetManagePostingCandidateParam,
-  body: UpsertManagePostingCandidateNoteBody,
+  query: UpsertManagePostingCandidateNoteBody,
 ): Promise<ManagePostingCandidateDetail | null> {
   const existingDetail = await findManagePostingCandidate(userId, params);
 
@@ -1397,7 +1421,7 @@ export async function upsertManagePostingCandidateNote(
       sourceType,
       postingId: params.postingId,
       applicantId: params.candidateId,
-      note: body.note,
+      note: query.note,
       createdBy: userId,
       updatedBy: userId,
     })
@@ -1408,7 +1432,7 @@ export async function upsertManagePostingCandidateNote(
         workspaceApplicantNote.applicantId,
       ],
       set: {
-        note: body.note,
+        note: query.note,
         updatedBy: userId,
         updatedAt: sql`now()`,
       },
@@ -1529,36 +1553,10 @@ async function updateVolunteerManagePostingApplication(
       statusLogs.map((logStatus) => ({
         volunteerApplicationId: applicationId,
         status: logStatus,
-        declinedBy: logStatus === "DECLINED" ? ("POSTER" as const) : null,
+        declinedBy: null,
         createdBy: userId,
       })),
     );
-
-    if (status === "APPROVED") {
-      const autoDeclinedApplications = await tx
-        .update(volunteerApplication)
-        .set({ status: "DECLINED", updatedAt: sql`now()` })
-        .where(
-          and(
-            eq(volunteerApplication.opportunityId, current.opportunityId),
-            eq(volunteerApplication.applicantId, current.applicantId),
-            sql`${volunteerApplication.id} <> ${current.id}`,
-            sql`${volunteerApplication.status} in ('SUBMITTED', 'UNDER_REVIEW')`,
-          ),
-        )
-        .returning({ id: volunteerApplication.id });
-
-      if (autoDeclinedApplications.length > 0) {
-        await tx.insert(volunteerApplicationLog).values(
-          autoDeclinedApplications.map((application) => ({
-            volunteerApplicationId: application.id,
-            status: "DECLINED" as const,
-            declinedBy: "POSTER" as const,
-            createdBy: userId,
-          })),
-        );
-      }
-    }
 
     return {
       outcome: "updated" as const,
@@ -1688,13 +1686,219 @@ async function updateProjectManagePostingApplication(
       statusLogs.map((logStatus) => ({
         launchpadApplicationId: applicationId,
         status: logStatus,
+        declinedBy: null,
+        createdBy: userId,
+      })),
+    );
+
+    return {
+      outcome: "updated" as const,
+      applicantId: current.createdBy,
+    };
+  });
+
+  if (typeof result === "string") {
+    return result;
+  }
+
+  const detail = await findProjectManagePostingApplicant(
+    userId,
+    postingId,
+    result.applicantId,
+  );
+
+  return detail ?? "not_found";
+}
+
+async function declineVolunteerManagePostingApplication(
+  userId: string,
+  postingId: string,
+  applicationId: string,
+  query: DeclineManagePostingApplicationQuery,
+): Promise<ManagePostingApplicationDeclineResult> {
+  const result = await db.transaction(async (tx) => {
+    const [current] = await tx
+      .select({
+        id: volunteerApplication.id,
+        status: volunteerApplication.status,
+        applicantId: volunteerApplication.applicantId,
+        opportunityId: volunteerApplication.opportunityId,
+      })
+      .from(volunteerApplication)
+      .innerJoin(
+        volunteerOpportunity,
+        eq(volunteerOpportunity.id, volunteerApplication.opportunityId),
+      )
+      .where(
+        and(
+          eq(volunteerApplication.id, applicationId),
+          eq(volunteerApplication.opportunityId, postingId),
+          eq(volunteerOpportunity.createdBy, userId),
+        ),
+      )
+      .limit(1);
+
+    if (!current) {
+      return "not_found" as const;
+    }
+
+    if (POSTER_LOCKED_APPLICATION_STATUSES.has(current.status)) {
+      return "conflict" as const;
+    }
+
+    const [updated] = await tx
+      .update(volunteerApplication)
+      .set({ status: "DECLINED", updatedAt: sql`now()` })
+      .where(
+        and(
+          eq(volunteerApplication.id, applicationId),
+          eq(volunteerApplication.status, current.status),
+        ),
+      )
+      .returning({ id: volunteerApplication.id });
+
+    if (!updated) {
+      return "conflict" as const;
+    }
+
+    await tx.insert(volunteerApplicationLog).values(
+      buildPosterDeclineLogSequence(current.status).map((logStatus) => ({
+        volunteerApplicationId: applicationId,
+        status: logStatus,
         declinedBy: logStatus === "DECLINED" ? ("POSTER" as const) : null,
         createdBy: userId,
       })),
     );
 
-    if (status === "APPROVED") {
-      const autoDeclinedApplications = await tx
+    if (query.declineAll) {
+      const declinedApplications = await tx
+        .update(volunteerApplication)
+        .set({ status: "DECLINED", updatedAt: sql`now()` })
+        .where(
+          and(
+            eq(volunteerApplication.opportunityId, current.opportunityId),
+            eq(volunteerApplication.applicantId, current.applicantId),
+            sql`${volunteerApplication.id} <> ${current.id}`,
+            sql`${volunteerApplication.status} in ('SUBMITTED', 'UNDER_REVIEW', 'APPROVED')`,
+          ),
+        )
+        .returning({ id: volunteerApplication.id });
+
+      if (declinedApplications.length > 0) {
+        await tx.insert(volunteerApplicationLog).values(
+          declinedApplications.map((application) => ({
+            volunteerApplicationId: application.id,
+            status: "DECLINED" as const,
+            declinedBy: "POSTER" as const,
+            createdBy: userId,
+          })),
+        );
+      }
+    }
+
+    if (query.blockFutureApply) {
+      await tx
+        .insert(workspaceCandidateBlock)
+        .values({
+          sourceType: "VOLUNTEER",
+          postingId: current.opportunityId,
+          candidateId: current.applicantId,
+          status: "ACTIVE",
+          createdBy: userId,
+          updatedBy: userId,
+        })
+        .onConflictDoUpdate({
+          target: [
+            workspaceCandidateBlock.sourceType,
+            workspaceCandidateBlock.postingId,
+            workspaceCandidateBlock.candidateId,
+          ],
+          set: {
+            status: "ACTIVE",
+            updatedBy: userId,
+            updatedAt: sql`now()`,
+          },
+        });
+    }
+
+    return {
+      outcome: "updated" as const,
+      applicantId: current.applicantId,
+    };
+  });
+
+  if (typeof result === "string") {
+    return result;
+  }
+
+  const detail = await findVolunteerManagePostingApplicant(
+    userId,
+    postingId,
+    result.applicantId,
+  );
+
+  return detail ?? "not_found";
+}
+
+async function declineProjectManagePostingApplication(
+  userId: string,
+  postingId: string,
+  applicationId: string,
+  query: DeclineManagePostingApplicationQuery,
+): Promise<ManagePostingApplicationDeclineResult> {
+  const result = await db.transaction(async (tx) => {
+    const [current] = await tx
+      .select({
+        id: launchpadApplication.id,
+        status: launchpadApplication.status,
+        launchpadId: launchpadApplication.launchpadId,
+        createdBy: launchpadApplication.createdBy,
+      })
+      .from(launchpadApplication)
+      .innerJoin(launchpad, eq(launchpad.id, launchpadApplication.launchpadId))
+      .where(
+        and(
+          eq(launchpadApplication.id, applicationId),
+          eq(launchpadApplication.launchpadId, postingId),
+          eq(launchpad.createdBy, userId),
+        ),
+      )
+      .limit(1);
+
+    if (!current) {
+      return "not_found" as const;
+    }
+
+    if (POSTER_LOCKED_APPLICATION_STATUSES.has(current.status)) {
+      return "conflict" as const;
+    }
+
+    const [updated] = await tx
+      .update(launchpadApplication)
+      .set({ status: "DECLINED", updatedAt: sql`now()` })
+      .where(
+        and(
+          eq(launchpadApplication.id, applicationId),
+          eq(launchpadApplication.status, current.status),
+        ),
+      )
+      .returning({ id: launchpadApplication.id });
+
+    if (!updated) {
+      return "conflict" as const;
+    }
+
+    await tx.insert(launchpadApplicationLog).values(
+      buildPosterDeclineLogSequence(current.status).map((logStatus) => ({
+        launchpadApplicationId: applicationId,
+        status: logStatus,
+        declinedBy: logStatus === "DECLINED" ? ("POSTER" as const) : null,
+        createdBy: userId,
+      })),
+    );
+
+    if (query.declineAll) {
+      const declinedApplications = await tx
         .update(launchpadApplication)
         .set({ status: "DECLINED", updatedAt: sql`now()` })
         .where(
@@ -1702,14 +1906,14 @@ async function updateProjectManagePostingApplication(
             eq(launchpadApplication.launchpadId, current.launchpadId),
             eq(launchpadApplication.createdBy, current.createdBy),
             sql`${launchpadApplication.id} <> ${current.id}`,
-            sql`${launchpadApplication.status} in ('SUBMITTED', 'UNDER_REVIEW')`,
+            sql`${launchpadApplication.status} in ('SUBMITTED', 'UNDER_REVIEW', 'APPROVED')`,
           ),
         )
         .returning({ id: launchpadApplication.id });
 
-      if (autoDeclinedApplications.length > 0) {
+      if (declinedApplications.length > 0) {
         await tx.insert(launchpadApplicationLog).values(
-          autoDeclinedApplications.map((application) => ({
+          declinedApplications.map((application) => ({
             launchpadApplicationId: application.id,
             status: "DECLINED" as const,
             declinedBy: "POSTER" as const,
@@ -1717,6 +1921,31 @@ async function updateProjectManagePostingApplication(
           })),
         );
       }
+    }
+
+    if (query.blockFutureApply) {
+      await tx
+        .insert(workspaceCandidateBlock)
+        .values({
+          sourceType: "PROJECT",
+          postingId: current.launchpadId,
+          candidateId: current.createdBy,
+          status: "ACTIVE",
+          createdBy: userId,
+          updatedBy: userId,
+        })
+        .onConflictDoUpdate({
+          target: [
+            workspaceCandidateBlock.sourceType,
+            workspaceCandidateBlock.postingId,
+            workspaceCandidateBlock.candidateId,
+          ],
+          set: {
+            status: "ACTIVE",
+            updatedBy: userId,
+            updatedAt: sql`now()`,
+          },
+        });
     }
 
     return {
@@ -1736,6 +1965,28 @@ async function updateProjectManagePostingApplication(
   );
 
   return detail ?? "not_found";
+}
+
+export async function declineManagePostingApplication(
+  userId: string,
+  params: GetManagePostingApplicationParam,
+  query: DeclineManagePostingApplicationQuery,
+): Promise<ManagePostingApplicationDeclineResult> {
+  if (params.sourceType === "volunteer") {
+    return declineVolunteerManagePostingApplication(
+      userId,
+      params.postingId,
+      params.applicationId,
+      query,
+    );
+  }
+
+  return declineProjectManagePostingApplication(
+    userId,
+    params.postingId,
+    params.applicationId,
+    query,
+  );
 }
 
 async function updateVolunteerManagePostingAction(
@@ -1974,7 +2225,7 @@ export async function updateManagePostingAction(
 async function extendVolunteerManagePostingDeadline(
   userId: string,
   postingId: string,
-  body: ExtendManagePostingDeadlineBody,
+  query: ExtendManagePostingDeadlineBody,
 ): Promise<ManagePostingDeadlineUpdateResult> {
   const result = await db.transaction(async (tx) => {
     const [current] = await tx
@@ -2002,7 +2253,7 @@ async function extendVolunteerManagePostingDeadline(
       return "deadline_extension_not_allowed" as const;
     }
 
-    if (!isDeadlineExtensionLater(current.deadline, body.deadline)) {
+    if (!isDeadlineExtensionLater(current.deadline, query.deadline)) {
       return "deadline_not_later" as const;
     }
 
@@ -2010,7 +2261,7 @@ async function extendVolunteerManagePostingDeadline(
     const [updated] = await tx
       .update(volunteerOpportunity)
       .set({
-        applicationDeadline: body.deadline,
+        applicationDeadline: query.deadline,
         status: nextStatus,
         updatedBy: userId,
         updatedAt: sql`now()`,
@@ -2038,7 +2289,7 @@ async function extendVolunteerManagePostingDeadline(
       },
       toData: {
         status: nextStatus,
-        deadline: body.deadline,
+        deadline: query.deadline,
       },
       status: nextStatus,
       createdBy: userId,
@@ -2062,7 +2313,7 @@ async function extendVolunteerManagePostingDeadline(
 async function extendProjectManagePostingDeadline(
   userId: string,
   postingId: string,
-  body: ExtendManagePostingDeadlineBody,
+  query: ExtendManagePostingDeadlineBody,
 ): Promise<ManagePostingDeadlineUpdateResult> {
   const result = await db.transaction(async (tx) => {
     const [current] = await tx
@@ -2090,7 +2341,7 @@ async function extendProjectManagePostingDeadline(
       return "deadline_extension_not_allowed" as const;
     }
 
-    if (!isDeadlineExtensionLater(current.deadline, body.deadline)) {
+    if (!isDeadlineExtensionLater(current.deadline, query.deadline)) {
       return "deadline_not_later" as const;
     }
 
@@ -2098,7 +2349,7 @@ async function extendProjectManagePostingDeadline(
     const [updated] = await tx
       .update(launchpad)
       .set({
-        deadline: body.deadline,
+        deadline: query.deadline,
         status: nextStatus,
         updatedBy: userId,
         updatedAt: sql`now()`,
@@ -2126,7 +2377,7 @@ async function extendProjectManagePostingDeadline(
       },
       toData: {
         status: nextStatus,
-        deadline: body.deadline,
+        deadline: query.deadline,
       },
       status: nextStatus,
       createdBy: userId,
@@ -2150,13 +2401,13 @@ async function extendProjectManagePostingDeadline(
 export async function extendManagePostingDeadline(
   userId: string,
   params: GetManagePostingDetailParam,
-  body: ExtendManagePostingDeadlineBody,
+  query: ExtendManagePostingDeadlineBody,
 ): Promise<ManagePostingDeadlineUpdateResult> {
   if (params.sourceType === "volunteer") {
-    return extendVolunteerManagePostingDeadline(userId, params.postingId, body);
+    return extendVolunteerManagePostingDeadline(userId, params.postingId, query);
   }
 
-  return extendProjectManagePostingDeadline(userId, params.postingId, body);
+  return extendProjectManagePostingDeadline(userId, params.postingId, query);
 }
 
 export async function updateManagePostingApplication(

@@ -6,6 +6,7 @@ import {
   launchpadApplicationLog,
   launchpadApplicationStatusEnum,
   launchpadRole,
+  workspaceCandidateBlock,
 } from "../../../db/schema";
 
 export type ApplicationStatus =
@@ -304,6 +305,26 @@ export async function hasLaunchpadApprovedOrConfirmedApplication(
         eq(launchpadApplication.launchpadId, launchpadId),
         eq(launchpadApplication.createdBy, createdBy),
         sql`${launchpadApplication.status} in ('APPROVED', 'CONFIRMED')`,
+      ),
+    )
+    .limit(1);
+
+  return row !== undefined;
+}
+
+export async function hasLaunchpadApplicationBlock(
+  launchpadId: string,
+  createdBy: string,
+): Promise<boolean> {
+  const [row] = await db
+    .select({ id: workspaceCandidateBlock.id })
+    .from(workspaceCandidateBlock)
+    .where(
+      and(
+        eq(workspaceCandidateBlock.sourceType, "PROJECT"),
+        eq(workspaceCandidateBlock.postingId, launchpadId),
+        eq(workspaceCandidateBlock.candidateId, createdBy),
+        eq(workspaceCandidateBlock.status, "ACTIVE"),
       ),
     )
     .limit(1);

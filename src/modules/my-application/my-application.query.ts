@@ -472,6 +472,30 @@ async function updateVolunteerApplicationStatus(
     });
 
     if (nextStatus === "CONFIRMED") {
+      const autoDeclinedApplications = await tx
+        .update(volunteerApplication)
+        .set({ status: "DECLINED", updatedAt: sql`now()` })
+        .where(
+          and(
+            eq(volunteerApplication.opportunityId, current.opportunityId),
+            eq(volunteerApplication.applicantId, applicantId),
+            sql`${volunteerApplication.id} <> ${current.id}`,
+            sql`${volunteerApplication.status} in ('SUBMITTED', 'UNDER_REVIEW', 'APPROVED')`,
+          ),
+        )
+        .returning({ id: volunteerApplication.id });
+
+      if (autoDeclinedApplications.length > 0) {
+        await tx.insert(volunteerApplicationLog).values(
+          autoDeclinedApplications.map((application) => ({
+            volunteerApplicationId: application.id,
+            status: "DECLINED" as const,
+            declinedBy: "POSTER" as const,
+            createdBy: applicantId,
+          })),
+        );
+      }
+
       await tx
         .select({ id: volunteerOpportunity.id })
         .from(volunteerOpportunity)
@@ -519,6 +543,7 @@ async function updateProjectApplicationStatus(
       .select({
         id: launchpadApplication.id,
         status: launchpadApplication.status,
+        launchpadId: launchpadApplication.launchpadId,
       })
       .from(launchpadApplication)
       .where(
@@ -559,6 +584,32 @@ async function updateProjectApplicationStatus(
       declinedBy: nextStatus === "DECLINED" ? "APPLICANT" : null,
       createdBy: applicantId,
     });
+
+    if (nextStatus === "CONFIRMED") {
+      const autoDeclinedApplications = await tx
+        .update(launchpadApplication)
+        .set({ status: "DECLINED", updatedAt: sql`now()` })
+        .where(
+          and(
+            eq(launchpadApplication.launchpadId, current.launchpadId),
+            eq(launchpadApplication.createdBy, applicantId),
+            sql`${launchpadApplication.id} <> ${current.id}`,
+            sql`${launchpadApplication.status} in ('SUBMITTED', 'UNDER_REVIEW', 'APPROVED')`,
+          ),
+        )
+        .returning({ id: launchpadApplication.id });
+
+      if (autoDeclinedApplications.length > 0) {
+        await tx.insert(launchpadApplicationLog).values(
+          autoDeclinedApplications.map((application) => ({
+            launchpadApplicationId: application.id,
+            status: "DECLINED" as const,
+            declinedBy: "POSTER" as const,
+            createdBy: applicantId,
+          })),
+        );
+      }
+    }
 
     return "updated" as const;
   });

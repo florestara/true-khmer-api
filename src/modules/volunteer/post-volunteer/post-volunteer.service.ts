@@ -23,7 +23,7 @@ import {
   getVolunteerOpportunityById,
   getVolunteerLocations,
   getVolunteerOpportunities,
-  hasVolunteerApprovedOrConfirmedApplication,
+  hasVolunteerApplicationBlock,
   incrementVolunteerOpportunityViewCount,
   saveVolunteerOpportunityForUser,
   unsaveVolunteerOpportunityForUser,
@@ -522,17 +522,11 @@ export async function handleCreateVolunteerApplication(
       throw new Error("Volunteer application target missing after validation");
     }
 
-    if (
-      await hasVolunteerApprovedOrConfirmedApplication(
-        target.opportunityId,
-        authResult.userId,
-      )
-    ) {
+    if (await hasVolunteerApplicationBlock(target.opportunityId, authResult.userId)) {
       return c.json(
         {
           ok: false,
-          error:
-            "You already have an approved or confirmed application for this opportunity",
+          error: "You are blocked from applying to this opportunity",
         },
         409,
       );
@@ -717,7 +711,7 @@ export async function handleCreateVolunteerApplicationBatch(
     }
 
     if (
-      await hasVolunteerApprovedOrConfirmedApplication(
+      await hasVolunteerApplicationBlock(
         firstTarget.opportunityId,
         authResult.userId,
       )
@@ -725,8 +719,7 @@ export async function handleCreateVolunteerApplicationBatch(
       return c.json(
         {
           ok: false,
-          error:
-            "You already have an approved or confirmed application for this opportunity",
+          error: "You are blocked from applying to this opportunity",
         },
         409,
       );

@@ -13,7 +13,7 @@ import {
   findLaunchpadApplicationTarget,
   findLaunchpadApplicationTargetsByRoleIds,
   findLaunchpadTopPickedRoleId,
-  hasLaunchpadApprovedOrConfirmedApplication,
+  hasLaunchpadApplicationBlock,
 } from "./applications.query";
 import type {
   CreateLaunchpadApplicationBatchInput,
@@ -152,17 +152,11 @@ export async function handleCreateLaunchpadApplication(
       );
     }
 
-    if (
-      await hasLaunchpadApprovedOrConfirmedApplication(
-        params.launchpadId,
-        authResult.userId,
-      )
-    ) {
+    if (await hasLaunchpadApplicationBlock(params.launchpadId, authResult.userId)) {
       return c.json(
         {
           ok: false,
-          error:
-            "You already have an approved or confirmed application for this launchpad",
+          error: "You are blocked from applying to this launchpad",
         },
         409,
       );
@@ -313,17 +307,11 @@ export async function handleCreateLaunchpadApplicationBatch(
       );
     }
 
-    if (
-      await hasLaunchpadApprovedOrConfirmedApplication(
-        params.launchpadId,
-        authResult.userId,
-      )
-    ) {
+    if (await hasLaunchpadApplicationBlock(params.launchpadId, authResult.userId)) {
       return c.json(
         {
           ok: false,
-          error:
-            "You already have an approved or confirmed application for this launchpad",
+          error: "You are blocked from applying to this launchpad",
         },
         409,
       );

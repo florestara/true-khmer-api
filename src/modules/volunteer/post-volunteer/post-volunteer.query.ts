@@ -31,6 +31,7 @@ import {
   volunteerOpportunitySave,
   volunteerRole,
   volunteerRoleRequirement,
+  workspaceCandidateBlock,
 } from "../../../db/schema";
 import {
   buildCursorPagination,
@@ -1215,6 +1216,26 @@ export async function hasVolunteerApprovedOrConfirmedApplication(
         eq(volunteerApplication.opportunityId, opportunityId),
         eq(volunteerApplication.applicantId, applicantId),
         sql`${volunteerApplication.status} in ('APPROVED', 'CONFIRMED')`,
+      ),
+    )
+    .limit(1);
+
+  return row !== undefined;
+}
+
+export async function hasVolunteerApplicationBlock(
+  opportunityId: string,
+  applicantId: string,
+): Promise<boolean> {
+  const [row] = await db
+    .select({ id: workspaceCandidateBlock.id })
+    .from(workspaceCandidateBlock)
+    .where(
+      and(
+        eq(workspaceCandidateBlock.sourceType, "VOLUNTEER"),
+        eq(workspaceCandidateBlock.postingId, opportunityId),
+        eq(workspaceCandidateBlock.candidateId, applicantId),
+        eq(workspaceCandidateBlock.status, "ACTIVE"),
       ),
     )
     .limit(1);
