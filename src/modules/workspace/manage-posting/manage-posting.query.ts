@@ -1159,6 +1159,7 @@ async function findVolunteerManagePostingDetail(
     .where(
       and(
         eq(volunteerApplication.opportunityId, postingId),
+        sql`${volunteerApplication.status} <> 'WITHDRAWN'`,
         eq(volunteerOpportunity.createdBy, userId),
       ),
     )
@@ -1220,6 +1221,7 @@ async function findProjectManagePostingDetail(
     .where(
       and(
         eq(launchpadApplication.launchpadId, postingId),
+        sql`${launchpadApplication.status} <> 'WITHDRAWN'`,
         eq(launchpad.createdBy, userId),
       ),
     )
@@ -1302,6 +1304,7 @@ async function findVolunteerManagePostingApplicant(
       and(
         eq(volunteerApplication.opportunityId, postingId),
         eq(volunteerApplication.applicantId, applicantId),
+        sql`${volunteerApplication.status} <> 'WITHDRAWN'`,
         eq(volunteerOpportunity.createdBy, userId),
       ),
     )
@@ -1360,6 +1363,7 @@ async function findProjectManagePostingApplicant(
       and(
         eq(launchpadApplication.launchpadId, postingId),
         eq(launchpadApplication.createdBy, applicantId),
+        sql`${launchpadApplication.status} <> 'WITHDRAWN'`,
         eq(launchpad.createdBy, userId),
       ),
     )

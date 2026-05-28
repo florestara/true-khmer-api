@@ -265,6 +265,7 @@ export async function findExistingApplication(
       and(
         eq(launchpadApplication.launchpadRoleId, launchpadRoleId),
         eq(launchpadApplication.createdBy, createdBy),
+        sql`${launchpadApplication.status} <> 'WITHDRAWN'`,
       ),
     )
     .limit(1);
@@ -287,6 +288,7 @@ export async function findExistingApplicationRoleIds(
       and(
         eq(launchpadApplication.createdBy, createdBy),
         inArray(launchpadApplication.launchpadRoleId, launchpadRoleIds),
+        sql`${launchpadApplication.status} <> 'WITHDRAWN'`,
       ),
     );
 

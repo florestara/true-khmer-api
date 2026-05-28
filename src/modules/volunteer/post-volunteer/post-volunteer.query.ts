@@ -1129,13 +1129,9 @@ async function getAppliedRoleIdsByRoleIds(
       and(
         inArray(volunteerApplication.roleId, uniqueRoleIds),
         eq(volunteerApplication.applicantId, viewerId),
-        inArray(
-          volunteerApplication.status,
-          ACTIVE_VOLUNTEER_APPLICATION_STATUSES,
-        ),
+        sql`${volunteerApplication.status} <> 'WITHDRAWN'`,
       ),
     );
-
   return new Set(rows.map((row) => row.roleId));
 }
 
@@ -1198,6 +1194,7 @@ export async function findVolunteerAppliedRoleIds(
       and(
         eq(volunteerApplication.applicantId, applicantId),
         inArray(volunteerApplication.roleId, roleIds),
+        sql`${volunteerApplication.status} <> 'WITHDRAWN'`,
       ),
     );
 
