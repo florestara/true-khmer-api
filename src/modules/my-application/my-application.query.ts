@@ -83,7 +83,7 @@ function buildApplicationTimeline(
       | "COMPLETED"
       | string;
     createdAt: string;
-    declinedBy: "POSTER" | "APPLICANT" | null;
+    declinedBy: "POSTER" | "APPLICANT" | "SYSTEM" | null;
   }>,
 ) {
   return logs.reduce(
@@ -125,7 +125,7 @@ function buildApplicationTimeline(
       passed: string | null;
       declined: {
         at: string | null;
-        by: "POSTER" | "APPLICANT" | null;
+        by: "POSTER" | "APPLICANT" | "SYSTEM" | null;
       };
       confirmed: string | null;
       completed: string | null;
@@ -490,7 +490,7 @@ async function updateVolunteerApplicationStatus(
           autoDeclinedApplications.map((application) => ({
             volunteerApplicationId: application.id,
             status: "DECLINED" as const,
-            declinedBy: "POSTER" as const,
+            declinedBy: "SYSTEM" as const,
             createdBy: applicantId,
           })),
         );
@@ -604,7 +604,7 @@ async function updateProjectApplicationStatus(
           autoDeclinedApplications.map((application) => ({
             launchpadApplicationId: application.id,
             status: "DECLINED" as const,
-            declinedBy: "POSTER" as const,
+            declinedBy: "SYSTEM" as const,
             createdBy: applicantId,
           })),
         );

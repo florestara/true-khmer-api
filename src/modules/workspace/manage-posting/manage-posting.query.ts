@@ -471,11 +471,10 @@ function resolveApplicantFilterStatuses(
   if (overallStatus === "UNDER_REVIEW") {
     return ["in_review"];
   }
-  if (
-    overallStatus === "SUBMITTED" &&
-    statuses.every((status) => status === "SUBMITTED")
-  ) {
-    return ["new"];
+  if (overallStatus === "SUBMITTED") {
+    return statuses.every((status) => status === "SUBMITTED")
+      ? ["new"]
+      : ["in_review"];
   }
 
   return [];
@@ -1799,6 +1798,21 @@ async function declineVolunteerManagePostingApplication(
     );
 
     if (query.declineAll) {
+      const siblingApplications = await tx
+        .select({
+          id: volunteerApplication.id,
+          status: volunteerApplication.status,
+        })
+        .from(volunteerApplication)
+        .where(
+          and(
+            eq(volunteerApplication.opportunityId, current.opportunityId),
+            eq(volunteerApplication.applicantId, current.applicantId),
+            sql`${volunteerApplication.id} <> ${current.id}`,
+            sql`${volunteerApplication.status} in ('SUBMITTED', 'UNDER_REVIEW', 'APPROVED')`,
+          ),
+        );
+
       const declinedApplications = await tx
         .update(volunteerApplication)
         .set({ status: "DECLINED", updatedAt: sql`now()` })
@@ -1813,13 +1827,24 @@ async function declineVolunteerManagePostingApplication(
         .returning({ id: volunteerApplication.id });
 
       if (declinedApplications.length > 0) {
+        const declinedApplicationIds = new Set(
+          declinedApplications.map((application) => application.id),
+        );
+
         await tx.insert(volunteerApplicationLog).values(
-          declinedApplications.map((application) => ({
-            volunteerApplicationId: application.id,
-            status: "DECLINED" as const,
-            declinedBy: "POSTER" as const,
-            createdBy: userId,
-          })),
+          siblingApplications
+            .filter((application) => declinedApplicationIds.has(application.id))
+            .flatMap((application) =>
+              buildPosterDeclineLogSequence(application.status).map(
+                (logStatus) => ({
+                  volunteerApplicationId: application.id,
+                  status: logStatus,
+                  declinedBy:
+                    logStatus === "DECLINED" ? ("POSTER" as const) : null,
+                  createdBy: userId,
+                }),
+              ),
+            ),
         );
       }
     }
@@ -1926,6 +1951,21 @@ async function declineProjectManagePostingApplication(
     );
 
     if (query.declineAll) {
+      const siblingApplications = await tx
+        .select({
+          id: launchpadApplication.id,
+          status: launchpadApplication.status,
+        })
+        .from(launchpadApplication)
+        .where(
+          and(
+            eq(launchpadApplication.launchpadId, current.launchpadId),
+            eq(launchpadApplication.createdBy, current.createdBy),
+            sql`${launchpadApplication.id} <> ${current.id}`,
+            sql`${launchpadApplication.status} in ('SUBMITTED', 'UNDER_REVIEW', 'APPROVED')`,
+          ),
+        );
+
       const declinedApplications = await tx
         .update(launchpadApplication)
         .set({ status: "DECLINED", updatedAt: sql`now()` })
@@ -1940,13 +1980,24 @@ async function declineProjectManagePostingApplication(
         .returning({ id: launchpadApplication.id });
 
       if (declinedApplications.length > 0) {
+        const declinedApplicationIds = new Set(
+          declinedApplications.map((application) => application.id),
+        );
+
         await tx.insert(launchpadApplicationLog).values(
-          declinedApplications.map((application) => ({
-            launchpadApplicationId: application.id,
-            status: "DECLINED" as const,
-            declinedBy: "POSTER" as const,
-            createdBy: userId,
-          })),
+          siblingApplications
+            .filter((application) => declinedApplicationIds.has(application.id))
+            .flatMap((application) =>
+              buildPosterDeclineLogSequence(application.status).map(
+                (logStatus) => ({
+                  launchpadApplicationId: application.id,
+                  status: logStatus,
+                  declinedBy:
+                    logStatus === "DECLINED" ? ("POSTER" as const) : null,
+                  createdBy: userId,
+                }),
+              ),
+            ),
         );
       }
     }

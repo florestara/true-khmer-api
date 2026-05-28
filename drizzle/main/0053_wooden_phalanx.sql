@@ -13,8 +13,8 @@ CREATE TABLE "workspace_candidate_block" (
 );
 --> statement-breakpoint
 ALTER TABLE "workspace_candidate_block" ADD CONSTRAINT "workspace_candidate_block_candidate_id_user_id_fk" FOREIGN KEY ("candidate_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "workspace_candidate_block" ADD CONSTRAINT "workspace_candidate_block_created_by_user_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "workspace_candidate_block" ADD CONSTRAINT "workspace_candidate_block_updated_by_user_id_fk" FOREIGN KEY ("updated_by") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "workspace_candidate_block" ADD CONSTRAINT "workspace_candidate_block_created_by_user_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "workspace_candidate_block" ADD CONSTRAINT "workspace_candidate_block_updated_by_user_id_fk" FOREIGN KEY ("updated_by") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "workspace_candidate_block_source_posting_candidate_unique_idx" ON "workspace_candidate_block" USING btree ("source_type","posting_id","candidate_id");--> statement-breakpoint
 CREATE INDEX "workspace_candidate_block_candidate_idx" ON "workspace_candidate_block" USING btree ("candidate_id");--> statement-breakpoint
 CREATE INDEX "workspace_candidate_block_created_by_idx" ON "workspace_candidate_block" USING btree ("created_by");

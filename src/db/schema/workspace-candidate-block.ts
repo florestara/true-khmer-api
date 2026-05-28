@@ -33,10 +33,10 @@ export const workspaceCandidateBlock = pgTable(
       .notNull(),
     createdBy: uuid("created_by")
       .notNull()
-      .references(() => user.id, { onDelete: "cascade" }),
+      .references(() => user.id),
     updatedBy: uuid("updated_by")
       .notNull()
-      .references(() => user.id, { onDelete: "cascade" }),
+      .references(() => user.id),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
       .defaultNow()
       .notNull(),

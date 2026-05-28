@@ -109,7 +109,7 @@ export async function createApplicationLog(
   options: {
     applicationId: string;
     status: ApplicationStatus;
-    declinedBy?: "POSTER" | "APPLICANT" | null;
+    declinedBy?: "POSTER" | "APPLICANT" | "SYSTEM" | null;
     createdBy: string;
   },
 ): Promise<LaunchpadApplicationLog> {

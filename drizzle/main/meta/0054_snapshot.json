@@ -1,6 +1,6 @@
 {
-  "id": "911d068a-8716-4f34-a558-ac5f1ddb8c6b",
-  "prevId": "fa49dfb8-9d7c-4a64-b94c-133f2c9ecc6c",
+  "id": "ee0938e8-b83b-4585-b27b-d78a456a0f1d",
+  "prevId": "911d068a-8716-4f34-a558-ac5f1ddb8c6b",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -6822,7 +6822,8 @@
       "schema": "public",
       "values": [
         "POSTER",
-        "APPLICANT"
+        "APPLICANT",
+        "SYSTEM"
       ]
     },
     "public.volunteer_category_status": {
