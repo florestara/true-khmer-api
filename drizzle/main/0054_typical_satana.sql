@@ -1,0 +1,1 @@
+ALTER TYPE "public"."application_declined_by" ADD VALUE 'SYSTEM';
