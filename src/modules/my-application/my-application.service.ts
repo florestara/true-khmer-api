@@ -1,10 +1,13 @@
 import type { Context } from "hono";
 import { getAuthUserId } from "../auth/utils/get-auth";
 import {
+  buildApplicationTimeline,
   findMyProjectApplicationDetail,
   findMyProjectApplications,
   findMyVolunteerApplicationDetail,
   findMyVolunteerApplications,
+  findProjectApplicationLogsByApplicationIds,
+  findVolunteerApplicationLogsByApplicationIds,
   updateMyApplicationArchived,
   updateMyApplicationStatus,
   type MySpaceProjectApplication,
@@ -26,6 +29,8 @@ type MyApplicationStatus =
   | "COMPLETED"
   | "WITHDRAWN";
 
+type MyApplicationTimeline = ReturnType<typeof buildApplicationTimeline>;
+
 type MyApplicationItem = {
   opportunityId: string;
   opportunityTitle: string;
@@ -33,10 +38,14 @@ type MyApplicationItem = {
   imageKey: string | null;
   appliedAt: string;
   deadline: string | null;
+  startDate: string | null;
+  endDate: string | null;
   status: MyApplicationStatus;
   needAttention: boolean;
   totalRoleApplied: number;
+  canArchive: boolean;
   filled: boolean;
+  archivedAt: string | null;
   category: {
     id: string;
     name: string;
@@ -60,15 +69,17 @@ type MyApplicationRole = {
   title: string;
   status: MyApplicationStatus;
   appliedAt: string;
+  timeline: MyApplicationTimeline;
 };
 
 type MyApplicationRecord = Omit<
   MyApplicationItem,
-  "needAttention" | "totalRoleApplied" | "roles" | "approvedRole"
+  "needAttention" | "totalRoleApplied" | "canArchive" | "roles" | "approvedRole"
 > & {
   opportunity: MyApplicationOpportunity;
   role: MyApplicationRole;
   archived: boolean;
+  archivedAt: string | null;
 };
 
 type MyApplicationGroup = MyApplicationItem & {
@@ -90,6 +101,7 @@ function mapReference(
 
 function mapVolunteerApplication(
   application: MySpaceVolunteerApplication,
+  timelinesByApplicationId: Map<string, MyApplicationTimeline> = new Map(),
 ): MyApplicationRecord {
   return {
     opportunityId: application.opportunity.id,
@@ -98,9 +110,12 @@ function mapVolunteerApplication(
     imageKey: application.opportunity.coverImageKey,
     appliedAt: application.createdAt,
     deadline: application.opportunity.applicationDeadline,
+    startDate: application.opportunity.startDate,
+    endDate: application.opportunity.endDate,
     status: application.status,
     filled: application.opportunity.filled,
     archived: application.archived,
+    archivedAt: application.archivedAt,
     opportunity: {
       id: application.opportunity.id,
       title: application.opportunity.title,
@@ -113,12 +128,16 @@ function mapVolunteerApplication(
       title: application.role.title,
       status: application.status,
       appliedAt: application.createdAt,
+      timeline:
+        timelinesByApplicationId.get(application.id) ??
+        buildApplicationTimeline([]),
     },
   };
 }
 
 function mapProjectApplication(
   application: MySpaceProjectApplication,
+  timelinesByApplicationId: Map<string, MyApplicationTimeline> = new Map(),
 ): MyApplicationRecord {
   if (!application.opportunity) {
     throw new Error("Project application is missing opportunity");
@@ -131,9 +150,12 @@ function mapProjectApplication(
     imageKey: application.imageKey,
     appliedAt: application.appliedAt,
     deadline: application.deadline,
+    startDate: null,
+    endDate: null,
     status: application.status,
     filled: false,
     archived: application.archived,
+    archivedAt: application.archivedAt,
     opportunity: application.opportunity,
     category: mapReference(application.category),
     location: mapReference(application.location),
@@ -143,8 +165,64 @@ function mapProjectApplication(
       title: application.title,
       status: application.status,
       appliedAt: application.appliedAt,
+      timeline:
+        timelinesByApplicationId.get(application.id) ??
+        buildApplicationTimeline([]),
     },
   };
+}
+
+function groupApplicationTimelines(
+  logs: Array<{
+    applicationId: string;
+    status: string;
+    createdAt: string;
+    declinedBy: "POSTER" | "APPLICANT" | "SYSTEM" | null;
+  }>,
+) {
+  const logsByApplicationId = new Map<string, typeof logs>();
+  const timelinesByApplicationId = new Map<string, MyApplicationTimeline>();
+
+  for (const log of logs) {
+    const current = logsByApplicationId.get(log.applicationId) ?? [];
+    current.push(log);
+    logsByApplicationId.set(log.applicationId, current);
+  }
+
+  for (const [applicationId, applicationLogs] of logsByApplicationId) {
+    timelinesByApplicationId.set(
+      applicationId,
+      buildApplicationTimeline(applicationLogs),
+    );
+  }
+
+  return timelinesByApplicationId;
+}
+
+async function buildVolunteerApplicationRecords(applicantId: string) {
+  const applications = await findMyVolunteerApplications(applicantId);
+  const timelinesByApplicationId = groupApplicationTimelines(
+    await findVolunteerApplicationLogsByApplicationIds(
+      applications.map((application) => application.id),
+    ),
+  );
+
+  return applications.map((application) =>
+    mapVolunteerApplication(application, timelinesByApplicationId),
+  );
+}
+
+async function buildProjectApplicationRecords(applicantId: string) {
+  const applications = await findMyProjectApplications(applicantId);
+  const timelinesByApplicationId = groupApplicationTimelines(
+    await findProjectApplicationLogsByApplicationIds(
+      applications.map((application) => application.id),
+    ),
+  );
+
+  return applications.map((application) =>
+    mapProjectApplication(application, timelinesByApplicationId),
+  );
 }
 
 function resolveOpportunityStatus(statuses: MyApplicationStatus[]) {
@@ -179,6 +257,20 @@ function resolveOpportunityStatus(statuses: MyApplicationStatus[]) {
   return "DECLINED";
 }
 
+function canArchiveApplicationGroup(statuses: MyApplicationStatus[]) {
+  if (statuses.length === 0) {
+    return false;
+  }
+
+  if (statuses.some((status) => status === "COMPLETED")) {
+    return true;
+  }
+
+  return statuses.every(
+    (status) => status === "DECLINED" || status === "WITHDRAWN",
+  );
+}
+
 function buildMyApplicationGroups(
   applications: MyApplicationRecord[],
 ): MyApplicationGroup[] {
@@ -196,10 +288,14 @@ function buildMyApplicationGroups(
         imageKey: application.imageKey,
         appliedAt: application.appliedAt,
         deadline: application.deadline,
+        startDate: application.startDate,
+        endDate: application.endDate,
         status: application.status,
         needAttention: application.status === "APPROVED",
         totalRoleApplied: 1,
+        canArchive: canArchiveApplicationGroup([application.status]),
         filled: application.filled,
+        archivedAt: application.archived ? application.archivedAt : null,
         category: application.category,
         location: application.location,
         roles: [application.role],
@@ -215,12 +311,18 @@ function buildMyApplicationGroups(
     existing.status = resolveOpportunityStatus(
       existing.roles.map((role) => role.status),
     );
+    existing.canArchive = canArchiveApplicationGroup(
+      existing.roles.map((role) => role.status),
+    );
     existing.needAttention = existing.roles.some(
       (role) => role.status === "APPROVED",
     );
     existing.approvedRole =
       existing.roles.find((role) => role.status === "APPROVED") ?? null;
     existing.archived = existing.archived && application.archived;
+    existing.archivedAt = existing.archived
+      ? latestDateTimeString(existing.archivedAt, application.archivedAt)
+      : null;
 
     if (Date.parse(application.appliedAt) > Date.parse(existing.appliedAt)) {
       existing.appliedAt = application.appliedAt;
@@ -239,6 +341,21 @@ function buildMyApplicationGroups(
       (left, right) =>
         Date.parse(right.appliedAt) - Date.parse(left.appliedAt),
     );
+}
+
+function latestDateTimeString(
+  left: string | null,
+  right: string | null,
+) {
+  if (!left) {
+    return right;
+  }
+
+  if (!right) {
+    return left;
+  }
+
+  return Date.parse(right) > Date.parse(left) ? right : left;
 }
 
 function buildSummary(applications: MyApplicationGroup[]) {
@@ -337,6 +454,22 @@ function findApplicationGroupByRoleApplicationId(
   );
 }
 
+function sortResponseApplications(
+  applications: MyApplicationGroup[],
+  filter: GetMyApplicationsQuery["filter"],
+) {
+  if (filter !== "archived") {
+    return applications;
+  }
+
+  return [...applications].sort((left, right) => {
+    const leftTime = Date.parse(left.archivedAt ?? left.appliedAt);
+    const rightTime = Date.parse(right.archivedAt ?? right.appliedAt);
+
+    return rightTime - leftTime;
+  });
+}
+
 export async function handleGetMyApplications(
   c: Context,
   query: GetMyApplicationsQuery,
@@ -347,21 +480,25 @@ export async function handleGetMyApplications(
   }
 
   try {
-    const [volunteerApplications, projectApplications] = await Promise.all([
-      query.type === "projects"
-        ? Promise.resolve([])
-        : findMyVolunteerApplications(authResult.userId),
-      query.type === "volunteer"
-        ? Promise.resolve([])
-        : findMyProjectApplications(authResult.userId),
-    ]);
+    const [volunteerApplicationRecords, projectApplicationRecords] =
+      await Promise.all([
+        query.type === "projects"
+          ? Promise.resolve([])
+          : buildVolunteerApplicationRecords(authResult.userId),
+        query.type === "volunteer"
+          ? Promise.resolve([])
+          : buildProjectApplicationRecords(authResult.userId),
+      ]);
     const applicationRecords = [
-      ...volunteerApplications.map(mapVolunteerApplication),
-      ...projectApplications.map(mapProjectApplication),
+      ...volunteerApplicationRecords,
+      ...projectApplicationRecords,
     ];
     const applications = buildMyApplicationGroups(applicationRecords);
-    const filteredApplications = applications.filter((application) =>
-      matchesFilter(application, query.filter),
+    const filteredApplications = sortResponseApplications(
+      applications.filter((application) =>
+        matchesFilter(application, query.filter),
+      ),
+      query.filter,
     );
     const responseApplications = filteredApplications.map(toResponseApplication);
 
@@ -448,12 +585,8 @@ export async function handleChangeMyApplicationStatus(
 
     const applicationRecords =
       params.sourceType === "volunteer"
-        ? (await findMyVolunteerApplications(authResult.userId)).map(
-            mapVolunteerApplication,
-          )
-        : (await findMyProjectApplications(authResult.userId)).map(
-            mapProjectApplication,
-          );
+        ? await buildVolunteerApplicationRecords(authResult.userId)
+        : await buildProjectApplicationRecords(authResult.userId);
     const application = findApplicationGroupByRoleApplicationId(
       buildMyApplicationGroups(applicationRecords),
       params.applicationId,
@@ -508,12 +641,8 @@ export async function handleChangeMyApplicationArchived(
 
     const applicationRecords =
       params.sourceType === "volunteer"
-        ? (await findMyVolunteerApplications(authResult.userId)).map(
-            mapVolunteerApplication,
-          )
-        : (await findMyProjectApplications(authResult.userId)).map(
-            mapProjectApplication,
-          );
+        ? await buildVolunteerApplicationRecords(authResult.userId)
+        : await buildProjectApplicationRecords(authResult.userId);
     const application = findApplicationGroupByOpportunityId(
       buildMyApplicationGroups(applicationRecords),
       params.opportunityId,

@@ -44,6 +44,7 @@ export async function findProjectApplicationsByApplicantId(applicantId: string) 
       deadline: launchpad.deadline,
       status: launchpadApplication.status,
       archived: launchpadApplication.archived,
+      archivedAt: launchpadApplication.archivedAt,
       opportunity: {
         id: launchpad.id,
         title: launchpad.name,
@@ -73,7 +74,7 @@ export async function findMyProjectApplications(userId: string) {
   return findProjectApplicationsByApplicantId(userId);
 }
 
-function buildApplicationTimeline(
+export function buildApplicationTimeline(
   logs: Array<{
     status:
       | "SUBMITTED"
@@ -82,6 +83,7 @@ function buildApplicationTimeline(
       | "DECLINED"
       | "CONFIRMED"
       | "COMPLETED"
+      | "WITHDRAWN"
       | string;
     createdAt: string;
     declinedBy: "POSTER" | "APPLICANT" | "SYSTEM" | null;
@@ -106,6 +108,8 @@ function buildApplicationTimeline(
         timeline.confirmed ??= log.createdAt;
       } else if (log.status === "COMPLETED") {
         timeline.completed ??= log.createdAt;
+      } else if (log.status === "WITHDRAWN") {
+        timeline.withdrawn ??= log.createdAt;
       }
 
       return timeline;
@@ -120,6 +124,7 @@ function buildApplicationTimeline(
       },
       confirmed: null,
       completed: null,
+      withdrawn: null,
     } as {
       submitted: string | null;
       underReview: string | null;
@@ -130,8 +135,47 @@ function buildApplicationTimeline(
       };
       confirmed: string | null;
       completed: string | null;
+      withdrawn: string | null;
     },
   );
+}
+
+export async function findVolunteerApplicationLogsByApplicationIds(
+  applicationIds: string[],
+) {
+  if (applicationIds.length === 0) {
+    return [];
+  }
+
+  return db
+    .select({
+      applicationId: volunteerApplicationLog.volunteerApplicationId,
+      status: volunteerApplicationLog.status,
+      createdAt: volunteerApplicationLog.createdAt,
+      declinedBy: volunteerApplicationLog.declinedBy,
+    })
+    .from(volunteerApplicationLog)
+    .where(inArray(volunteerApplicationLog.volunteerApplicationId, applicationIds))
+    .orderBy(asc(volunteerApplicationLog.createdAt));
+}
+
+export async function findProjectApplicationLogsByApplicationIds(
+  applicationIds: string[],
+) {
+  if (applicationIds.length === 0) {
+    return [];
+  }
+
+  return db
+    .select({
+      applicationId: launchpadApplicationLog.launchpadApplicationId,
+      status: launchpadApplicationLog.status,
+      createdAt: launchpadApplicationLog.createdAt,
+      declinedBy: launchpadApplicationLog.declinedBy,
+    })
+    .from(launchpadApplicationLog)
+    .where(inArray(launchpadApplicationLog.launchpadApplicationId, applicationIds))
+    .orderBy(asc(launchpadApplicationLog.createdAt));
 }
 
 function normalizeNullableReference(
@@ -296,6 +340,7 @@ export async function findMyVolunteerApplicationDetail(
       status: row.application.status,
       appliedAt: row.application.createdAt,
       archived: row.application.archived,
+      archivedAt: row.application.archivedAt,
       actions: buildRoleActions(row.application.status),
       timeline: buildApplicationTimeline(
         logsByApplicationId.get(row.application.id) ?? [],
@@ -318,6 +363,24 @@ export async function findMyVolunteerApplicationDetail(
     appliedAt: roles[0]?.appliedAt ?? firstRow.application.createdAt,
     deadline: firstRow.opportunity.applicationDeadline,
     archived: roles.every((role) => role.archived),
+    archivedAt: roles.every((role) => role.archived)
+      ? roles.reduce<string | null>(
+          (latest, role) => {
+            if (!latest) {
+              return role.archivedAt;
+            }
+
+            if (!role.archivedAt) {
+              return latest;
+            }
+
+            return Date.parse(role.archivedAt) > Date.parse(latest)
+              ? role.archivedAt
+              : latest;
+          },
+          null,
+        )
+      : null,
     needAttention: approvedRole !== null,
     totalRoleApplied: roles.length,
     canArchive: canArchiveApplicationGroup(statuses),
@@ -354,6 +417,7 @@ export async function findMyVolunteerApplicationDetail(
           title: approvedRole.title,
           status: approvedRole.status,
           appliedAt: approvedRole.appliedAt,
+          timeline: approvedRole.timeline,
         }
       : null,
   };
@@ -448,6 +512,7 @@ export async function findMyProjectApplicationDetail(
       status: row.application.status,
       appliedAt: row.application.createdAt,
       archived: row.application.archived,
+      archivedAt: row.application.archivedAt,
       actions: buildRoleActions(row.application.status),
       timeline: buildApplicationTimeline(
         logsByApplicationId.get(row.application.id) ?? [],
@@ -470,6 +535,24 @@ export async function findMyProjectApplicationDetail(
     appliedAt: roles[0]?.appliedAt ?? firstRow.application.createdAt,
     deadline: firstRow.opportunity.deadline,
     archived: roles.every((role) => role.archived),
+    archivedAt: roles.every((role) => role.archived)
+      ? roles.reduce<string | null>(
+          (latest, role) => {
+            if (!latest) {
+              return role.archivedAt;
+            }
+
+            if (!role.archivedAt) {
+              return latest;
+            }
+
+            return Date.parse(role.archivedAt) > Date.parse(latest)
+              ? role.archivedAt
+              : latest;
+          },
+          null,
+        )
+      : null,
     needAttention: approvedRole !== null,
     totalRoleApplied: roles.length,
     canArchive: canArchiveApplicationGroup(statuses),
@@ -506,6 +589,7 @@ export async function findMyProjectApplicationDetail(
           title: approvedRole.title,
           status: approvedRole.status,
           appliedAt: approvedRole.appliedAt,
+          timeline: approvedRole.timeline,
         }
       : null,
   };
@@ -789,13 +873,20 @@ async function updateVolunteerApplicationGroupArchived(
       return "not_found" as const;
     }
 
-    if (!canArchiveApplicationGroup(applications.map((item) => item.status))) {
+    if (
+      archived &&
+      !canArchiveApplicationGroup(applications.map((item) => item.status))
+    ) {
       return "conflict" as const;
     }
 
     const updated = await tx
       .update(volunteerApplication)
-      .set({ archived, updatedAt: sql`now()` })
+      .set({
+        archived,
+        archivedAt: archived ? sql`now()` : null,
+        updatedAt: sql`now()`,
+      })
       .where(
         and(
           eq(volunteerApplication.opportunityId, opportunityId),
@@ -835,13 +926,20 @@ async function updateProjectApplicationGroupArchived(
       return "not_found" as const;
     }
 
-    if (!canArchiveApplicationGroup(applications.map((item) => item.status))) {
+    if (
+      archived &&
+      !canArchiveApplicationGroup(applications.map((item) => item.status))
+    ) {
       return "conflict" as const;
     }
 
     const updated = await tx
       .update(launchpadApplication)
-      .set({ archived, updatedAt: sql`now()` })
+      .set({
+        archived,
+        archivedAt: archived ? sql`now()` : null,
+        updatedAt: sql`now()`,
+      })
       .where(
         and(
           eq(launchpadApplication.launchpadId, opportunityId),

@@ -205,6 +205,8 @@ export type VolunteerApplicationDetail = {
     title: string;
     coverImageKey: string;
     applicationDeadline: string;
+    startDate: string | null;
+    endDate: string | null;
     status: VolunteerOpportunityStatus;
     filled: boolean;
     category: VolunteerReference;
@@ -219,6 +221,7 @@ export type VolunteerApplicationDetail = {
   supportingDocuments: VolunteerSupportingDocument[];
   status: VolunteerApplicationRow["status"];
   archived: boolean;
+  archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -275,6 +278,8 @@ type VolunteerApplicationTarget = {
   roleTitle: string;
   createdBy: string;
   applicationDeadline: string;
+  startDate: string | null;
+  endDate: string | null;
   status: VolunteerOpportunityStatus;
   publishedAt: string | null;
 };
@@ -492,6 +497,8 @@ export async function findVolunteerOpportunityApplicationTargetById(
       cityName: city.name,
       createdBy: volunteerOpportunity.createdBy,
       applicationDeadline: volunteerOpportunity.applicationDeadline,
+      startDate: volunteerOpportunity.startDate,
+      endDate: volunteerOpportunity.endDate,
       status: volunteerOpportunity.status,
       publishedAt: volunteerOpportunity.publishedAt,
     })
@@ -549,6 +556,8 @@ export async function findVolunteerApplicationTargetByRoleId(
       opportunityOverview: volunteerOpportunity.overview,
       createdBy: volunteerOpportunity.createdBy,
       applicationDeadline: volunteerOpportunity.applicationDeadline,
+      startDate: volunteerOpportunity.startDate,
+      endDate: volunteerOpportunity.endDate,
       status: volunteerOpportunity.status,
       publishedAt: volunteerOpportunity.publishedAt,
     })
@@ -589,6 +598,8 @@ export async function findVolunteerApplicationTargetsByRoleIds(
       opportunityOverview: volunteerOpportunity.overview,
       createdBy: volunteerOpportunity.createdBy,
       applicationDeadline: volunteerOpportunity.applicationDeadline,
+      startDate: volunteerOpportunity.startDate,
+      endDate: volunteerOpportunity.endDate,
       status: volunteerOpportunity.status,
       publishedAt: volunteerOpportunity.publishedAt,
     })
@@ -624,6 +635,8 @@ type CreateVolunteerApplicationInput = {
   opportunityTitle: string;
   coverImageKey: string;
   applicationDeadline: string;
+  startDate: string | null;
+  endDate: string | null;
   category: VolunteerReference;
   location: VolunteerReference;
   roleTitle: string;
@@ -703,6 +716,8 @@ function hydrateVolunteerApplication(
     title: string;
     coverImageKey: string;
     applicationDeadline: string;
+    startDate: string | null;
+    endDate: string | null;
     status: VolunteerOpportunityStatus;
     filled: boolean;
     category: VolunteerReference;
@@ -730,6 +745,7 @@ function hydrateVolunteerApplication(
       application.supportingDocuments as VolunteerSupportingDocument[],
     status: application.status,
     archived: application.archived,
+    archivedAt: toNullableIsoDateTimeString(application.archivedAt),
     createdAt: toIsoDateTimeString(application.createdAt),
     updatedAt: toIsoDateTimeString(application.updatedAt),
   };
@@ -2449,6 +2465,8 @@ export async function createVolunteerApplication(
       title: data.opportunityTitle,
       coverImageKey: data.coverImageKey,
       applicationDeadline: data.applicationDeadline,
+      startDate: toNullableIsoDateTimeString(data.startDate),
+      endDate: toNullableIsoDateTimeString(data.endDate),
       status: "LIVE",
       filled: false,
       category: data.category,
@@ -2508,6 +2526,8 @@ export async function createVolunteerApplicationsBatch(
           title: data.opportunityTitle,
           coverImageKey: data.coverImageKey,
           applicationDeadline: data.applicationDeadline,
+          startDate: toNullableIsoDateTimeString(data.startDate),
+          endDate: toNullableIsoDateTimeString(data.endDate),
           status: "LIVE",
           filled: false,
           category: data.category,
@@ -2529,6 +2549,8 @@ export async function findVolunteerApplicationsByApplicantId(
       opportunityTitle: volunteerOpportunity.title,
       coverImageKey: volunteerOpportunity.coverImageKey,
       applicationDeadline: volunteerOpportunity.applicationDeadline,
+      startDate: volunteerOpportunity.startDate,
+      endDate: volunteerOpportunity.endDate,
       opportunityStatus: volunteerOpportunity.status,
       filled: volunteerOpportunity.filled,
       categoryId: volunteerCategory.id,
@@ -2556,6 +2578,8 @@ export async function findVolunteerApplicationsByApplicantId(
       title: row.opportunityTitle,
       coverImageKey: row.coverImageKey,
       applicationDeadline: row.applicationDeadline,
+      startDate: toNullableIsoDateTimeString(row.startDate),
+      endDate: toNullableIsoDateTimeString(row.endDate),
       status: row.opportunityStatus,
       filled: row.filled,
       category: {

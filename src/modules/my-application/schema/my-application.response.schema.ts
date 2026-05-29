@@ -7,13 +7,6 @@ const myApplicationReferenceSchema = z
   })
   .openapi("MyApplicationReference");
 
-const myApplicationOpportunitySchema = z
-  .object({
-    id: z.string(),
-    title: z.string(),
-  })
-  .openapi("MyApplicationOpportunity");
-
 export const myApplicationStatusGroupSchema = z
   .enum([
     "SUBMITTED",
@@ -26,6 +19,21 @@ export const myApplicationStatusGroupSchema = z
   ])
   .openapi("MyApplicationStatusGroup");
 
+const myApplicationTimelineSchema = z
+  .object({
+    submitted: z.string().nullable(),
+    underReview: z.string().nullable(),
+    approved: z.string().nullable(),
+    declined: z.object({
+      at: z.string().nullable(),
+      by: z.enum(["POSTER", "APPLICANT", "SYSTEM"]).nullable(),
+    }),
+    confirmed: z.string().nullable(),
+    completed: z.string().nullable(),
+    withdrawn: z.string().nullable(),
+  })
+  .openapi("MyApplicationTimeline");
+
 const myApplicationRoleSchema = z
   .object({
     applicationId: z.string(),
@@ -33,6 +41,7 @@ const myApplicationRoleSchema = z
     title: z.string(),
     status: myApplicationStatusGroupSchema,
     appliedAt: z.string(),
+    timeline: myApplicationTimelineSchema,
   })
   .openapi("MyApplicationRole");
 
@@ -44,10 +53,14 @@ export const myApplicationItemSchema = z
     imageKey: z.string().nullable(),
     appliedAt: z.string(),
     deadline: z.string().nullable(),
+    startDate: z.string().nullable(),
+    endDate: z.string().nullable(),
     status: myApplicationStatusGroupSchema,
     needAttention: z.boolean(),
     totalRoleApplied: z.number().int().nonnegative(),
+    canArchive: z.boolean(),
     filled: z.boolean(),
+    archivedAt: z.string().nullable(),
     category: myApplicationReferenceSchema.nullable(),
     location: myApplicationReferenceSchema.nullable(),
     roles: z.array(myApplicationRoleSchema),
@@ -75,20 +88,6 @@ export const myApplicationsResponseSchema = z
   })
   .openapi("MyApplicationsResponse");
 
-const myApplicationTimelineSchema = z
-  .object({
-    submitted: z.string().nullable(),
-    underReview: z.string().nullable(),
-    approved: z.string().nullable(),
-    declined: z.object({
-      at: z.string().nullable(),
-      by: z.enum(["POSTER", "APPLICANT", "SYSTEM"]).nullable(),
-    }),
-    confirmed: z.string().nullable(),
-    completed: z.string().nullable(),
-  })
-  .openapi("MyApplicationTimeline");
-
 const myApplicationRoleDetailSchema = z
   .object({
     applicationId: z.string(),
@@ -100,6 +99,7 @@ const myApplicationRoleDetailSchema = z
     status: myApplicationStatusGroupSchema,
     appliedAt: z.string(),
     archived: z.boolean(),
+    archivedAt: z.string().nullable(),
     actions: z.object({
       canConfirm: z.boolean(),
       canDecline: z.boolean(),
@@ -119,6 +119,7 @@ export const myApplicationDetailSchema = z
     appliedAt: z.string(),
     deadline: z.string().nullable(),
     archived: z.boolean(),
+    archivedAt: z.string().nullable(),
     needAttention: z.boolean(),
     totalRoleApplied: z.number().int().nonnegative(),
     canArchive: z.boolean(),
