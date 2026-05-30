@@ -8,10 +8,12 @@ import {
   createLaunchpadApplication,
   createLaunchpadApplicationsBatch,
   findExistingApplication,
+  findExistingApplicationRoleIds,
   findLaunchpadApplicationById,
   findLaunchpadApplicationTarget,
   findLaunchpadApplicationTargetsByRoleIds,
   findLaunchpadTopPickedRoleId,
+  hasLaunchpadApplicationBlock,
 } from "./applications.query";
 import type {
   CreateLaunchpadApplicationBatchInput,
@@ -143,9 +145,19 @@ export async function handleCreateLaunchpadApplication(
       data.launchpadRoleId,
       authResult.userId,
     );
-    if (existing && existing.status !== "WITHDRAWN") {
+    if (existing) {
       return c.json(
         { ok: false, error: "You have already applied for this role" },
+        409,
+      );
+    }
+
+    if (await hasLaunchpadApplicationBlock(params.launchpadId, authResult.userId)) {
+      return c.json(
+        {
+          ok: false,
+          error: "You are blocked from applying to this launchpad",
+        },
         409,
       );
     }
@@ -281,6 +293,28 @@ export async function handleCreateLaunchpadApplicationBatch(
           400,
         );
       }
+    }
+
+    const existingRoleIds = await findExistingApplicationRoleIds(
+      data.launchpadRoleIds,
+      authResult.userId,
+    );
+
+    if (existingRoleIds.length > 0) {
+      return c.json(
+        { ok: false, error: "You have already applied for one or more roles" },
+        409,
+      );
+    }
+
+    if (await hasLaunchpadApplicationBlock(params.launchpadId, authResult.userId)) {
+      return c.json(
+        {
+          ok: false,
+          error: "You are blocked from applying to this launchpad",
+        },
+        409,
+      );
     }
 
     if (data.topPickRoleId) {

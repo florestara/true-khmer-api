@@ -11,6 +11,7 @@ import {
   createVolunteerCategory,
   createVolunteerOpportunity,
   findActiveVolunteerCategoryById,
+  findVolunteerAppliedRoleIds,
   findVolunteerApplicationTargetByRoleId,
   findVolunteerApplicationTargetsByRoleIds,
   findVolunteerTopPickedRoleId,
@@ -22,6 +23,7 @@ import {
   getVolunteerOpportunityById,
   getVolunteerLocations,
   getVolunteerOpportunities,
+  hasVolunteerApplicationBlock,
   incrementVolunteerOpportunityViewCount,
   saveVolunteerOpportunityForUser,
   unsaveVolunteerOpportunityForUser,
@@ -520,6 +522,28 @@ export async function handleCreateVolunteerApplication(
       throw new Error("Volunteer application target missing after validation");
     }
 
+    if (await hasVolunteerApplicationBlock(target.opportunityId, authResult.userId)) {
+      return c.json(
+        {
+          ok: false,
+          error: "You are blocked from applying to this opportunity",
+        },
+        409,
+      );
+    }
+
+    const appliedRoleIds = await findVolunteerAppliedRoleIds(
+      [data.roleId],
+      authResult.userId,
+    );
+
+    if (appliedRoleIds.length > 0) {
+      return c.json(
+        { ok: false, error: "You have already applied to this role" },
+        409,
+      );
+    }
+
     if (data.topPickRoleId === data.roleId) {
       const existingTopPickedRoleId = await findVolunteerTopPickedRoleId(
         target.opportunityId,
@@ -567,6 +591,8 @@ export async function handleCreateVolunteerApplication(
       opportunityTitle: target.opportunityTitle,
       coverImageKey: target.coverImageKey,
       applicationDeadline: target.applicationDeadline,
+      startDate: target.startDate,
+      endDate: target.endDate,
       category: {
         id: target.categoryId,
         name: target.categoryName,
@@ -686,6 +712,33 @@ export async function handleCreateVolunteerApplicationBatch(
       }
     }
 
+    if (
+      await hasVolunteerApplicationBlock(
+        firstTarget.opportunityId,
+        authResult.userId,
+      )
+    ) {
+      return c.json(
+        {
+          ok: false,
+          error: "You are blocked from applying to this opportunity",
+        },
+        409,
+      );
+    }
+
+    const appliedRoleIds = await findVolunteerAppliedRoleIds(
+      data.roleIds,
+      authResult.userId,
+    );
+
+    if (appliedRoleIds.length > 0) {
+      return c.json(
+        { ok: false, error: "You have already applied to one or more roles" },
+        409,
+      );
+    }
+
     if (data.topPickRoleId && data.roleIds.includes(data.topPickRoleId)) {
       const existingTopPickedRoleId = await findVolunteerTopPickedRoleId(
         firstTarget.opportunityId,
@@ -732,6 +785,8 @@ export async function handleCreateVolunteerApplicationBatch(
       opportunityTitle: firstTarget.opportunityTitle,
       coverImageKey: firstTarget.coverImageKey,
       applicationDeadline: firstTarget.applicationDeadline,
+      startDate: firstTarget.startDate,
+      endDate: firstTarget.endDate,
       category: {
         id: firstTarget.categoryId,
         name: firstTarget.categoryName,

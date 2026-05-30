@@ -365,6 +365,34 @@
       "when": 1779763402992,
       "tag": "0051_cooing_firestar",
       "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1779902967208,
+      "tag": "0052_previous_miracleman",
+      "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1779943876496,
+      "tag": "0053_wooden_phalanx",
+      "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1779972242794,
+      "tag": "0054_typical_satana",
+      "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1780045563460,
+      "tag": "0055_deep_warbound",
+      "breakpoints": true
     }
   ]
 }

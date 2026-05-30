@@ -31,6 +31,7 @@ import {
   volunteerOpportunitySave,
   volunteerRole,
   volunteerRoleRequirement,
+  workspaceCandidateBlock,
 } from "../../../db/schema";
 import {
   buildCursorPagination,
@@ -186,6 +187,7 @@ export type VolunteerOpportunityDetail = {
   updatedAt: string;
   viewerSave: boolean;
   viewerTopPicked: string | null;
+  viewerBlocked: boolean;
   roles: Array<{
     id: string;
     title: string;
@@ -203,6 +205,8 @@ export type VolunteerApplicationDetail = {
     title: string;
     coverImageKey: string;
     applicationDeadline: string;
+    startDate: string | null;
+    endDate: string | null;
     status: VolunteerOpportunityStatus;
     filled: boolean;
     category: VolunteerReference;
@@ -217,6 +221,7 @@ export type VolunteerApplicationDetail = {
   supportingDocuments: VolunteerSupportingDocument[];
   status: VolunteerApplicationRow["status"];
   archived: boolean;
+  archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -273,6 +278,8 @@ type VolunteerApplicationTarget = {
   roleTitle: string;
   createdBy: string;
   applicationDeadline: string;
+  startDate: string | null;
+  endDate: string | null;
   status: VolunteerOpportunityStatus;
   publishedAt: string | null;
 };
@@ -490,6 +497,8 @@ export async function findVolunteerOpportunityApplicationTargetById(
       cityName: city.name,
       createdBy: volunteerOpportunity.createdBy,
       applicationDeadline: volunteerOpportunity.applicationDeadline,
+      startDate: volunteerOpportunity.startDate,
+      endDate: volunteerOpportunity.endDate,
       status: volunteerOpportunity.status,
       publishedAt: volunteerOpportunity.publishedAt,
     })
@@ -547,6 +556,8 @@ export async function findVolunteerApplicationTargetByRoleId(
       opportunityOverview: volunteerOpportunity.overview,
       createdBy: volunteerOpportunity.createdBy,
       applicationDeadline: volunteerOpportunity.applicationDeadline,
+      startDate: volunteerOpportunity.startDate,
+      endDate: volunteerOpportunity.endDate,
       status: volunteerOpportunity.status,
       publishedAt: volunteerOpportunity.publishedAt,
     })
@@ -587,6 +598,8 @@ export async function findVolunteerApplicationTargetsByRoleIds(
       opportunityOverview: volunteerOpportunity.overview,
       createdBy: volunteerOpportunity.createdBy,
       applicationDeadline: volunteerOpportunity.applicationDeadline,
+      startDate: volunteerOpportunity.startDate,
+      endDate: volunteerOpportunity.endDate,
       status: volunteerOpportunity.status,
       publishedAt: volunteerOpportunity.publishedAt,
     })
@@ -622,6 +635,8 @@ type CreateVolunteerApplicationInput = {
   opportunityTitle: string;
   coverImageKey: string;
   applicationDeadline: string;
+  startDate: string | null;
+  endDate: string | null;
   category: VolunteerReference;
   location: VolunteerReference;
   roleTitle: string;
@@ -701,6 +716,8 @@ function hydrateVolunteerApplication(
     title: string;
     coverImageKey: string;
     applicationDeadline: string;
+    startDate: string | null;
+    endDate: string | null;
     status: VolunteerOpportunityStatus;
     filled: boolean;
     category: VolunteerReference;
@@ -728,6 +745,7 @@ function hydrateVolunteerApplication(
       application.supportingDocuments as VolunteerSupportingDocument[],
     status: application.status,
     archived: application.archived,
+    archivedAt: toNullableIsoDateTimeString(application.archivedAt),
     createdAt: toIsoDateTimeString(application.createdAt),
     updatedAt: toIsoDateTimeString(application.updatedAt),
   };
@@ -765,6 +783,7 @@ function hydrateVolunteerOpportunityDetail(
   viewerSave: boolean,
   appliedRoleIds: Set<string>,
   viewerTopPicked: string | null,
+  viewerBlocked: boolean,
 ): VolunteerOpportunityDetail {
   const capacity = roles.reduce(
     (total, role) => total + toInteger(role.capacity),
@@ -807,6 +826,7 @@ function hydrateVolunteerOpportunityDetail(
     updatedAt: toIsoDateTimeString(opportunity.updatedAt),
     viewerSave,
     viewerTopPicked,
+    viewerBlocked,
     roles: roles.map((role) => ({
       id: role.id,
       title: role.title,
@@ -1128,13 +1148,9 @@ async function getAppliedRoleIdsByRoleIds(
       and(
         inArray(volunteerApplication.roleId, uniqueRoleIds),
         eq(volunteerApplication.applicantId, viewerId),
-        inArray(
-          volunteerApplication.status,
-          ACTIVE_VOLUNTEER_APPLICATION_STATUSES,
-        ),
+        sql`${volunteerApplication.status} <> 'WITHDRAWN'`,
       ),
     );
-
   return new Set(rows.map((row) => row.roleId));
 }
 
@@ -1180,6 +1196,92 @@ export async function findVolunteerTopPickedRoleId(
   );
 
   return topPickedRoleByOpportunityId.get(opportunityId) ?? null;
+}
+
+export async function findVolunteerAppliedRoleIds(
+  roleIds: string[],
+  applicantId: string,
+): Promise<string[]> {
+  if (roleIds.length === 0) {
+    return [];
+  }
+
+  const rows = await db
+    .select({ roleId: volunteerApplication.roleId })
+    .from(volunteerApplication)
+    .where(
+      and(
+        eq(volunteerApplication.applicantId, applicantId),
+        inArray(volunteerApplication.roleId, roleIds),
+        sql`${volunteerApplication.status} <> 'WITHDRAWN'`,
+      ),
+    );
+
+  return rows.map((row) => row.roleId);
+}
+
+export async function hasVolunteerApprovedOrConfirmedApplication(
+  opportunityId: string,
+  applicantId: string,
+): Promise<boolean> {
+  const [row] = await db
+    .select({ id: volunteerApplication.id })
+    .from(volunteerApplication)
+    .where(
+      and(
+        eq(volunteerApplication.opportunityId, opportunityId),
+        eq(volunteerApplication.applicantId, applicantId),
+        sql`${volunteerApplication.status} in ('APPROVED', 'CONFIRMED')`,
+      ),
+    )
+    .limit(1);
+
+  return row !== undefined;
+}
+
+export async function hasVolunteerApplicationBlock(
+  opportunityId: string,
+  applicantId: string,
+): Promise<boolean> {
+  const [row] = await db
+    .select({ id: workspaceCandidateBlock.id })
+    .from(workspaceCandidateBlock)
+    .where(
+      and(
+        eq(workspaceCandidateBlock.sourceType, "VOLUNTEER"),
+        eq(workspaceCandidateBlock.postingId, opportunityId),
+        eq(workspaceCandidateBlock.candidateId, applicantId),
+        eq(workspaceCandidateBlock.status, "ACTIVE"),
+      ),
+    )
+    .limit(1);
+
+  return row !== undefined;
+}
+
+async function getBlockedOpportunityIdsByOpportunityIds(
+  executor: VolunteerQueryExecutor,
+  opportunityIds: string[],
+  viewerId?: string,
+): Promise<Set<string>> {
+  const uniqueOpportunityIds = [...new Set(opportunityIds)];
+  if (!viewerId || uniqueOpportunityIds.length === 0) {
+    return new Set();
+  }
+
+  const rows = await executor
+    .select({ postingId: workspaceCandidateBlock.postingId })
+    .from(workspaceCandidateBlock)
+    .where(
+      and(
+        eq(workspaceCandidateBlock.sourceType, "VOLUNTEER"),
+        inArray(workspaceCandidateBlock.postingId, uniqueOpportunityIds),
+        eq(workspaceCandidateBlock.candidateId, viewerId),
+        eq(workspaceCandidateBlock.status, "ACTIVE"),
+      ),
+    );
+
+  return new Set(rows.map((row) => row.postingId));
 }
 
 async function hydrateVolunteerOpportunityDetails(
@@ -1246,12 +1348,14 @@ async function hydrateVolunteerOpportunityDetails(
     savedOpportunityIds,
     appliedRoleIds,
     topPickedRoleIdByOpportunityId,
+    blockedOpportunityIds,
   ] = await Promise.all([
-      getAcceptedApplicationCountsByOpportunityIds(db, opportunityIds),
-      getSavedOpportunityIdsByOpportunityIds(db, opportunityIds, viewerId),
-      getAppliedRoleIdsByRoleIds(db, roleIds, viewerId),
-      getTopPickedRoleIdByOpportunityIds(db, opportunityIds, viewerId),
-    ]);
+    getAcceptedApplicationCountsByOpportunityIds(db, opportunityIds),
+    getSavedOpportunityIdsByOpportunityIds(db, opportunityIds, viewerId),
+    getAppliedRoleIdsByRoleIds(db, roleIds, viewerId),
+    getTopPickedRoleIdByOpportunityIds(db, opportunityIds, viewerId),
+    getBlockedOpportunityIdsByOpportunityIds(db, opportunityIds, viewerId),
+  ]);
 
   return rows.map((row) => {
     const organizer = organizerById.get(row.opportunity.createdBy);
@@ -1273,6 +1377,7 @@ async function hydrateVolunteerOpportunityDetails(
       savedOpportunityIds.has(row.opportunity.id),
       appliedRoleIds,
       topPickedRoleIdByOpportunityId.get(row.opportunity.id) ?? null,
+      blockedOpportunityIds.has(row.opportunity.id),
     );
   });
 }
@@ -2316,6 +2421,7 @@ export async function createVolunteerOpportunity(
       false,
       new Set(),
       null,
+      false,
     );
   });
 }
@@ -2359,6 +2465,8 @@ export async function createVolunteerApplication(
       title: data.opportunityTitle,
       coverImageKey: data.coverImageKey,
       applicationDeadline: data.applicationDeadline,
+      startDate: toNullableIsoDateTimeString(data.startDate),
+      endDate: toNullableIsoDateTimeString(data.endDate),
       status: "LIVE",
       filled: false,
       category: data.category,
@@ -2418,6 +2526,8 @@ export async function createVolunteerApplicationsBatch(
           title: data.opportunityTitle,
           coverImageKey: data.coverImageKey,
           applicationDeadline: data.applicationDeadline,
+          startDate: toNullableIsoDateTimeString(data.startDate),
+          endDate: toNullableIsoDateTimeString(data.endDate),
           status: "LIVE",
           filled: false,
           category: data.category,
@@ -2439,6 +2549,8 @@ export async function findVolunteerApplicationsByApplicantId(
       opportunityTitle: volunteerOpportunity.title,
       coverImageKey: volunteerOpportunity.coverImageKey,
       applicationDeadline: volunteerOpportunity.applicationDeadline,
+      startDate: volunteerOpportunity.startDate,
+      endDate: volunteerOpportunity.endDate,
       opportunityStatus: volunteerOpportunity.status,
       filled: volunteerOpportunity.filled,
       categoryId: volunteerCategory.id,
@@ -2466,6 +2578,8 @@ export async function findVolunteerApplicationsByApplicantId(
       title: row.opportunityTitle,
       coverImageKey: row.coverImageKey,
       applicationDeadline: row.applicationDeadline,
+      startDate: toNullableIsoDateTimeString(row.startDate),
+      endDate: toNullableIsoDateTimeString(row.endDate),
       status: row.opportunityStatus,
       filled: row.filled,
       category: {

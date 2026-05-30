@@ -264,6 +264,7 @@ export const volunteerApplication = pgTable(
       .default("SUBMITTED")
       .notNull(),
     archived: boolean("archived").default(false).notNull(),
+    archivedAt: timestamp("archived_at", { withTimezone: true, mode: "string" }),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
       .defaultNow()
       .notNull(),

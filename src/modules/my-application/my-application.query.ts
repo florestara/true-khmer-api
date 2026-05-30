@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../../db";
 import {
   city,
@@ -37,12 +37,14 @@ export async function findProjectApplicationsByApplicantId(applicantId: string) 
   return db
     .select({
       id: launchpadApplication.id,
+      roleId: launchpadRole.id,
       title: launchpadRole.title,
       imageKey: launchpad.coverKey,
       appliedAt: launchpadApplication.createdAt,
       deadline: launchpad.deadline,
       status: launchpadApplication.status,
       archived: launchpadApplication.archived,
+      archivedAt: launchpadApplication.archivedAt,
       opportunity: {
         id: launchpad.id,
         title: launchpad.name,
@@ -72,7 +74,7 @@ export async function findMyProjectApplications(userId: string) {
   return findProjectApplicationsByApplicantId(userId);
 }
 
-function buildApplicationTimeline(
+export function buildApplicationTimeline(
   logs: Array<{
     status:
       | "SUBMITTED"
@@ -81,9 +83,10 @@ function buildApplicationTimeline(
       | "DECLINED"
       | "CONFIRMED"
       | "COMPLETED"
+      | "WITHDRAWN"
       | string;
     createdAt: string;
-    declinedBy: "POSTER" | "APPLICANT" | null;
+    declinedBy: "POSTER" | "APPLICANT" | "SYSTEM" | null;
   }>,
 ) {
   return logs.reduce(
@@ -93,7 +96,7 @@ function buildApplicationTimeline(
       } else if (log.status === "UNDER_REVIEW") {
         timeline.underReview ??= log.createdAt;
       } else if (log.status === "APPROVED") {
-        timeline.passed ??= log.createdAt;
+        timeline.approved ??= log.createdAt;
       } else if (log.status === "DECLINED") {
         if (!timeline.declined.at) {
           timeline.declined = {
@@ -105,6 +108,8 @@ function buildApplicationTimeline(
         timeline.confirmed ??= log.createdAt;
       } else if (log.status === "COMPLETED") {
         timeline.completed ??= log.createdAt;
+      } else if (log.status === "WITHDRAWN") {
+        timeline.withdrawn ??= log.createdAt;
       }
 
       return timeline;
@@ -112,25 +117,65 @@ function buildApplicationTimeline(
     {
       submitted: null,
       underReview: null,
-      passed: null,
+      approved: null,
       declined: {
         at: null,
         by: null,
       },
       confirmed: null,
       completed: null,
+      withdrawn: null,
     } as {
       submitted: string | null;
       underReview: string | null;
-      passed: string | null;
+      approved: string | null;
       declined: {
         at: string | null;
-        by: "POSTER" | "APPLICANT" | null;
+        by: "POSTER" | "APPLICANT" | "SYSTEM" | null;
       };
       confirmed: string | null;
       completed: string | null;
+      withdrawn: string | null;
     },
   );
+}
+
+export async function findVolunteerApplicationLogsByApplicationIds(
+  applicationIds: string[],
+) {
+  if (applicationIds.length === 0) {
+    return [];
+  }
+
+  return db
+    .select({
+      applicationId: volunteerApplicationLog.volunteerApplicationId,
+      status: volunteerApplicationLog.status,
+      createdAt: volunteerApplicationLog.createdAt,
+      declinedBy: volunteerApplicationLog.declinedBy,
+    })
+    .from(volunteerApplicationLog)
+    .where(inArray(volunteerApplicationLog.volunteerApplicationId, applicationIds))
+    .orderBy(asc(volunteerApplicationLog.createdAt));
+}
+
+export async function findProjectApplicationLogsByApplicationIds(
+  applicationIds: string[],
+) {
+  if (applicationIds.length === 0) {
+    return [];
+  }
+
+  return db
+    .select({
+      applicationId: launchpadApplicationLog.launchpadApplicationId,
+      status: launchpadApplicationLog.status,
+      createdAt: launchpadApplicationLog.createdAt,
+      declinedBy: launchpadApplicationLog.declinedBy,
+    })
+    .from(launchpadApplicationLog)
+    .where(inArray(launchpadApplicationLog.launchpadApplicationId, applicationIds))
+    .orderBy(asc(launchpadApplicationLog.createdAt));
 }
 
 function normalizeNullableReference(
@@ -146,9 +191,49 @@ function normalizeNullableReference(
   };
 }
 
+function resolveApplicationGroupStatus(statuses: string[]) {
+  if (statuses.some((status) => status === "COMPLETED")) {
+    return "COMPLETED";
+  }
+
+  if (statuses.some((status) => status === "CONFIRMED")) {
+    return "CONFIRMED";
+  }
+
+  if (statuses.some((status) => status === "APPROVED")) {
+    return "APPROVED";
+  }
+
+  if (statuses.some((status) => status === "UNDER_REVIEW")) {
+    return "UNDER_REVIEW";
+  }
+
+  if (statuses.some((status) => status === "SUBMITTED")) {
+    return "SUBMITTED";
+  }
+
+  if (statuses.every((status) => status === "DECLINED")) {
+    return "DECLINED";
+  }
+
+  if (statuses.every((status) => status === "WITHDRAWN")) {
+    return "WITHDRAWN";
+  }
+
+  return "DECLINED";
+}
+
+function buildRoleActions(status: string) {
+  return {
+    canConfirm: status === "APPROVED",
+    canDecline: status === "APPROVED",
+    canWithdraw: status === "SUBMITTED" || status === "UNDER_REVIEW",
+  };
+}
+
 export async function findMyVolunteerApplicationDetail(
   applicantId: string,
-  applicationId: string,
+  postingId: string,
 ) {
   const postedCounts = db
     .select({
@@ -159,7 +244,7 @@ export async function findMyVolunteerApplicationDetail(
     .groupBy(volunteerOpportunity.createdBy)
     .as("volunteer_posted_counts");
 
-  const [row] = await db
+  const rows = await db
     .select({
       application: volunteerApplication,
       opportunity: volunteerOpportunity,
@@ -199,83 +284,148 @@ export async function findMyVolunteerApplicationDetail(
     .leftJoin(postedCounts, eq(postedCounts.userId, user.id))
     .where(
       and(
-        eq(volunteerApplication.id, applicationId),
+        eq(volunteerApplication.opportunityId, postingId),
         eq(volunteerApplication.applicantId, applicantId),
       ),
     )
-    .limit(1);
+    .orderBy(desc(volunteerApplication.createdAt));
 
-  if (!row) {
+  if (rows.length === 0) {
     return null;
   }
 
+  const firstRow = rows[0]!;
+  const applicationIds = rows.map((row) => row.application.id);
+  const roleIds = rows.map((row) => row.role.id);
   const [requirements, logs] = await Promise.all([
     db
       .select({
+        roleId: volunteerRoleRequirement.roleId,
         text: volunteerRoleRequirement.requirementText,
       })
       .from(volunteerRoleRequirement)
-      .where(eq(volunteerRoleRequirement.roleId, row.role.id))
+      .where(inArray(volunteerRoleRequirement.roleId, roleIds))
       .orderBy(asc(volunteerRoleRequirement.displayOrder)),
     db
       .select({
+        applicationId: volunteerApplicationLog.volunteerApplicationId,
         status: volunteerApplicationLog.status,
         createdAt: volunteerApplicationLog.createdAt,
         declinedBy: volunteerApplicationLog.declinedBy,
       })
       .from(volunteerApplicationLog)
-      .where(eq(volunteerApplicationLog.volunteerApplicationId, applicationId))
+      .where(inArray(volunteerApplicationLog.volunteerApplicationId, applicationIds))
       .orderBy(asc(volunteerApplicationLog.createdAt)),
   ]);
-
-  return {
-    id: row.application.id,
-    sourceType: "VOLUNTEER" as const,
-    title: row.role.title,
-    imageKey: row.opportunity.coverImageKey,
-    status: row.application.status,
-    appliedAt: row.application.createdAt,
-    deadline: row.opportunity.applicationDeadline,
-    archived: row.application.archived,
-    opportunity: {
-      id: row.opportunity.id,
-      title: row.opportunity.title,
-      overview: row.opportunity.overview,
-      category: row.category,
-      location: row.location,
-      startDate: row.opportunity.startDate,
-      endDate: row.opportunity.endDate,
-      commitmentLabel: row.opportunity.commitmentLabel,
-      commitmentDescription: row.opportunity.commitmentDescription,
-      filled: row.opportunity.filled,
-      impactRewardPoints: null,
-    },
-    role: {
-      id: row.role.id,
+  const requirementsByRoleId = new Map<string, string[]>();
+  for (const requirement of requirements) {
+    const current = requirementsByRoleId.get(requirement.roleId) ?? [];
+    current.push(requirement.text);
+    requirementsByRoleId.set(requirement.roleId, current);
+  }
+  const logsByApplicationId = new Map<string, typeof logs>();
+  for (const log of logs) {
+    const current = logsByApplicationId.get(log.applicationId) ?? [];
+    current.push(log);
+    logsByApplicationId.set(log.applicationId, current);
+  }
+  const roles = rows
+    .map((row) => ({
+      applicationId: row.application.id,
+      roleId: row.role.id,
       title: row.role.title,
       description: null,
       responsibilities: row.role.responsibilities as string[],
-      requirements: requirements.map((requirement) => requirement.text),
+      requirements: requirementsByRoleId.get(row.role.id) ?? [],
+      status: row.application.status,
+      appliedAt: row.application.createdAt,
+      archived: row.application.archived,
+      archivedAt: row.application.archivedAt,
+      actions: buildRoleActions(row.application.status),
+      timeline: buildApplicationTimeline(
+        logsByApplicationId.get(row.application.id) ?? [],
+      ),
+    }))
+    .sort(
+      (left, right) =>
+        Date.parse(right.appliedAt) - Date.parse(left.appliedAt),
+    );
+  const statuses = roles.map((role) => role.status);
+  const approvedRole =
+    roles.find((role) => role.status === "APPROVED") ?? null;
+
+  return {
+    id: firstRow.opportunity.id,
+    sourceType: "VOLUNTEER" as const,
+    title: firstRow.opportunity.title,
+    imageKey: firstRow.opportunity.coverImageKey,
+    status: resolveApplicationGroupStatus(statuses),
+    appliedAt: roles[0]?.appliedAt ?? firstRow.application.createdAt,
+    deadline: firstRow.opportunity.applicationDeadline,
+    archived: roles.every((role) => role.archived),
+    archivedAt: roles.every((role) => role.archived)
+      ? roles.reduce<string | null>(
+          (latest, role) => {
+            if (!latest) {
+              return role.archivedAt;
+            }
+
+            if (!role.archivedAt) {
+              return latest;
+            }
+
+            return Date.parse(role.archivedAt) > Date.parse(latest)
+              ? role.archivedAt
+              : latest;
+          },
+          null,
+        )
+      : null,
+    needAttention: approvedRole !== null,
+    totalRoleApplied: roles.length,
+    canArchive: canArchiveApplicationGroup(statuses),
+    opportunity: {
+      id: firstRow.opportunity.id,
+      title: firstRow.opportunity.title,
+      overview: firstRow.opportunity.overview,
+      category: firstRow.category,
+      location: firstRow.location,
+      startDate: firstRow.opportunity.startDate,
+      endDate: firstRow.opportunity.endDate,
+      commitmentLabel: firstRow.opportunity.commitmentLabel,
+      commitmentDescription: firstRow.opportunity.commitmentDescription,
+      filled: firstRow.opportunity.filled,
+      impactRewardPoints: null,
     },
     owner: {
-      id: row.owner.id,
-      name: row.owner.name,
-      avatarUrl: row.owner.avatarUrl,
-      avatarKey: row.owner.avatarKey,
-      postedCount: Number(row.postedCount),
+      id: firstRow.owner.id,
+      name: firstRow.owner.name,
+      avatarUrl: firstRow.owner.avatarUrl,
+      avatarKey: firstRow.owner.avatarKey,
+      postedCount: Number(firstRow.postedCount),
       contact: {
-        email: row.owner.email,
-        phoneNumber: row.owner.phoneNumber,
-        telegramUsername: row.owner.telegramUsername,
+        email: firstRow.owner.email,
+        phoneNumber: firstRow.owner.phoneNumber,
+        telegramUsername: firstRow.owner.telegramUsername,
       },
     },
-    timeline: buildApplicationTimeline(logs),
+    roles,
+    approvedRole: approvedRole
+      ? {
+          applicationId: approvedRole.applicationId,
+          roleId: approvedRole.roleId,
+          title: approvedRole.title,
+          status: approvedRole.status,
+          appliedAt: approvedRole.appliedAt,
+          timeline: approvedRole.timeline,
+        }
+      : null,
   };
 }
 
 export async function findMyProjectApplicationDetail(
   applicantId: string,
-  applicationId: string,
+  postingId: string,
 ) {
   const postedCounts = db
     .select({
@@ -286,7 +436,7 @@ export async function findMyProjectApplicationDetail(
     .groupBy(launchpad.createdBy)
     .as("launchpad_posted_counts");
 
-  const [row] = await db
+  const rows = await db
     .select({
       application: launchpadApplication,
       opportunity: launchpad,
@@ -323,41 +473,95 @@ export async function findMyProjectApplicationDetail(
     .leftJoin(postedCounts, eq(postedCounts.userId, user.id))
     .where(
       and(
-        eq(launchpadApplication.id, applicationId),
+        eq(launchpadApplication.launchpadId, postingId),
         eq(launchpadApplication.createdBy, applicantId),
       ),
     )
-    .limit(1);
+    .orderBy(desc(launchpadApplication.createdAt));
 
-  if (!row) {
+  if (rows.length === 0) {
     return null;
   }
 
+  const firstRow = rows[0]!;
+  const applicationIds = rows.map((row) => row.application.id);
   const logs = await db
     .select({
+      applicationId: launchpadApplicationLog.launchpadApplicationId,
       status: launchpadApplicationLog.status,
       createdAt: launchpadApplicationLog.createdAt,
       declinedBy: launchpadApplicationLog.declinedBy,
     })
     .from(launchpadApplicationLog)
-    .where(eq(launchpadApplicationLog.launchpadApplicationId, applicationId))
+    .where(inArray(launchpadApplicationLog.launchpadApplicationId, applicationIds))
     .orderBy(asc(launchpadApplicationLog.createdAt));
+  const logsByApplicationId = new Map<string, typeof logs>();
+  for (const log of logs) {
+    const current = logsByApplicationId.get(log.applicationId) ?? [];
+    current.push(log);
+    logsByApplicationId.set(log.applicationId, current);
+  }
+  const roles = rows
+    .map((row) => ({
+      applicationId: row.application.id,
+      roleId: row.role.id,
+      title: row.role.title,
+      description: row.role.description,
+      responsibilities: [],
+      requirements: [],
+      status: row.application.status,
+      appliedAt: row.application.createdAt,
+      archived: row.application.archived,
+      archivedAt: row.application.archivedAt,
+      actions: buildRoleActions(row.application.status),
+      timeline: buildApplicationTimeline(
+        logsByApplicationId.get(row.application.id) ?? [],
+      ),
+    }))
+    .sort(
+      (left, right) =>
+        Date.parse(right.appliedAt) - Date.parse(left.appliedAt),
+    );
+  const statuses = roles.map((role) => role.status);
+  const approvedRole =
+    roles.find((role) => role.status === "APPROVED") ?? null;
 
   return {
-    id: row.application.id,
+    id: firstRow.opportunity.id,
     sourceType: "PROJECT" as const,
-    title: row.role.title,
-    imageKey: row.opportunity.coverKey,
-    status: row.application.status,
-    appliedAt: row.application.createdAt,
-    deadline: row.opportunity.deadline,
-    archived: row.application.archived,
+    title: firstRow.opportunity.name,
+    imageKey: firstRow.opportunity.coverKey,
+    status: resolveApplicationGroupStatus(statuses),
+    appliedAt: roles[0]?.appliedAt ?? firstRow.application.createdAt,
+    deadline: firstRow.opportunity.deadline,
+    archived: roles.every((role) => role.archived),
+    archivedAt: roles.every((role) => role.archived)
+      ? roles.reduce<string | null>(
+          (latest, role) => {
+            if (!latest) {
+              return role.archivedAt;
+            }
+
+            if (!role.archivedAt) {
+              return latest;
+            }
+
+            return Date.parse(role.archivedAt) > Date.parse(latest)
+              ? role.archivedAt
+              : latest;
+          },
+          null,
+        )
+      : null,
+    needAttention: approvedRole !== null,
+    totalRoleApplied: roles.length,
+    canArchive: canArchiveApplicationGroup(statuses),
     opportunity: {
-      id: row.opportunity.id,
-      title: row.opportunity.name,
-      overview: row.opportunity.description,
-      category: normalizeNullableReference(row.category),
-      location: normalizeNullableReference(row.location),
+      id: firstRow.opportunity.id,
+      title: firstRow.opportunity.name,
+      overview: firstRow.opportunity.description,
+      category: normalizeNullableReference(firstRow.category),
+      location: normalizeNullableReference(firstRow.location),
       startDate: null,
       endDate: null,
       commitmentLabel: null,
@@ -365,38 +569,34 @@ export async function findMyProjectApplicationDetail(
       filled: false,
       impactRewardPoints: null,
     },
-    role: {
-      id: row.role.id,
-      title: row.role.title,
-      description: row.role.description,
-      responsibilities: [],
-      requirements: [],
-    },
     owner: {
-      id: row.owner.id,
-      name: row.owner.name,
-      avatarUrl: row.owner.avatarUrl,
-      avatarKey: row.owner.avatarKey,
-      postedCount: Number(row.postedCount),
+      id: firstRow.owner.id,
+      name: firstRow.owner.name,
+      avatarUrl: firstRow.owner.avatarUrl,
+      avatarKey: firstRow.owner.avatarKey,
+      postedCount: Number(firstRow.postedCount),
       contact: {
-        email: row.owner.email,
-        phoneNumber: row.owner.phoneNumber,
-        telegramUsername: row.owner.telegramUsername,
+        email: firstRow.owner.email,
+        phoneNumber: firstRow.owner.phoneNumber,
+        telegramUsername: firstRow.owner.telegramUsername,
       },
     },
-    timeline: buildApplicationTimeline(logs),
+    roles,
+    approvedRole: approvedRole
+      ? {
+          applicationId: approvedRole.applicationId,
+          roleId: approvedRole.roleId,
+          title: approvedRole.title,
+          status: approvedRole.status,
+          appliedAt: approvedRole.appliedAt,
+          timeline: approvedRole.timeline,
+        }
+      : null,
   };
 }
 
 type MyApplicationStatusAction = ChangeMyApplicationStatusParam["statusAction"];
 type ApplicantStatusChange = "CONFIRMED" | "DECLINED" | "WITHDRAWN";
-type TerminalApplicationStatus = "DECLINED" | "COMPLETED" | "WITHDRAWN";
-
-const ARCHIVABLE_APPLICATION_STATUSES = [
-  "DECLINED",
-  "COMPLETED",
-  "WITHDRAWN",
-] as const satisfies readonly TerminalApplicationStatus[];
 
 function getApplicantStatusChange(
   statusAction: MyApplicationStatusAction,
@@ -472,6 +672,30 @@ async function updateVolunteerApplicationStatus(
     });
 
     if (nextStatus === "CONFIRMED") {
+      const autoDeclinedApplications = await tx
+        .update(volunteerApplication)
+        .set({ status: "DECLINED", updatedAt: sql`now()` })
+        .where(
+          and(
+            eq(volunteerApplication.opportunityId, current.opportunityId),
+            eq(volunteerApplication.applicantId, applicantId),
+            sql`${volunteerApplication.id} <> ${current.id}`,
+            sql`${volunteerApplication.status} in ('SUBMITTED', 'UNDER_REVIEW', 'APPROVED')`,
+          ),
+        )
+        .returning({ id: volunteerApplication.id });
+
+      if (autoDeclinedApplications.length > 0) {
+        await tx.insert(volunteerApplicationLog).values(
+          autoDeclinedApplications.map((application) => ({
+            volunteerApplicationId: application.id,
+            status: "DECLINED" as const,
+            declinedBy: "SYSTEM" as const,
+            createdBy: applicantId,
+          })),
+        );
+      }
+
       await tx
         .select({ id: volunteerOpportunity.id })
         .from(volunteerOpportunity)
@@ -519,6 +743,7 @@ async function updateProjectApplicationStatus(
       .select({
         id: launchpadApplication.id,
         status: launchpadApplication.status,
+        launchpadId: launchpadApplication.launchpadId,
       })
       .from(launchpadApplication)
       .where(
@@ -560,6 +785,32 @@ async function updateProjectApplicationStatus(
       createdBy: applicantId,
     });
 
+    if (nextStatus === "CONFIRMED") {
+      const autoDeclinedApplications = await tx
+        .update(launchpadApplication)
+        .set({ status: "DECLINED", updatedAt: sql`now()` })
+        .where(
+          and(
+            eq(launchpadApplication.launchpadId, current.launchpadId),
+            eq(launchpadApplication.createdBy, applicantId),
+            sql`${launchpadApplication.id} <> ${current.id}`,
+            sql`${launchpadApplication.status} in ('SUBMITTED', 'UNDER_REVIEW', 'APPROVED')`,
+          ),
+        )
+        .returning({ id: launchpadApplication.id });
+
+      if (autoDeclinedApplications.length > 0) {
+        await tx.insert(launchpadApplicationLog).values(
+          autoDeclinedApplications.map((application) => ({
+            launchpadApplicationId: application.id,
+            status: "DECLINED" as const,
+            declinedBy: "SYSTEM" as const,
+            createdBy: applicantId,
+          })),
+        );
+      }
+    }
+
     return "updated" as const;
   });
 }
@@ -585,60 +836,66 @@ export async function updateMyApplicationStatus(
   );
 }
 
-function canArchiveApplicationStatus(
-  status: string,
-): status is TerminalApplicationStatus {
-  return ARCHIVABLE_APPLICATION_STATUSES.includes(
-    status as TerminalApplicationStatus,
+function canArchiveApplicationGroup(statuses: string[]) {
+  if (statuses.length === 0) {
+    return false;
+  }
+
+  if (statuses.some((status) => status === "COMPLETED")) {
+    return true;
+  }
+
+  return statuses.every(
+    (status) => status === "DECLINED" || status === "WITHDRAWN",
   );
 }
 
-async function updateVolunteerApplicationArchived(
+async function updateVolunteerApplicationGroupArchived(
   applicantId: string,
-  applicationId: string,
+  opportunityId: string,
   archived: boolean,
 ) {
   return db.transaction(async (tx) => {
-    const [current] = await tx
+    const applications = await tx
       .select({
         id: volunteerApplication.id,
         status: volunteerApplication.status,
-        archived: volunteerApplication.archived,
       })
       .from(volunteerApplication)
       .where(
         and(
-          eq(volunteerApplication.id, applicationId),
+          eq(volunteerApplication.opportunityId, opportunityId),
           eq(volunteerApplication.applicantId, applicantId),
         ),
-      )
-      .limit(1);
+      );
 
-    if (!current) {
+    if (applications.length === 0) {
       return "not_found" as const;
     }
 
-    if (!canArchiveApplicationStatus(current.status)) {
+    if (
+      archived &&
+      !canArchiveApplicationGroup(applications.map((item) => item.status))
+    ) {
       return "conflict" as const;
     }
 
-    if (current.archived === archived) {
-      return "updated" as const;
-    }
-
-    const [updated] = await tx
+    const updated = await tx
       .update(volunteerApplication)
-      .set({ archived, updatedAt: sql`now()` })
+      .set({
+        archived,
+        archivedAt: archived ? sql`now()` : null,
+        updatedAt: sql`now()`,
+      })
       .where(
         and(
-          eq(volunteerApplication.id, applicationId),
+          eq(volunteerApplication.opportunityId, opportunityId),
           eq(volunteerApplication.applicantId, applicantId),
-          eq(volunteerApplication.status, current.status),
         ),
       )
       .returning({ id: volunteerApplication.id });
 
-    if (!updated) {
+    if (updated.length === 0) {
       return "conflict" as const;
     }
 
@@ -646,52 +903,52 @@ async function updateVolunteerApplicationArchived(
   });
 }
 
-async function updateProjectApplicationArchived(
+async function updateProjectApplicationGroupArchived(
   applicantId: string,
-  applicationId: string,
+  opportunityId: string,
   archived: boolean,
 ) {
   return db.transaction(async (tx) => {
-    const [current] = await tx
+    const applications = await tx
       .select({
         id: launchpadApplication.id,
         status: launchpadApplication.status,
-        archived: launchpadApplication.archived,
       })
       .from(launchpadApplication)
       .where(
         and(
-          eq(launchpadApplication.id, applicationId),
+          eq(launchpadApplication.launchpadId, opportunityId),
           eq(launchpadApplication.createdBy, applicantId),
         ),
-      )
-      .limit(1);
+      );
 
-    if (!current) {
+    if (applications.length === 0) {
       return "not_found" as const;
     }
 
-    if (!canArchiveApplicationStatus(current.status)) {
+    if (
+      archived &&
+      !canArchiveApplicationGroup(applications.map((item) => item.status))
+    ) {
       return "conflict" as const;
     }
 
-    if (current.archived === archived) {
-      return "updated" as const;
-    }
-
-    const [updated] = await tx
+    const updated = await tx
       .update(launchpadApplication)
-      .set({ archived, updatedAt: sql`now()` })
+      .set({
+        archived,
+        archivedAt: archived ? sql`now()` : null,
+        updatedAt: sql`now()`,
+      })
       .where(
         and(
-          eq(launchpadApplication.id, applicationId),
+          eq(launchpadApplication.launchpadId, opportunityId),
           eq(launchpadApplication.createdBy, applicantId),
-          eq(launchpadApplication.status, current.status),
         ),
       )
       .returning({ id: launchpadApplication.id });
 
-    if (!updated) {
+    if (updated.length === 0) {
       return "conflict" as const;
     }
 
@@ -706,16 +963,16 @@ export async function updateMyApplicationArchived(
   const archived = params.archiveAction === "archive";
 
   if (params.sourceType === "volunteer") {
-    return updateVolunteerApplicationArchived(
+    return updateVolunteerApplicationGroupArchived(
       applicantId,
-      params.applicationId,
+      params.opportunityId,
       archived,
     );
   }
 
-  return updateProjectApplicationArchived(
+  return updateProjectApplicationGroupArchived(
     applicantId,
-    params.applicationId,
+    params.opportunityId,
     archived,
   );
 }

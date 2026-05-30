@@ -71,7 +71,7 @@ const getMyApplicationsRoute = createRoute({
 
 const getMyApplicationDetailRoute = createRoute({
   method: "get",
-  path: "/{sourceType}/{applicationId}",
+  path: "/{sourceType}/{postingId}",
   tags: ["My Applications"],
   middleware: [requireAccessToken],
   security: [{ BearerAuth: [] }],
@@ -80,7 +80,7 @@ const getMyApplicationDetailRoute = createRoute({
   },
   responses: {
     200: {
-      description: "Authenticated user's application detail",
+      description: "Authenticated user's posting application detail",
       content: {
         "application/json": {
           schema: myApplicationDetailResponseSchema,
@@ -104,7 +104,7 @@ const getMyApplicationDetailRoute = createRoute({
       },
     },
     404: {
-      description: "Application not found",
+      description: "Posting application not found",
       content: {
         "application/json": {
           schema: myApplicationsErrorResponseSchema,
@@ -185,7 +185,7 @@ const changeMyApplicationStatusRoute = createRoute({
 
 const changeMyApplicationArchiveRoute = createRoute({
   method: "post",
-  path: "/{sourceType}/{applicationId}/archive/{archiveAction}",
+  path: "/{sourceType}/{opportunityId}/archive/{archiveAction}",
   tags: ["My Applications"],
   middleware: [requireAccessToken],
   security: [{ BearerAuth: [] }],
@@ -194,7 +194,7 @@ const changeMyApplicationArchiveRoute = createRoute({
   },
   responses: {
     200: {
-      description: "Application archived state changed",
+      description: "Opportunity application group archived state changed",
       content: {
         "application/json": {
           schema: myApplicationArchiveActionResponseSchema,
@@ -218,7 +218,7 @@ const changeMyApplicationArchiveRoute = createRoute({
       },
     },
     404: {
-      description: "Application not found",
+      description: "Opportunity application group not found",
       content: {
         "application/json": {
           schema: myApplicationsErrorResponseSchema,
@@ -227,7 +227,7 @@ const changeMyApplicationArchiveRoute = createRoute({
     },
     409: {
       description:
-        "Only declined, withdrawn, and completed applications can be archived",
+        "Only completed groups or groups containing only declined/withdrawn roles can be archived",
       content: {
         "application/json": {
           schema: myApplicationsErrorResponseSchema,
