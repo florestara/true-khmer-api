@@ -393,6 +393,13 @@
       "when": 1780045563460,
       "tag": "0055_deep_warbound",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1780107649733,
+      "tag": "0056_supreme_grandmaster",
+      "breakpoints": true
     }
   ]
 }

@@ -13,6 +13,10 @@ import {
   type MySpaceProjectApplication,
   type MySpaceVolunteerApplication,
 } from "./my-application.query";
+import {
+  notifyApplicantApplicationWithdrawn,
+  notifyApplicantParticipationConfirmed,
+} from "../notifications/notifications.service";
 import type {
   ChangeMyApplicationArchiveParam,
   ChangeMyApplicationStatusParam,
@@ -594,6 +598,40 @@ export async function handleChangeMyApplicationStatus(
 
     if (!application) {
       return c.json({ ok: false, error: "Application not found" }, 404);
+    }
+
+    const detail =
+      params.sourceType === "volunteer"
+        ? await findMyVolunteerApplicationDetail(
+            authResult.userId,
+            application.opportunityId,
+          )
+        : await findMyProjectApplicationDetail(
+            authResult.userId,
+            application.opportunityId,
+          );
+
+    if (detail) {
+      const sourceType: "volunteer" | "projects" =
+        params.sourceType === "volunteer" ? "volunteer" : "projects";
+      const posterNotificationPayload = {
+        recipientUserId: detail.owner.id,
+        postingId: detail.opportunity.id,
+        postingTitle: detail.opportunity.title,
+        sourceType,
+      };
+
+      if (params.statusAction === "confirm") {
+        notifyApplicantParticipationConfirmed(posterNotificationPayload).catch(
+          (err) =>
+            console.error("Failed to notify application confirmed", err),
+        );
+      } else {
+        notifyApplicantApplicationWithdrawn(posterNotificationPayload).catch(
+          (err) =>
+            console.error("Failed to notify application withdrawn", err),
+        );
+      }
     }
 
     return c.json(

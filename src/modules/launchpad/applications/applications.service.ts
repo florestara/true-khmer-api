@@ -3,6 +3,7 @@ import type { Context } from "hono";
 import { POSTGRES_UNIQUE_VIOLATION } from "../../../db/constants";
 import { getAuthUserId } from "../../auth/utils/get-auth";
 import { recordRecentActivityQuietly } from "../../recent-activity/recent-activity.service";
+import { notifyApplicationReceived } from "../../notifications/notifications.service";
 import { presignLaunchpadApplicationDocumentUpload } from "../../uploads/uploads.service";
 import {
   createLaunchpadApplication,
@@ -206,6 +207,17 @@ export async function handleCreateLaunchpadApplication(
       },
     });
 
+    if (target.createdBy !== authResult.userId) {
+      notifyApplicationReceived({
+        recipientUserId: target.createdBy,
+        postingId: target.launchpadId,
+        postingTitle: target.launchpadName,
+        sourceType: "projects",
+      }).catch((err) =>
+        console.error("Failed to notify launchpad application received", err),
+      );
+    }
+
     return c.json({ ok: true, application }, 201);
   } catch (err) {
     const error = getPostgresError(err);
@@ -401,6 +413,17 @@ export async function handleCreateLaunchpadApplicationBatch(
           roleId: target.roleId,
         },
       });
+    }
+
+    if (firstTarget.createdBy !== authResult.userId) {
+      notifyApplicationReceived({
+        recipientUserId: firstTarget.createdBy,
+        postingId: firstTarget.launchpadId,
+        postingTitle: firstTarget.launchpadName,
+        sourceType: "projects",
+      }).catch((err) =>
+        console.error("Failed to notify launchpad application received", err),
+      );
     }
 
     return c.json({ ok: true, applications }, 201);

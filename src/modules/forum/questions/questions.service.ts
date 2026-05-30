@@ -38,6 +38,7 @@ import {
   replaceRecentActivitiesByReference,
 } from "../../recent-activity/recent-activity.service";
 import { presignForumImageUpload } from "../../uploads/uploads.service";
+import { notifyForumQuestionUpvoted } from "../../notifications/notifications.service";
 
 function quoteActivityText(value: string) {
   return `'${value}'`;
@@ -524,6 +525,20 @@ export async function handleVoteQuestion(
     }).catch((err) => {
       console.error("Failed to replace forum question vote activity", err);
     });
+
+    if (
+      data.voteType === "UPVOTE" &&
+      existingQuestion.authorId !== authResult.userId
+    ) {
+      notifyForumQuestionUpvoted({
+        recipientUserId: existingQuestion.authorId,
+        questionId: votedQuestion.id,
+        questionTitle: votedQuestion.title,
+        upvoteCount: votedQuestion.upvoteCount,
+      }).catch((err) =>
+        console.error("Failed to notify forum question upvote", err),
+      );
+    }
 
     return c.json(
       {

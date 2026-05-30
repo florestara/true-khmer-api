@@ -4,12 +4,20 @@ import {
   declineManagePostingApplication,
   extendManagePostingDeadline,
   findManagePostingCandidate,
+  findManagePostingApplicantNotificationTargets,
   findManagePostingDetail,
   findManagePostings,
   updateManagePostingAction,
   updateManagePostingApplication,
   upsertManagePostingCandidateNote,
 } from "./manage-posting.query";
+import {
+  notifyApplicantApplicationApproved,
+  notifyApplicantApplicationDeadlineExtended,
+  notifyApplicantApplicationDeclined,
+  notifyApplicantApplicationUnderReview,
+  notifyApplicantPostingStatusChanged,
+} from "../../notifications/notifications.service";
 import type {
   ChangeManagePostingApplicationStatusParam,
   DeclineManagePostingApplicationQuery,
@@ -22,6 +30,50 @@ import type {
   UpsertManagePostingCandidateNoteBody,
   UpdateManagePostingActionParam,
 } from "./manage-posting.schema";
+
+async function notifyPostingApplicantsDeadlineExtended(
+  userId: string,
+  params: GetManagePostingDetailParam,
+) {
+  const targets = await findManagePostingApplicantNotificationTargets(
+    userId,
+    params,
+  );
+
+  await Promise.all(
+    targets.map((target) =>
+      notifyApplicantApplicationDeadlineExtended({
+        recipientUserId: target.recipientUserId,
+        postingId: params.postingId,
+        postingTitle: target.postingTitle,
+        sourceType: params.sourceType,
+      }),
+    ),
+  );
+}
+
+async function notifyPostingApplicantsStatusChanged(
+  userId: string,
+  params: UpdateManagePostingActionParam,
+  status: "closed" | "canceled" | "completed",
+) {
+  const targets = await findManagePostingApplicantNotificationTargets(
+    userId,
+    params,
+  );
+
+  await Promise.all(
+    targets.map((target) =>
+      notifyApplicantPostingStatusChanged({
+        recipientUserId: target.recipientUserId,
+        postingId: params.postingId,
+        postingTitle: target.postingTitle,
+        sourceType: params.sourceType,
+        status,
+      }),
+    ),
+  );
+}
 
 export async function handleGetManagePostings(
   c: Context,
@@ -152,6 +204,25 @@ export async function handleUpdateManagePostingAction(
       );
     }
 
+    const notificationStatus =
+      params.postingAction === "cancel"
+        ? "canceled"
+        : params.postingAction === "close"
+          ? "closed"
+          : params.postingAction === "mark_complete"
+            ? "completed"
+            : null;
+
+    if (notificationStatus) {
+      notifyPostingApplicantsStatusChanged(
+        authResult.userId,
+        params,
+        notificationStatus,
+      ).catch((err) =>
+        console.error("Failed to notify posting status changed", err),
+      );
+    }
+
     return c.json({ ok: true, posting: result }, 200);
   } catch (error) {
     console.error("Failed to update manage posting action", error);
@@ -199,6 +270,11 @@ export async function handleExtendManagePostingDeadline(
         409,
       );
     }
+
+    notifyPostingApplicantsDeadlineExtended(authResult.userId, params).catch(
+      (err) =>
+        console.error("Failed to notify posting deadline extended", err),
+    );
 
     return c.json({ ok: true, posting: result }, 200);
   } catch (error) {
@@ -314,6 +390,26 @@ export async function handleUpdateManagePostingApplication(
       );
     }
 
+    const notificationPayload = {
+      recipientUserId: result.applicant.candidate.id,
+      postingId: params.postingId,
+      sourceType: params.sourceType,
+    };
+
+    if (params.statusAction === "under_review") {
+      notifyApplicantApplicationUnderReview(notificationPayload).catch((err) =>
+        console.error("Failed to notify application under review", err),
+      );
+    } else if (params.statusAction === "approve") {
+      notifyApplicantApplicationApproved(notificationPayload).catch((err) =>
+        console.error("Failed to notify application approved", err),
+      );
+    } else {
+      notifyApplicantApplicationDeclined(notificationPayload).catch((err) =>
+        console.error("Failed to notify application declined", err),
+      );
+    }
+
     return c.json(
       {
         ok: true,
@@ -357,6 +453,14 @@ export async function handleDeclineManagePostingApplication(
         409,
       );
     }
+
+    notifyApplicantApplicationDeclined({
+      recipientUserId: result.applicant.candidate.id,
+      postingId: params.postingId,
+      sourceType: params.sourceType,
+    }).catch((err) =>
+      console.error("Failed to notify application declined", err),
+    );
 
     return c.json(
       {

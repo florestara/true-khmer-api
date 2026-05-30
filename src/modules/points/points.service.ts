@@ -8,6 +8,7 @@ import {
   insertPointTransaction,
 } from "./points.query";
 import type { ActionType } from "./points.query";
+import { notifyMyspaceAchievement } from "../notifications/notifications.service";
 
 export async function awardPoints(params: {
   userId: string;
@@ -36,6 +37,24 @@ export async function awardPoints(params: {
       Boolean(params.referenceType && params.referenceId),
   });
 
+  if (transaction) {
+    notifyMyspaceAchievement({
+      recipientUserId: params.userId,
+      title: "Points earned",
+      body: `You earned ${config.value} points`,
+      eventType: "points_earned",
+      type: "points",
+      data: {
+        actionKey: params.actionKey,
+        points: String(config.value),
+        ...(params.referenceType
+          ? { referenceType: params.referenceType }
+          : {}),
+        ...(params.referenceId ? { referenceId: params.referenceId } : {}),
+      },
+    }).catch((err) => console.error("Failed to notify points earned", err));
+  }
+
   return transaction;
 }
 
@@ -44,6 +63,11 @@ export async function awardForumParticipationPoints(params: {
   answerId: string;
   questionId: string;
 }) {
+  const question = await getForumQuestionById(params.questionId);
+  if (!question || question.authorId === params.answerAuthorId) {
+    return null;
+  }
+
   // Award participation points only for the user's first answer in this thread
   const priorAnswers = await countUserAnswersInThread(
     params.answerAuthorId,
@@ -58,12 +82,7 @@ export async function awardForumParticipationPoints(params: {
     });
   }
 
-  const question = await getForumQuestionById(params.questionId);
-  if (
-    question &&
-    question.authorId !== params.answerAuthorId &&
-    question.answerCount === 1
-  ) {
+  if (question.answerCount === 1) {
     const isFirst = await isUsersFirstQuestion(question.authorId, question.id);
     if (isFirst) {
       await awardPoints({

@@ -47,6 +47,7 @@ import type {
   UpdateVolunteerOpportunityBodyInput,
 } from "./post-volunteer.schema";
 import { recordRecentActivityQuietly } from "../../recent-activity/recent-activity.service";
+import { notifyApplicationReceived } from "../../notifications/notifications.service";
 import type { VolunteerSupportingDocument } from "./post-volunteer.query";
 
 const VOLUNTEER_CATEGORY_SLUG_UNIQUE_INDEX =
@@ -626,6 +627,15 @@ export async function handleCreateVolunteerApplication(
       },
     });
 
+    notifyApplicationReceived({
+      recipientUserId: target.createdBy,
+      postingId: target.opportunityId,
+      postingTitle: target.opportunityTitle,
+      sourceType: "volunteer",
+    }).catch((err) =>
+      console.error("Failed to notify volunteer application received", err),
+    );
+
     return c.json({ ok: true, application }, 201);
   } catch (err) {
     const error = getPostgresError(err);
@@ -836,6 +846,15 @@ export async function handleCreateVolunteerApplicationBatch(
         },
       });
     }
+
+    notifyApplicationReceived({
+      recipientUserId: firstTarget.createdBy,
+      postingId: firstTarget.opportunityId,
+      postingTitle: firstTarget.opportunityTitle,
+      sourceType: "volunteer",
+    }).catch((err) =>
+      console.error("Failed to notify volunteer application received", err),
+    );
 
     return c.json({ ok: true, applications }, 201);
   } catch (err) {
