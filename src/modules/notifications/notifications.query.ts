@@ -145,10 +145,14 @@ export async function createOrAggregateNotification(opts: {
   incrementBy?: number;
   reuseAfterRead?: boolean;
 }) {
+  if (opts.dedupeKey.trim().length === 0) {
+    throw new Error("Notification dedupeKey must not be empty");
+  }
+
   const type = opts.type ?? "system";
   const incrementBy = opts.incrementBy ?? 1;
 
-  return db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     await tx.execute(
       sql`select pg_advisory_xact_lock(hashtext(${opts.userId}), hashtext(${opts.dedupeKey}))`,
     );
@@ -199,10 +203,6 @@ export async function createOrAggregateNotification(opts: {
         .where(eq(notification.id, existing.id))
         .returning();
 
-      if (row) {
-        emitToUser(opts.userId, row);
-      }
-
       return { row, aggregated: true, reopened };
     }
 
@@ -224,12 +224,14 @@ export async function createOrAggregateNotification(opts: {
       })
       .returning();
 
-    if (row) {
-      emitToUser(opts.userId, row);
-    }
-
     return { row, aggregated: false, reopened: false };
   });
+
+  if (result.row) {
+    emitToUser(opts.userId, result.row);
+  }
+
+  return result;
 }
 
 export async function createNotificationsForAllUsers(opts: {

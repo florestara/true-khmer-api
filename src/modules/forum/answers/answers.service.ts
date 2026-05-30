@@ -12,6 +12,7 @@ import {
   BestAnswerSelectionInvalidTargetError,
   createAnswer,
   findAnswerById,
+  findAnswerWithViewerVoteById,
   findAnswersByAuthorId,
   findAnswersByQuestionId,
   findAnswersByQuestionIdPublic,
@@ -432,6 +433,14 @@ export async function handleVoteAnswer(
       );
     }
 
+    const existingAnswerWithViewerVote = await findAnswerWithViewerVoteById(
+      params.answerId,
+      authResult.userId,
+    );
+    if (!existingAnswerWithViewerVote) {
+      return c.json({ ok: false, error: "Answer not found" }, 404);
+    }
+
     const votedAnswer = await setAnswerVote(
       params.answerId,
       authResult.userId,
@@ -491,6 +500,8 @@ export async function handleVoteAnswer(
 
     if (
       data.voteType === "UPVOTE" &&
+      existingAnswerWithViewerVote.viewerVote !== "UPVOTE" &&
+      votedAnswer.viewerVote === "UPVOTE" &&
       existingAnswer.authorId !== authResult.userId
     ) {
       notifyForumAnswerUpvoted({

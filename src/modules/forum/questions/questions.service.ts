@@ -474,6 +474,14 @@ export async function handleVoteQuestion(
       );
     }
 
+    const existingQuestionWithViewerVote = await findQuestionById(
+      params.questionId,
+      authResult.userId,
+    );
+    if (!existingQuestionWithViewerVote) {
+      return c.json({ ok: false, error: "Question not found" }, 404);
+    }
+
     const votedQuestion = await setQuestionVote(
       params.questionId,
       authResult.userId,
@@ -528,6 +536,8 @@ export async function handleVoteQuestion(
 
     if (
       data.voteType === "UPVOTE" &&
+      existingQuestionWithViewerVote.viewerVote !== "UPVOTE" &&
+      votedQuestion.viewerVote === "UPVOTE" &&
       existingQuestion.authorId !== authResult.userId
     ) {
       notifyForumQuestionUpvoted({
