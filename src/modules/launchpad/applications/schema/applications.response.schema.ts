@@ -36,7 +36,7 @@ export const launchpadApplicationLogSchema = z
   .object({
     id: z.string(),
     status: launchpadApplicationStatusSchema,
-    declinedBy: z.enum(["POSTER", "APPLICANT"]).nullable(),
+    declinedBy: z.enum(["POSTER", "APPLICANT", "SYSTEM"]).nullable(),
     createdBy: z.string(),
     createdAt: z.string(),
   })

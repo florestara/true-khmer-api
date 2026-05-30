@@ -6,6 +6,7 @@ import {
   launchpadApplicationLog,
   launchpadApplicationStatusEnum,
   launchpadRole,
+  workspaceCandidateBlock,
 } from "../../../db/schema";
 
 export type ApplicationStatus =
@@ -108,7 +109,7 @@ export async function createApplicationLog(
   options: {
     applicationId: string;
     status: ApplicationStatus;
-    declinedBy?: "POSTER" | "APPLICANT" | null;
+    declinedBy?: "POSTER" | "APPLICANT" | "SYSTEM" | null;
     createdBy: string;
   },
 ): Promise<LaunchpadApplicationLog> {
@@ -264,10 +265,71 @@ export async function findExistingApplication(
       and(
         eq(launchpadApplication.launchpadRoleId, launchpadRoleId),
         eq(launchpadApplication.createdBy, createdBy),
-        sql`${launchpadApplication.status} in ('SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'CONFIRMED', 'COMPLETED')`,
+        sql`${launchpadApplication.status} <> 'WITHDRAWN'`,
       ),
     )
     .limit(1);
 
   return row ?? null;
+}
+
+export async function findExistingApplicationRoleIds(
+  launchpadRoleIds: string[],
+  createdBy: string,
+): Promise<string[]> {
+  if (launchpadRoleIds.length === 0) {
+    return [];
+  }
+
+  const rows = await db
+    .select({ roleId: launchpadApplication.launchpadRoleId })
+    .from(launchpadApplication)
+    .where(
+      and(
+        eq(launchpadApplication.createdBy, createdBy),
+        inArray(launchpadApplication.launchpadRoleId, launchpadRoleIds),
+        sql`${launchpadApplication.status} <> 'WITHDRAWN'`,
+      ),
+    );
+
+  return rows.map((row) => row.roleId);
+}
+
+export async function hasLaunchpadApprovedOrConfirmedApplication(
+  launchpadId: string,
+  createdBy: string,
+): Promise<boolean> {
+  const [row] = await db
+    .select({ id: launchpadApplication.id })
+    .from(launchpadApplication)
+    .where(
+      and(
+        eq(launchpadApplication.launchpadId, launchpadId),
+        eq(launchpadApplication.createdBy, createdBy),
+        sql`${launchpadApplication.status} in ('APPROVED', 'CONFIRMED')`,
+      ),
+    )
+    .limit(1);
+
+  return row !== undefined;
+}
+
+export async function hasLaunchpadApplicationBlock(
+  launchpadId: string,
+  createdBy: string,
+): Promise<boolean> {
+  const [row] = await db
+    .select({ id: workspaceCandidateBlock.id })
+    .from(workspaceCandidateBlock)
+    .where(
+      and(
+        eq(workspaceCandidateBlock.sourceType, "PROJECT"),
+        eq(workspaceCandidateBlock.postingId, launchpadId),
+        eq(workspaceCandidateBlock.candidateId, createdBy),
+        eq(workspaceCandidateBlock.status, "ACTIVE"),
+      ),
+    )
+    .limit(1);
+
+  return row !== undefined;
 }

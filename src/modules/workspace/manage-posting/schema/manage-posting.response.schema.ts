@@ -55,37 +55,25 @@ export const managePostingsResponseSchema = z
   })
   .openapi("ManagePostingsResponse");
 
-export const managePostingApplicantSchema = z
+export const managePostingApplicationRoleSchema = z
   .object({
-    candidate: z.object({
-      id: z.string(),
-      name: z.string(),
-      email: z.string(),
-      phoneNumber: z.string().nullable(),
-      telegramUsername: z.string().nullable(),
-      avatarUrl: z.string().nullable(),
-      avatarKey: z.string().nullable(),
-    }),
-    roles: z.array(
-      z.object({
-        applicationId: z.string(),
-        roleId: z.string(),
-        title: z.string(),
-        description: z.string().nullable(),
-        status: managePostingApplicantStatusSchema,
-        appliedAt: z.string(),
-        updatedAt: z.string(),
-      }),
-    ),
-    topPick: z.string().nullable(),
+    applicationId: z.string(),
+    roleId: z.string(),
+    title: z.string(),
+    description: z.string().nullable(),
     status: managePostingApplicantStatusSchema,
     appliedAt: z.string(),
     updatedAt: z.string(),
-    contact: z.object({
-      email: z.string(),
-      phoneNumber: z.string().nullable(),
-      telegramUsername: z.string().nullable(),
-    }),
+  })
+  .openapi("ManagePostingApplicationRole");
+
+export const managePostingSubmissionSchema = z
+  .object({
+    submissionKey: z.string(),
+    roles: z.array(managePostingApplicationRoleSchema),
+    topPick: z.string().nullable(),
+    appliedAt: z.string(),
+    updatedAt: z.string(),
     volunteer: z
       .object({
         availability: z.string(),
@@ -107,6 +95,43 @@ export const managePostingApplicantSchema = z
       })
       .nullable(),
   })
+  .openapi("ManagePostingSubmission");
+
+export const managePostingApplicantPrivateNoteSchema = z
+  .object({
+    id: z.string(),
+    note: z.string(),
+    createdBy: z.string(),
+    updatedBy: z.string(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  })
+  .openapi("ManagePostingApplicantPrivateNote");
+
+export const managePostingApplicantSchema = z
+  .object({
+    candidate: z.object({
+      id: z.string(),
+      name: z.string(),
+      email: z.string(),
+      phoneNumber: z.string().nullable(),
+      telegramUsername: z.string().nullable(),
+      avatarUrl: z.string().nullable(),
+      avatarKey: z.string().nullable(),
+    }),
+    submissions: z.array(managePostingSubmissionSchema),
+    submissionCount: z.number().int().nonnegative(),
+    totalRoleApplied: z.number().int().nonnegative(),
+    overallStatus: managePostingApplicantStatusSchema,
+    lastAppliedAt: z.string(),
+    updatedAt: z.string(),
+    contact: z.object({
+      email: z.string(),
+      phoneNumber: z.string().nullable(),
+      telegramUsername: z.string().nullable(),
+    }),
+    privateNote: managePostingApplicantPrivateNoteSchema.nullable(),
+  })
   .openapi("ManagePostingApplicant");
 
 export const managePostingDetailSchema = z
@@ -125,6 +150,14 @@ export const managePostingDetailSchema = z
         CONFIRMED: z.number().int().nonnegative(),
         COMPLETED: z.number().int().nonnegative(),
         WITHDRAWN: z.number().int().nonnegative(),
+      }),
+      filterCounts: z.object({
+        all: z.number().int().nonnegative(),
+        new: z.number().int().nonnegative(),
+        in_review: z.number().int().nonnegative(),
+        approved: z.number().int().nonnegative(),
+        confirmed: z.number().int().nonnegative(),
+        declined: z.number().int().nonnegative(),
       }),
     }),
     applicants: z.array(managePostingApplicantSchema),
@@ -146,12 +179,12 @@ export const managePostingDetailResponseSchema = z
   })
   .openapi("ManagePostingDetailResponse");
 
-export const managePostingApplicationDetailResponseSchema = z
+export const managePostingCandidateDetailResponseSchema = z
   .object({
     ok: z.literal(true),
     applicant: managePostingApplicantSchema,
   })
-  .openapi("ManagePostingApplicationDetailResponse");
+  .openapi("ManagePostingCandidateDetailResponse");
 
 export const managePostingApplicationActionResponseSchema = z
   .object({
@@ -159,6 +192,13 @@ export const managePostingApplicationActionResponseSchema = z
     applicant: managePostingApplicantSchema,
   })
   .openapi("ManagePostingApplicationActionResponse");
+
+export const upsertManagePostingCandidateNoteResponseSchema = z
+  .object({
+    ok: z.literal(true),
+    applicant: managePostingApplicantSchema,
+  })
+  .openapi("UpsertManagePostingCandidateNoteResponse");
 
 export const updateManagePostingActionResponseSchema = z
   .object({

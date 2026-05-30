@@ -69,7 +69,7 @@ const myApplicationTimelineSchema = z
     passed: z.string().nullable(),
     declined: z.object({
       at: z.string().nullable(),
-      by: z.enum(["POSTER", "APPLICANT"]).nullable(),
+      by: z.enum(["POSTER", "APPLICANT", "SYSTEM"]).nullable(),
     }),
     confirmed: z.string().nullable(),
     completed: z.string().nullable(),

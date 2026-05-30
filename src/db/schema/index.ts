@@ -14,3 +14,5 @@ export * from "./recent-activity";
 export * from "./launchpad/application/application";
 export * from "./fcm-token";
 export * from "./notification";
+export * from "./workspace-applicant-note";
+export * from "./workspace-candidate-block";

@@ -4,27 +4,33 @@ import { requireAccessToken } from "../../../middlewares/auth.middleware";
 import { authProtectedErrorResponseSchema } from "../../auth/auth.schema";
 import {
   changeManagePostingApplicationStatusParamSchema,
+  declineManagePostingApplicationQuerySchema,
   extendManagePostingDeadlineBodySchema,
   extendManagePostingDeadlineResponseSchema,
   getManagePostingApplicationParamSchema,
+  getManagePostingCandidateParamSchema,
   getManagePostingDetailParamSchema,
   getManagePostingDetailQuerySchema,
   getManagePostingsQuerySchema,
   managePostingApplicationActionResponseSchema,
-  managePostingApplicationDetailResponseSchema,
+  managePostingCandidateDetailResponseSchema,
   managePostingDetailResponseSchema,
   updateManagePostingActionParamSchema,
   updateManagePostingActionResponseSchema,
+  upsertManagePostingCandidateNoteBodySchema,
+  upsertManagePostingCandidateNoteResponseSchema,
   managePostingsErrorResponseSchema,
   managePostingsResponseSchema,
 } from "./manage-posting.schema";
 import {
   handleExtendManagePostingDeadline,
-  handleGetManagePostingApplication,
+  handleDeclineManagePostingApplication,
+  handleGetManagePostingCandidate,
   handleGetManagePostingDetail,
   handleGetManagePostings,
   handleUpdateManagePostingAction,
   handleUpdateManagePostingApplication,
+  handleUpsertManagePostingCandidateNote,
 } from "./manage-posting.service";
 
 export const managePostingRouter = new OpenAPIHono<AppBindings>();
@@ -129,21 +135,21 @@ const getManagePostingDetailRoute = createRoute({
   },
 });
 
-const getManagePostingApplicationRoute = createRoute({
+const getManagePostingCandidateRoute = createRoute({
   method: "get",
-  path: "/{sourceType}/{postingId}/{applicationId}",
+  path: "/{sourceType}/{postingId}/{candidateId}",
   tags: ["Workspace"],
   middleware: [requireAccessToken],
   security: [{ BearerAuth: [] }],
   request: {
-    params: getManagePostingApplicationParamSchema,
+    params: getManagePostingCandidateParamSchema,
   },
   responses: {
     200: {
-      description: "Authenticated posting owner's application detail",
+      description: "Authenticated posting owner's candidate detail",
       content: {
         "application/json": {
-          schema: managePostingApplicationDetailResponseSchema,
+          schema: managePostingCandidateDetailResponseSchema,
         },
       },
     },
@@ -164,7 +170,75 @@ const getManagePostingApplicationRoute = createRoute({
       },
     },
     404: {
-      description: "Application not found",
+      description: "Candidate not found",
+      content: {
+        "application/json": {
+          schema: managePostingsErrorResponseSchema,
+        },
+      },
+    },
+    500: {
+      description: "Internal server error",
+      content: {
+        "application/json": {
+          schema: managePostingsErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+const upsertManagePostingCandidateNoteRoute = createRoute({
+  method: "post",
+  path: "/{sourceType}/{postingId}/{candidateId}/note",
+  tags: ["Workspace"],
+  middleware: [requireAccessToken],
+  security: [{ BearerAuth: [] }],
+  request: {
+    params: getManagePostingCandidateParamSchema,
+    body: {
+      content: {
+        "application/json": {
+          schema: upsertManagePostingCandidateNoteBodySchema,
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Candidate private note saved",
+      content: {
+        "application/json": {
+          schema: upsertManagePostingCandidateNoteResponseSchema,
+        },
+      },
+    },
+    400: {
+      description: "Validation failed",
+      content: {
+        "application/json": {
+          schema: managePostingsErrorResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: "Unauthorized",
+      content: {
+        "application/json": {
+          schema: authProtectedErrorResponseSchema,
+        },
+      },
+    },
+    403: {
+      description: "Onboarding required",
+      content: {
+        "application/json": {
+          schema: authProtectedErrorResponseSchema,
+        },
+      },
+    },
+    404: {
+      description: "Candidate not found",
       content: {
         "application/json": {
           schema: managePostingsErrorResponseSchema,
@@ -380,14 +454,82 @@ const updateManagePostingApplicationRoute = createRoute({
   },
 });
 
+const declineManagePostingApplicationRoute = createRoute({
+  method: "post",
+  path: "/{sourceType}/{postingId}/{applicationId}/decline",
+  tags: ["Workspace"],
+  middleware: [requireAccessToken],
+  security: [{ BearerAuth: [] }],
+  request: {
+    params: getManagePostingApplicationParamSchema,
+    query: declineManagePostingApplicationQuerySchema,
+  },
+  responses: {
+    200: {
+      description: "Application declined",
+      content: {
+        "application/json": {
+          schema: managePostingApplicationActionResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: "Unauthorized",
+      content: {
+        "application/json": {
+          schema: authProtectedErrorResponseSchema,
+        },
+      },
+    },
+    403: {
+      description: "Onboarding required",
+      content: {
+        "application/json": {
+          schema: authProtectedErrorResponseSchema,
+        },
+      },
+    },
+    404: {
+      description: "Application not found",
+      content: {
+        "application/json": {
+          schema: managePostingsErrorResponseSchema,
+        },
+      },
+    },
+    409: {
+      description: "Application cannot be declined from the current state",
+      content: {
+        "application/json": {
+          schema: managePostingsErrorResponseSchema,
+        },
+      },
+    },
+    500: {
+      description: "Internal server error",
+      content: {
+        "application/json": {
+          schema: managePostingsErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
 managePostingRouter.openapi(getManagePostingsRoute, async (c) => {
   const query = c.req.valid("query");
   return (await handleGetManagePostings(c, query)) as any;
 });
 
-managePostingRouter.openapi(getManagePostingApplicationRoute, async (c) => {
+managePostingRouter.openapi(getManagePostingCandidateRoute, async (c) => {
   const params = c.req.valid("param");
-  return (await handleGetManagePostingApplication(c, params)) as any;
+  return (await handleGetManagePostingCandidate(c, params)) as any;
+});
+
+managePostingRouter.openapi(upsertManagePostingCandidateNoteRoute, async (c) => {
+  const params = c.req.valid("param");
+  const body = c.req.valid("json");
+  return (await handleUpsertManagePostingCandidateNote(c, params, body)) as any;
 });
 
 managePostingRouter.openapi(updateManagePostingActionRoute, async (c) => {
@@ -404,6 +546,12 @@ managePostingRouter.openapi(extendManagePostingDeadlineRoute, async (c) => {
 managePostingRouter.openapi(updateManagePostingApplicationRoute, async (c) => {
   const params = c.req.valid("param");
   return (await handleUpdateManagePostingApplication(c, params)) as any;
+});
+
+managePostingRouter.openapi(declineManagePostingApplicationRoute, async (c) => {
+  const params = c.req.valid("param");
+  const query = c.req.valid("query");
+  return (await handleDeclineManagePostingApplication(c, params, query)) as any;
 });
 
 managePostingRouter.openapi(getManagePostingDetailRoute, async (c) => {
