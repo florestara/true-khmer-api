@@ -591,6 +591,8 @@ export async function handleCreateVolunteerApplication(
       opportunityTitle: target.opportunityTitle,
       coverImageKey: target.coverImageKey,
       applicationDeadline: target.applicationDeadline,
+      startDate: target.startDate,
+      endDate: target.endDate,
       category: {
         id: target.categoryId,
         name: target.categoryName,
@@ -783,6 +785,8 @@ export async function handleCreateVolunteerApplicationBatch(
       opportunityTitle: firstTarget.opportunityTitle,
       coverImageKey: firstTarget.coverImageKey,
       applicationDeadline: firstTarget.applicationDeadline,
+      startDate: firstTarget.startDate,
+      endDate: firstTarget.endDate,
       category: {
         id: firstTarget.categoryId,
         name: firstTarget.categoryName,

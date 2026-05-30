@@ -51,6 +51,7 @@ const launchpadApplication = pgTable(
       .default("SUBMITTED")
       .notNull(),
     archived: boolean("archived").default(false).notNull(),
+    archivedAt: timestamp("archived_at", { withTimezone: true, mode: "string" }),
     documentKeys: jsonb("document_keys")
       .$type<string[]>()
       .notNull()
