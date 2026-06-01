@@ -1,6 +1,6 @@
 import type { Context } from "hono";
 import { getAuthUserId } from "../auth/utils/get-auth";
-import { canViewProfileContributions } from "./profile.query";
+import { profileUserExists } from "./profile.query";
 import { getPostedItemsByUserId, MyPostedQueryError } from "./posted.query";
 import type {
   GetMyPostedQuery,
@@ -13,26 +13,16 @@ export async function handleGetPostedItems(
   query: GetMyPostedQuery,
 ) {
   const authResult = getAuthUserId(c);
-  if (!authResult.ok) {
-    return authResult.response;
-  }
+  const viewerId = authResult.ok ? authResult.userId : undefined;
 
   try {
-    const canViewContributions = await canViewProfileContributions(
-      params.userId,
-      authResult.userId,
-    );
-    if (canViewContributions === null) {
+    if (!(await profileUserExists(params.userId))) {
       return c.json({ ok: false, error: "User not found" }, 404);
-    }
-
-    if (!canViewContributions) {
-      return c.json({ ok: false, error: "Contributions are private" }, 403);
     }
 
     const result = await getPostedItemsByUserId(
       params.userId,
-      authResult.userId,
+      viewerId,
       query,
     );
     return c.json({ ok: true, ...result }, 200);

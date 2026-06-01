@@ -456,7 +456,7 @@ function hydratePublicQuestion(
 }
 
 function buildQuestionsBaseQuery(
-  viewerId: string,
+  viewerId: string | undefined,
   trendingRankingTimestampSql: SQL = sql`statement_timestamp()`,
 ) {
   const trendingScore = buildTrendingScoreSql(trendingRankingTimestampSql);
@@ -487,14 +487,14 @@ function buildQuestionsBaseQuery(
       forumQuestionVote,
       and(
         eq(forumQuestionVote.questionId, forumQuestion.id),
-        eq(forumQuestionVote.voterId, viewerId),
+        viewerId ? eq(forumQuestionVote.voterId, viewerId) : sql`false`,
       ),
     )
     .leftJoin(
       forumQuestionSave,
       and(
         eq(forumQuestionSave.questionId, forumQuestion.id),
-        eq(forumQuestionSave.saverId, viewerId),
+        viewerId ? eq(forumQuestionSave.saverId, viewerId) : sql`false`,
       ),
     );
 }
@@ -1000,7 +1000,7 @@ export async function findQuestionById(
 export async function findQuestionsPostedByUserId(
   userId: string,
   query: GetQuestionsQuery,
-  viewerId: string,
+  viewerId?: string,
 ): Promise<QuestionsListResult> {
   return findQuestions(query, viewerId, userId);
 }
@@ -1119,7 +1119,7 @@ export async function findQuestions(
     sortBy,
     cursor,
   }: GetQuestionsQuery,
-  viewerId: string,
+  viewerId: string | undefined,
   authorId?: string,
 ): Promise<QuestionsListResult> {
   const trendingRankingTimestampSql =

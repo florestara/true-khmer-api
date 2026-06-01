@@ -15,7 +15,7 @@ export class MyPostedQueryError extends Error {
 
 export async function getPostedItemsByUserId(
   userId: string,
-  viewerId: string,
+  viewerId: string | undefined,
   query: GetMyPostedQuery,
 ) {
   if (query.sourceType === "forum") {

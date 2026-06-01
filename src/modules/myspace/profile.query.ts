@@ -132,13 +132,6 @@ async function updateUserSocialLinks(
   }
 }
 
-function canViewProfileSection(
-  visibility: "public" | "members" | "private",
-  isOwnProfile: boolean,
-) {
-  return isOwnProfile || visibility !== "private";
-}
-
 export async function getProfile(userId: string) {
   const [userRow] = await db
     .select({
@@ -282,41 +275,19 @@ export async function getProfile(userId: string) {
   };
 }
 
-export async function getPublicProfile(userId: string, viewerId: string) {
+export async function getPublicProfile(userId: string) {
   const profile = await getProfile(userId);
   if (!profile) {
     return null;
   }
 
-  const isOwnProfile = userId === viewerId;
-  if (
-    !canViewProfileSection(profile.profile.visibility.profile, isOwnProfile)
-  ) {
-    return { visible: false as const };
-  }
-
-  const canViewContact = canViewProfileSection(
-    profile.profile.visibility.contact,
-    isOwnProfile,
-  );
-  const canViewSocialLinks = canViewProfileSection(
-    profile.profile.visibility.socialLinks,
-    isOwnProfile,
-  );
-  const canViewContributions = canViewProfileSection(
-    profile.profile.visibility.contributions,
-    isOwnProfile,
-  );
-  const postedCounts = canViewContributions
-    ? await Promise.all([
-        countQuestionsPostedByUserId(userId),
-        countVolunteerOpportunitiesPostedByUserId(userId),
-        countLaunchpadsPostedByUserId(userId),
-      ])
-    : null;
+  const postedCounts = await Promise.all([
+    countQuestionsPostedByUserId(userId),
+    countVolunteerOpportunitiesPostedByUserId(userId),
+    countLaunchpadsPostedByUserId(userId),
+  ]);
 
   return {
-    visible: true as const,
     profile: {
       user: {
         id: profile.user.id,
@@ -324,11 +295,9 @@ export async function getPublicProfile(userId: string, viewerId: string) {
         lastName: profile.user.lastName,
         displayName: profile.user.displayName,
         occupation: profile.user.occupation,
-        email: canViewContact ? profile.user.email : null,
-        phoneNumber: canViewContact ? profile.user.phoneNumber : null,
-        telegramUsername: canViewContact
-          ? profile.user.telegramUsername
-          : null,
+        email: profile.user.email,
+        phoneNumber: profile.user.phoneNumber,
+        telegramUsername: profile.user.telegramUsername,
       },
       profile: {
         avatarKey: profile.profile.avatarKey,
@@ -338,48 +307,27 @@ export async function getPublicProfile(userId: string, viewerId: string) {
         city: profile.profile.city,
       },
       skills: profile.skills,
-      socialLinks: canViewSocialLinks
-        ? profile.socialLinks
-        : {
-            website: null,
-            linkedin: null,
-            twitter: null,
-            facebook: null,
-          },
+      socialLinks: profile.socialLinks,
       tier: profile.progress.tier,
-      postedCounts: postedCounts
-        ? {
-            forum: postedCounts[0],
-            volunteer: postedCounts[1],
-            project: postedCounts[2],
-          }
-        : null,
+      postedCounts: {
+        forum: postedCounts[0],
+        volunteer: postedCounts[1],
+        project: postedCounts[2],
+      },
     },
   };
 }
 
-export async function canViewProfileContributions(
-  userId: string,
-  viewerId: string,
-) {
+export async function profileUserExists(userId: string) {
   const [profile] = await db
     .select({
       userId: user.id,
-      contributionVisibility: userProfile.contributionVisibility,
     })
     .from(user)
-    .leftJoin(userProfile, eq(userProfile.userId, user.id))
     .where(eq(user.id, userId))
     .limit(1);
 
-  if (!profile) {
-    return null;
-  }
-
-  return canViewProfileSection(
-    profile.contributionVisibility ?? "public",
-    userId === viewerId,
-  );
+  return Boolean(profile);
 }
 
 export async function updateProfile(

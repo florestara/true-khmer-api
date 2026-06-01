@@ -62,19 +62,10 @@ export async function handleGetPublicProfile(
   c: Context,
   params: GetPublicProfileParams,
 ) {
-  const authResult = getAuthUserId(c);
-  if (!authResult.ok) {
-    return authResult.response;
-  }
-
   try {
-    const result = await getPublicProfile(params.userId, authResult.userId);
+    const result = await getPublicProfile(params.userId);
     if (!result) {
       return c.json({ ok: false, error: "User not found" }, 404);
-    }
-
-    if (!result.visible) {
-      return c.json({ ok: false, error: "Profile is private" }, 403);
     }
 
     return c.json({ ok: true, profile: result.profile }, 200);

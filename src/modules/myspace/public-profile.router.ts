@@ -1,7 +1,6 @@
 import { OpenAPIHono, createRoute } from "@hono/zod-openapi";
 import type { AppBindings } from "../../lib/types";
-import { requireAccessToken } from "../../middlewares/auth.middleware";
-import { authProtectedErrorResponseSchema } from "../auth/auth.schema";
+import { attachAuthIfValidAccessToken } from "../../middlewares/auth.middleware";
 import { handleGetPostedItems } from "./posted.service";
 import {
   getMyPostedQuerySchema,
@@ -21,8 +20,7 @@ const getPublicProfileRoute = createRoute({
   method: "get",
   path: "/{userId}",
   tags: ["Profile"],
-  middleware: [requireAccessToken],
-  security: [{ BearerAuth: [] }],
+  middleware: [attachAuthIfValidAccessToken],
   request: {
     params: getPublicProfileParamsSchema,
   },
@@ -32,22 +30,6 @@ const getPublicProfileRoute = createRoute({
       content: {
         "application/json": {
           schema: publicProfileResponseSchema,
-        },
-      },
-    },
-    401: {
-      description: "Unauthorized",
-      content: {
-        "application/json": {
-          schema: authProtectedErrorResponseSchema,
-        },
-      },
-    },
-    403: {
-      description: "Profile is private or onboarding is required",
-      content: {
-        "application/json": {
-          schema: profileErrorResponseSchema,
         },
       },
     },
@@ -74,8 +56,7 @@ const getMyPostedRoute = createRoute({
   method: "get",
   path: "/{userId}/posted",
   tags: ["Profile"],
-  middleware: [requireAccessToken],
-  security: [{ BearerAuth: [] }],
+  middleware: [attachAuthIfValidAccessToken],
   request: {
     params: getPublicProfileParamsSchema,
     query: getMyPostedQuerySchema,
@@ -92,22 +73,6 @@ const getMyPostedRoute = createRoute({
     },
     400: {
       description: "Validation failed",
-      content: {
-        "application/json": {
-          schema: myPostedErrorResponseSchema,
-        },
-      },
-    },
-    401: {
-      description: "Unauthorized",
-      content: {
-        "application/json": {
-          schema: authProtectedErrorResponseSchema,
-        },
-      },
-    },
-    403: {
-      description: "Contributions are private or onboarding is required",
       content: {
         "application/json": {
           schema: myPostedErrorResponseSchema,
