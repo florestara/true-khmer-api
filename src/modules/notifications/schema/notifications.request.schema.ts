@@ -4,6 +4,7 @@ export const fcmPlatformEnum = z.enum(["web", "android", "ios"]);
 export type FcmTokenPlatform = z.infer<typeof fcmPlatformEnum>;
 
 export const notificationTypeEnum = z.enum([
+  "forum", // MessageCircle
   "profile_view", // User
   "new_message", // MessageSquare
   "achievement", // Trophy
@@ -16,6 +17,7 @@ export const notificationTypeEnum = z.enum([
 export type NotificationType = z.infer<typeof notificationTypeEnum>;
 
 export const NOTIFICATION_ICON_MAP: Record<NotificationType, string> = {
+  forum: "MessageCircle",
   profile_view: "User",
   new_message: "MessageSquare",
   achievement: "Trophy",
@@ -25,6 +27,24 @@ export const NOTIFICATION_ICON_MAP: Record<NotificationType, string> = {
   points: "Star",
   system: "Bell",
 };
+
+export const NOTIFICATION_EVENT_ICON_MAP: Record<string, string> = {
+  forum_answer_created: "MessageCircle",
+  forum_answer_reply_created: "MessageCircle",
+  forum_question_upvoted: "ThumbsUp",
+  forum_answer_upvoted: "ThumbsUp",
+};
+
+export function resolveNotificationIcon(
+  type: string | undefined,
+  eventType: string | null | undefined,
+) {
+  return (
+    (eventType ? NOTIFICATION_EVENT_ICON_MAP[eventType] : undefined) ??
+    NOTIFICATION_ICON_MAP[type as NotificationType] ??
+    NOTIFICATION_ICON_MAP.system
+  );
+}
 
 export const registerTokenSchema = z.object({
   token: z.string().min(1, "FCM token is required"),
@@ -68,12 +88,12 @@ export const listNotificationsQuerySchema = z.object({
   unreadOnly: z
     .enum(["true", "false"])
     .optional()
-    .transform((v) => v === "false"),
+    .transform((v) => (v === undefined ? undefined : v === "true")),
   type: notificationTypeEnum.optional(),
   archived: z
     .enum(["true", "false"])
     .optional()
-    .transform((v) => v === "false"),
+    .transform((v) => (v === undefined ? undefined : v === "true")),
 });
 export type ListNotificationsQuery = z.infer<
   typeof listNotificationsQuerySchema
@@ -88,7 +108,7 @@ export const markAllReadQuerySchema = z.object({
   archived: z
     .enum(["true", "false"])
     .optional()
-    .transform((v) => v === "false"),
+    .transform((v) => (v === undefined ? undefined : v === "true")),
   type: notificationTypeEnum.optional(),
 });
 export type MarkAllReadQuery = z.infer<typeof markAllReadQuerySchema>;

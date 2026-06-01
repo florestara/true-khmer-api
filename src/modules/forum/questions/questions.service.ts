@@ -38,6 +38,7 @@ import {
   replaceRecentActivitiesByReference,
 } from "../../recent-activity/recent-activity.service";
 import { presignForumImageUpload } from "../../uploads/uploads.service";
+import { notifyForumQuestionUpvoted } from "../../notifications/notifications.service";
 
 function quoteActivityText(value: string) {
   return `'${value}'`;
@@ -473,6 +474,14 @@ export async function handleVoteQuestion(
       );
     }
 
+    const existingQuestionWithViewerVote = await findQuestionById(
+      params.questionId,
+      authResult.userId,
+    );
+    if (!existingQuestionWithViewerVote) {
+      return c.json({ ok: false, error: "Question not found" }, 404);
+    }
+
     const votedQuestion = await setQuestionVote(
       params.questionId,
       authResult.userId,
@@ -524,6 +533,22 @@ export async function handleVoteQuestion(
     }).catch((err) => {
       console.error("Failed to replace forum question vote activity", err);
     });
+
+    if (
+      data.voteType === "UPVOTE" &&
+      existingQuestionWithViewerVote.viewerVote !== "UPVOTE" &&
+      votedQuestion.viewerVote === "UPVOTE" &&
+      existingQuestion.authorId !== authResult.userId
+    ) {
+      notifyForumQuestionUpvoted({
+        recipientUserId: existingQuestion.authorId,
+        questionId: votedQuestion.id,
+        questionTitle: votedQuestion.title,
+        upvoteCount: votedQuestion.upvoteCount,
+      }).catch((err) =>
+        console.error("Failed to notify forum question upvote", err),
+      );
+    }
 
     return c.json(
       {

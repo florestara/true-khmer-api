@@ -12,6 +12,7 @@ import {
   BestAnswerSelectionInvalidTargetError,
   createAnswer,
   findAnswerById,
+  findAnswerWithViewerVoteById,
   findAnswersByAuthorId,
   findAnswersByQuestionId,
   findAnswersByQuestionIdPublic,
@@ -33,6 +34,12 @@ import {
   recordRecentActivityQuietly,
   replaceRecentActivitiesByReference,
 } from "../../recent-activity/recent-activity.service";
+import {
+  notifyForumAnswerCreated,
+  notifyForumAnswerReplyCreated,
+  notifyForumAnswerUpvoted,
+  notifyForumBestAnswerSelected,
+} from "../../notifications/notifications.service";
 
 function quoteActivityText(value: string) {
   return `'${value}'`;
@@ -110,8 +117,9 @@ export async function handleCreateAnswer(c: Context, data: CreateAnswerInput) {
       );
     }
 
+    let parentAnswer: Awaited<ReturnType<typeof findAnswerById>> = null;
     if (data.replyToAnswer) {
-      const parentAnswer = await findAnswerById(data.replyToAnswer);
+      parentAnswer = await findAnswerById(data.replyToAnswer);
       if (!parentAnswer) {
         return c.json({ ok: false, error: "Reply target not found" }, 404);
       }
@@ -175,6 +183,27 @@ export async function handleCreateAnswer(c: Context, data: CreateAnswerInput) {
         replyToAnswerId: data.replyToAnswer ?? null,
       },
     });
+
+    if (parentAnswer && parentAnswer.authorId !== authResult.userId) {
+      notifyForumAnswerReplyCreated({
+        recipientUserId: parentAnswer.authorId,
+        questionId: question.id,
+        answerId: newAnswer.id,
+        parentAnswerId: parentAnswer.id,
+        questionTitle: question.title,
+      }).catch((err) =>
+        console.error("Failed to notify forum answer reply", err),
+      );
+    } else if (question.authorId !== authResult.userId) {
+      notifyForumAnswerCreated({
+        recipientUserId: question.authorId,
+        questionId: question.id,
+        answerId: newAnswer.id,
+        questionTitle: question.title,
+      }).catch((err) =>
+        console.error("Failed to notify forum answer created", err),
+      );
+    }
 
     return c.json({ ok: true, answer: newAnswer }, 201);
   } catch (err) {
@@ -355,6 +384,17 @@ export async function handleMarkBestAnswer(
       },
     });
 
+    if (markedAnswer.answer.author.id !== authResult.userId) {
+      notifyForumBestAnswerSelected({
+        recipientUserId: markedAnswer.answer.author.id,
+        questionId: markedAnswer.answer.questionId,
+        answerId: markedAnswer.answer.id,
+        questionTitle: question?.title,
+      }).catch((err) =>
+        console.error("Failed to notify forum best answer selected", err),
+      );
+    }
+
     return c.json({ ok: true, answer: markedAnswer.answer }, 200);
   } catch (err) {
     if (err instanceof BestAnswerSelectionForbiddenError) {
@@ -391,6 +431,14 @@ export async function handleVoteAnswer(
         { ok: false, error: "Only published answers can be voted on" },
         409,
       );
+    }
+
+    const existingAnswerWithViewerVote = await findAnswerWithViewerVoteById(
+      params.answerId,
+      authResult.userId,
+    );
+    if (!existingAnswerWithViewerVote) {
+      return c.json({ ok: false, error: "Answer not found" }, 404);
     }
 
     const votedAnswer = await setAnswerVote(
@@ -449,6 +497,23 @@ export async function handleVoteAnswer(
     }).catch((err) => {
       console.error("Failed to replace forum answer vote activity", err);
     });
+
+    if (
+      data.voteType === "UPVOTE" &&
+      existingAnswerWithViewerVote.viewerVote !== "UPVOTE" &&
+      votedAnswer.viewerVote === "UPVOTE" &&
+      existingAnswer.authorId !== authResult.userId
+    ) {
+      notifyForumAnswerUpvoted({
+        recipientUserId: existingAnswer.authorId,
+        questionId: existingAnswer.questionId,
+        answerId: params.answerId,
+        questionTitle: question?.title,
+        upvoteCount: votedAnswer.upvoteCount,
+      }).catch((err) =>
+        console.error("Failed to notify forum answer upvote", err),
+      );
+    }
 
     return c.json(
       {

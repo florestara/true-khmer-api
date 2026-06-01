@@ -8,7 +8,7 @@ import type {
   ListNotificationsQuery,
   NotificationType,
 } from "./schema/notifications.request.schema";
-import { NOTIFICATION_ICON_MAP } from "./schema/notifications.request.schema";
+import { resolveNotificationIcon } from "./schema/notifications.request.schema";
 
 export const notificationEmitter = new EventEmitter();
 notificationEmitter.setMaxListeners(0);
@@ -20,7 +20,14 @@ function emitToUser(
     title: string;
     body: string;
     imageUrl: string | null;
+    type?: string;
+    eventType?: string | null;
+    data?: Record<string, string> | null;
+    webRoute?: string | null;
+    mobileRoute?: string | null;
+    aggregateCount?: number;
     createdAt: Date;
+    updatedAt?: Date;
   },
 ) {
   notificationEmitter.emit(`notify:${userId}`, {
@@ -28,7 +35,15 @@ function emitToUser(
     title: row.title,
     body: row.body,
     imageUrl: row.imageUrl,
+    icon: resolveNotificationIcon(row.type, row.eventType),
+    type: row.type,
+    eventType: row.eventType,
+    data: row.data,
+    webRoute: row.webRoute,
+    mobileRoute: row.mobileRoute,
+    aggregateCount: row.aggregateCount,
     createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt?.toISOString(),
   });
 }
 
@@ -78,6 +93,9 @@ export async function createNotification(opts: {
   body: string;
   imageUrl?: string;
   type?: NotificationType;
+  eventType?: string;
+  dedupeKey?: string;
+  aggregateCount?: number;
   data?: Record<string, string>;
   archived?: boolean;
   webRoute?: string;
@@ -92,6 +110,9 @@ export async function createNotification(opts: {
       body: opts.body,
       imageUrl: opts.imageUrl ?? null,
       type,
+      eventType: opts.eventType ?? null,
+      dedupeKey: opts.dedupeKey ?? null,
+      aggregateCount: opts.aggregateCount ?? 1,
       data: opts.data ?? null,
       archived: opts.archived ?? false,
       webRoute: opts.webRoute ?? null,
@@ -104,6 +125,113 @@ export async function createNotification(opts: {
   }
 
   return row;
+}
+
+export async function createOrAggregateNotification(opts: {
+  userId: string;
+  title: string;
+  body: string;
+  imageUrl?: string;
+  type?: NotificationType;
+  eventType?: string;
+  dedupeKey: string;
+  data?: Record<string, string>;
+  archived?: boolean;
+  webRoute?: string;
+  mobileRoute?: string;
+  aggregateBody?: (aggregateCount: number) => string;
+  aggregateTitle?: (aggregateCount: number) => string;
+  aggregateCount?: number;
+  incrementBy?: number;
+  reuseAfterRead?: boolean;
+}) {
+  if (opts.dedupeKey.trim().length === 0) {
+    throw new Error("Notification dedupeKey must not be empty");
+  }
+
+  const type = opts.type ?? "system";
+  const incrementBy = opts.incrementBy ?? 1;
+
+  const result = await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtext(${opts.userId}), hashtext(${opts.dedupeKey}))`,
+    );
+
+    const [existing] = await tx
+      .select()
+      .from(notification)
+      .where(
+        and(
+          eq(notification.userId, opts.userId),
+          eq(notification.dedupeKey, opts.dedupeKey),
+          opts.reuseAfterRead ? undefined : eq(notification.isRead, false),
+          eq(notification.archived, false),
+        ),
+      )
+      .orderBy(
+        sql`${notification.isRead} asc`,
+        sql`${notification.updatedAt} desc`,
+      )
+      .limit(1)
+      .for("update");
+
+    if (existing) {
+      const aggregateCount =
+        opts.aggregateCount ?? existing.aggregateCount + incrementBy;
+      const reopened = opts.reuseAfterRead === true && existing.isRead;
+      const [row] = await tx
+        .update(notification)
+        .set({
+          title: opts.aggregateTitle
+            ? opts.aggregateTitle(aggregateCount)
+            : opts.title,
+          body: opts.aggregateBody
+            ? opts.aggregateBody(aggregateCount)
+            : opts.body,
+          imageUrl: opts.imageUrl ?? existing.imageUrl,
+          type,
+          eventType: opts.eventType ?? existing.eventType,
+          aggregateCount,
+          data: opts.data ?? existing.data,
+          archived: opts.archived ?? existing.archived,
+          isRead: reopened ? false : existing.isRead,
+          readAt: reopened ? null : existing.readAt,
+          webRoute: opts.webRoute ?? existing.webRoute,
+          mobileRoute: opts.mobileRoute ?? existing.mobileRoute,
+          updatedAt: new Date(),
+        })
+        .where(eq(notification.id, existing.id))
+        .returning();
+
+      return { row, aggregated: true, reopened };
+    }
+
+    const [row] = await tx
+      .insert(notification)
+      .values({
+        userId: opts.userId,
+        title: opts.title,
+        body: opts.body,
+        imageUrl: opts.imageUrl ?? null,
+        type,
+        eventType: opts.eventType ?? null,
+        dedupeKey: opts.dedupeKey,
+        aggregateCount: opts.aggregateCount ?? incrementBy,
+        data: opts.data ?? null,
+        archived: opts.archived ?? false,
+        webRoute: opts.webRoute ?? null,
+        mobileRoute: opts.mobileRoute ?? null,
+      })
+      .returning();
+
+    return { row, aggregated: false, reopened: false };
+  });
+
+  if (result.row) {
+    emitToUser(opts.userId, result.row);
+  }
+
+  return result;
 }
 
 export async function createNotificationsForAllUsers(opts: {
@@ -132,6 +260,7 @@ export async function createNotificationsForAllUsers(opts: {
           body: opts.body,
           imageUrl: opts.imageUrl ?? null,
           type,
+          aggregateCount: 1,
           data: opts.data ?? null,
           archived: opts.archived ?? false,
           webRoute: opts.webRoute ?? null,
@@ -170,7 +299,7 @@ export async function listNotificationsForUser(
     .select()
     .from(notification)
     .where(whereClause)
-    .orderBy(sql`${notification.createdAt} desc`)
+    .orderBy(sql`${notification.updatedAt} desc`)
     .limit(query.limit)
     .offset(offset);
 

@@ -2512,6 +2512,60 @@ export async function updateManagePostingApplication(
   );
 }
 
+export async function findManagePostingApplicantNotificationTargets(
+  userId: string,
+  params: GetManagePostingDetailParam,
+): Promise<Array<{ recipientUserId: string; postingTitle: string }>> {
+  const rows =
+    params.sourceType === "volunteer"
+      ? await db
+          .select({
+            recipientUserId: volunteerApplication.applicantId,
+            postingTitle: volunteerOpportunity.title,
+          })
+          .from(volunteerApplication)
+          .innerJoin(
+            volunteerOpportunity,
+            eq(volunteerOpportunity.id, volunteerApplication.opportunityId),
+          )
+          .where(
+            and(
+              eq(volunteerApplication.opportunityId, params.postingId),
+              eq(volunteerOpportunity.createdBy, userId),
+              sql`${volunteerApplication.status} <> 'WITHDRAWN'`,
+              isNull(volunteerOpportunity.deletedAt),
+            ),
+          )
+      : await db
+          .select({
+            recipientUserId: launchpadApplication.createdBy,
+            postingTitle: launchpad.name,
+          })
+          .from(launchpadApplication)
+          .innerJoin(
+            launchpad,
+            eq(launchpad.id, launchpadApplication.launchpadId),
+          )
+          .where(
+            and(
+              eq(launchpadApplication.launchpadId, params.postingId),
+              eq(launchpad.createdBy, userId),
+              sql`${launchpadApplication.status} <> 'WITHDRAWN'`,
+              isNull(launchpad.deletedAt),
+            ),
+          );
+
+  const targetByUserId = new Map<string, string>();
+  for (const row of rows) {
+    targetByUserId.set(row.recipientUserId, row.postingTitle);
+  }
+
+  return Array.from(targetByUserId, ([recipientUserId, postingTitle]) => ({
+    recipientUserId,
+    postingTitle,
+  }));
+}
+
 export async function findManagePostingDetail(
   userId: string,
   params: GetManagePostingDetailParam,

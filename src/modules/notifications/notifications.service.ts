@@ -4,6 +4,7 @@ import { getMessaging } from "../../lib/firebase";
 import {
   countUnreadByTypeForUser,
   createNotification,
+  createOrAggregateNotification,
   createNotificationsForAllUsers,
   deleteFcmToken,
   getAllFcmTokens,
@@ -23,7 +24,563 @@ import type {
   SendToUserPayload,
   UnregisterTokenPayload,
 } from "./schema/notifications.request.schema";
-import { NOTIFICATION_ICON_MAP } from "./schema/notifications.request.schema";
+import { resolveNotificationIcon } from "./schema/notifications.request.schema";
+
+type NotificationSendResult = {
+  successCount: number;
+  failureCount: number;
+  aggregated?: boolean;
+};
+
+export type SendNotificationToUserPayload = {
+  userId: string;
+  title: string;
+  body: string;
+  imageUrl?: string;
+  type?: NotificationType;
+  eventType?: string;
+  dedupeKey?: string;
+  aggregateBody?: (aggregateCount: number) => string;
+  aggregateTitle?: (aggregateCount: number) => string;
+  aggregateCount?: number;
+  incrementBy?: number;
+  sendPushOnAggregate?: boolean;
+  reuseAfterRead?: boolean;
+  archived?: boolean;
+  data?: Record<string, string>;
+  webRoute?: string;
+  mobileRoute?: string;
+};
+
+type ForumQuestionNotificationPayload = {
+  recipientUserId: string;
+  questionId: string;
+  questionTitle?: string | null;
+};
+
+type ForumAnswerNotificationPayload = ForumQuestionNotificationPayload & {
+  answerId: string;
+};
+
+type ForumAnswerReplyNotificationPayload = ForumAnswerNotificationPayload & {
+  parentAnswerId: string;
+};
+
+type ForumQuestionUpvoteNotificationPayload =
+  ForumQuestionNotificationPayload & {
+    upvoteCount: number;
+  };
+
+type ForumAnswerUpvoteNotificationPayload = ForumAnswerNotificationPayload & {
+  upvoteCount: number;
+};
+
+type PostingNotificationSource = "volunteer" | "projects";
+
+type PostingNotificationPayload = {
+  recipientUserId: string;
+  postingId: string;
+  postingTitle?: string | null;
+  sourceType: PostingNotificationSource;
+  applicantName?: string | null;
+};
+
+type MyspaceNotificationPayload = {
+  recipientUserId: string;
+  title: string;
+  body: string;
+  eventType: string;
+  type?: NotificationType;
+  data?: Record<string, string>;
+};
+
+function withMobileRouteData(
+  data: Record<string, string> | undefined,
+  mobileRoute: string | undefined,
+) {
+  return mobileRoute ? { ...data, route: mobileRoute } : data;
+}
+
+function forumQuestionRoute(questionId: string) {
+  return `/forum/detail/${questionId}`;
+}
+
+function forumAnswerRoute(questionId: string, answerId: string) {
+  return `${forumQuestionRoute(questionId)}#answer-${answerId}`;
+}
+
+function managePostingRoute(
+  sourceType: PostingNotificationSource,
+  postingId: string,
+) {
+  return `/manage-post/${sourceType}/${postingId}`;
+}
+
+function myApplicationRoute(
+  sourceType: PostingNotificationSource,
+  postingId: string,
+) {
+  return `/my-applications/detail/${sourceType}/${postingId}`;
+}
+
+function quoteTitle(title?: string | null) {
+  const normalizedTitle = title?.trim();
+  return normalizedTitle ? `"${normalizedTitle}"` : null;
+}
+
+async function sendMobilePushToUser(
+  userId: string,
+  payload: {
+    title: string;
+    body: string;
+    imageUrl?: string;
+    data?: Record<string, string>;
+    mobileRoute?: string;
+  },
+): Promise<NotificationSendResult> {
+  const allTokens = await getFcmTokensByUserId(userId);
+  const mobileTokens = allTokens.filter(
+    (t) => t.platform === "android" || t.platform === "ios",
+  );
+
+  if (mobileTokens.length === 0) {
+    return { successCount: 0, failureCount: 0 };
+  }
+
+  const messaging = getMessaging();
+  const CHUNK_SIZE = 500;
+  let successCount = 0;
+  let failureCount = 0;
+
+  for (let i = 0; i < mobileTokens.length; i += CHUNK_SIZE) {
+    const chunk = mobileTokens.slice(i, i + CHUNK_SIZE);
+    const result = await messaging.sendEachForMulticast({
+      tokens: chunk.map((t) => t.token),
+      notification: {
+        title: payload.title,
+        body: payload.body,
+        imageUrl: payload.imageUrl,
+      },
+      data: withMobileRouteData(payload.data, payload.mobileRoute),
+    });
+    successCount += result.successCount;
+    failureCount += result.failureCount;
+  }
+
+  return { successCount, failureCount };
+}
+
+/**
+ * Internal backend helper for system-triggered notifications.
+ *
+ * This stores the notification row, emits the realtime SSE event via
+ * createNotification, then sends mobile FCM to the recipient's android/ios
+ * tokens. Callers should pass trusted server-computed title/body/routes.
+ */
+export async function sendNotificationToUser(
+  payload: SendNotificationToUserPayload,
+): Promise<NotificationSendResult> {
+  if (payload.dedupeKey) {
+    const result = await createOrAggregateNotification({
+      userId: payload.userId,
+      title: payload.title,
+      body: payload.body,
+      imageUrl: payload.imageUrl,
+      type: payload.type,
+      eventType: payload.eventType,
+      dedupeKey: payload.dedupeKey,
+      archived: payload.archived,
+      data: payload.data,
+      webRoute: payload.webRoute,
+      mobileRoute: payload.mobileRoute,
+      aggregateBody: payload.aggregateBody,
+      aggregateTitle: payload.aggregateTitle,
+      aggregateCount: payload.aggregateCount,
+      incrementBy: payload.incrementBy,
+      reuseAfterRead: payload.reuseAfterRead,
+    });
+
+    if (
+      result.aggregated &&
+      !result.reopened &&
+      !payload.sendPushOnAggregate
+    ) {
+      return { successCount: 0, failureCount: 0, aggregated: true };
+    }
+
+    const pushResult = await sendMobilePushToUser(payload.userId, payload);
+    return { ...pushResult, aggregated: result.aggregated };
+  }
+
+  await createNotification({
+    userId: payload.userId,
+    title: payload.title,
+    body: payload.body,
+    imageUrl: payload.imageUrl,
+    type: payload.type,
+    eventType: payload.eventType,
+    archived: payload.archived,
+    data: payload.data,
+    webRoute: payload.webRoute,
+    mobileRoute: payload.mobileRoute,
+  });
+
+  const pushResult = await sendMobilePushToUser(payload.userId, payload);
+  return { ...pushResult, aggregated: false };
+}
+
+export function notifyForumAnswerCreated(
+  payload: ForumAnswerNotificationPayload,
+) {
+  const route = forumAnswerRoute(payload.questionId, payload.answerId);
+  const questionTitle = quoteTitle(payload.questionTitle);
+
+  return sendNotificationToUser({
+    userId: payload.recipientUserId,
+    title: "Someone answered your question",
+    body: questionTitle
+      ? `A new answer was posted on ${questionTitle}`
+      : "A new answer was posted on your question",
+    type: "forum",
+    eventType: "forum_answer_created",
+    dedupeKey: `forum_answer_created:${payload.questionId}`,
+    aggregateBody: (count) =>
+      questionTitle
+        ? `${count} new answers were posted on ${questionTitle}`
+        : `${count} new answers were posted on your question`,
+    data: {
+      questionId: payload.questionId,
+      answerId: payload.answerId,
+    },
+    webRoute: route,
+    mobileRoute: route,
+  });
+}
+
+export function notifyForumAnswerReplyCreated(
+  payload: ForumAnswerReplyNotificationPayload,
+) {
+  const route = forumAnswerRoute(payload.questionId, payload.answerId);
+  const questionTitle = quoteTitle(payload.questionTitle);
+
+  return sendNotificationToUser({
+    userId: payload.recipientUserId,
+    title: "Someone replied to your answer",
+    body: questionTitle
+      ? `A new reply was posted on ${questionTitle}`
+      : "A new reply was posted on your answer",
+    type: "forum",
+    eventType: "forum_answer_reply_created",
+    dedupeKey: `forum_answer_reply_created:${payload.parentAnswerId}`,
+    aggregateBody: (count) =>
+      questionTitle
+        ? `${count} new replies were posted to your answer on ${questionTitle}`
+        : `${count} new replies were posted to your answer`,
+    data: {
+      questionId: payload.questionId,
+      answerId: payload.answerId,
+      parentAnswerId: payload.parentAnswerId,
+    },
+    webRoute: route,
+    mobileRoute: route,
+  });
+}
+
+export function notifyForumQuestionUpvoted(
+  payload: ForumQuestionUpvoteNotificationPayload,
+) {
+  const route = forumQuestionRoute(payload.questionId);
+  const questionTitle = quoteTitle(payload.questionTitle);
+  const formatBody = (count: number) =>
+    questionTitle
+      ? `${count} ${count === 1 ? "person" : "people"} upvoted ${questionTitle}`
+      : `${count} ${count === 1 ? "person" : "people"} upvoted your question`;
+
+  return sendNotificationToUser({
+    userId: payload.recipientUserId,
+    title: "Your question got an upvote",
+    body: formatBody(payload.upvoteCount),
+    type: "forum",
+    eventType: "forum_question_upvoted",
+    dedupeKey: `forum_question_upvoted:${payload.questionId}`,
+    reuseAfterRead: true,
+    aggregateCount: payload.upvoteCount,
+    aggregateBody: formatBody,
+    data: {
+      questionId: payload.questionId,
+    },
+    webRoute: route,
+    mobileRoute: route,
+  });
+}
+
+export function notifyForumAnswerUpvoted(
+  payload: ForumAnswerUpvoteNotificationPayload,
+) {
+  const route = forumAnswerRoute(payload.questionId, payload.answerId);
+  const questionTitle = quoteTitle(payload.questionTitle);
+  const formatBody = (count: number) =>
+    questionTitle
+      ? `${count} ${count === 1 ? "person" : "people"} upvoted your answer on ${questionTitle}`
+      : `${count} ${count === 1 ? "person" : "people"} upvoted your answer`;
+
+  return sendNotificationToUser({
+    userId: payload.recipientUserId,
+    title: "Your answer got an upvote",
+    body: formatBody(payload.upvoteCount),
+    type: "forum",
+    eventType: "forum_answer_upvoted",
+    dedupeKey: `forum_answer_upvoted:${payload.answerId}`,
+    reuseAfterRead: true,
+    aggregateCount: payload.upvoteCount,
+    aggregateBody: formatBody,
+    data: {
+      questionId: payload.questionId,
+      answerId: payload.answerId,
+    },
+    webRoute: route,
+    mobileRoute: route,
+  });
+}
+
+export function notifyForumBestAnswerSelected(
+  payload: ForumAnswerNotificationPayload,
+) {
+  const route = forumAnswerRoute(payload.questionId, payload.answerId);
+  const questionTitle = quoteTitle(payload.questionTitle);
+
+  return sendNotificationToUser({
+    userId: payload.recipientUserId,
+    title: "Your answer was selected",
+    body: questionTitle
+      ? `Your answer was selected as best answer on ${questionTitle}`
+      : "Your answer was selected as the best answer",
+    type: "achievement",
+    eventType: "forum_best_answer_selected",
+    data: {
+      questionId: payload.questionId,
+      answerId: payload.answerId,
+    },
+    webRoute: route,
+    mobileRoute: route,
+  });
+}
+
+export function notifyApplicationReceived(payload: PostingNotificationPayload) {
+  const route = managePostingRoute(payload.sourceType, payload.postingId);
+  const title = payload.postingTitle ?? "your posting";
+
+  return sendNotificationToUser({
+    userId: payload.recipientUserId,
+    title: "New application received",
+    body: payload.applicantName
+      ? `${payload.applicantName} applied to ${title}`
+      : `Someone applied to ${title}`,
+    type:
+      payload.sourceType === "projects" ? "launchpad_update" : "application",
+    eventType: `${payload.sourceType}_application_received`,
+    data: {
+      postingId: payload.postingId,
+      sourceType: payload.sourceType,
+    },
+    webRoute: route,
+    mobileRoute: route,
+  });
+}
+
+export function notifyApplicantApplicationUnderReview(
+  payload: PostingNotificationPayload,
+) {
+  const route = myApplicationRoute(payload.sourceType, payload.postingId);
+
+  return sendNotificationToUser({
+    userId: payload.recipientUserId,
+    title: "Application under review",
+    body: payload.postingTitle
+      ? `Your application for ${payload.postingTitle} is under review`
+      : "Your application is under review",
+    type:
+      payload.sourceType === "projects" ? "launchpad_update" : "application",
+    eventType: `${payload.sourceType}_application_under_review`,
+    data: {
+      postingId: payload.postingId,
+      sourceType: payload.sourceType,
+    },
+    webRoute: route,
+    mobileRoute: route,
+  });
+}
+
+export function notifyApplicantApplicationApproved(
+  payload: PostingNotificationPayload,
+) {
+  const route = myApplicationRoute(payload.sourceType, payload.postingId);
+
+  return sendNotificationToUser({
+    userId: payload.recipientUserId,
+    title: "Application approved",
+    body: payload.postingTitle
+      ? `Your application for ${payload.postingTitle} was approved`
+      : "Your application was approved",
+    type:
+      payload.sourceType === "projects" ? "launchpad_update" : "application",
+    eventType: `${payload.sourceType}_application_approved`,
+    data: {
+      postingId: payload.postingId,
+      sourceType: payload.sourceType,
+    },
+    webRoute: route,
+    mobileRoute: route,
+  });
+}
+
+export function notifyApplicantApplicationDeclined(
+  payload: PostingNotificationPayload,
+) {
+  const route = myApplicationRoute(payload.sourceType, payload.postingId);
+
+  return sendNotificationToUser({
+    userId: payload.recipientUserId,
+    title: "Application declined",
+    body: payload.postingTitle
+      ? `Your application for ${payload.postingTitle} was declined`
+      : "Your application was declined",
+    type:
+      payload.sourceType === "projects" ? "launchpad_update" : "application",
+    eventType: `${payload.sourceType}_application_declined`,
+    data: {
+      postingId: payload.postingId,
+      sourceType: payload.sourceType,
+    },
+    webRoute: route,
+    mobileRoute: route,
+  });
+}
+
+export function notifyApplicantApplicationDeadlineExtended(
+  payload: PostingNotificationPayload,
+) {
+  const route = myApplicationRoute(payload.sourceType, payload.postingId);
+
+  return sendNotificationToUser({
+    userId: payload.recipientUserId,
+    title: "Application deadline extended",
+    body: payload.postingTitle
+      ? `The deadline for ${payload.postingTitle} was extended`
+      : "An application deadline was extended",
+    type: "event_reminder",
+    eventType: `${payload.sourceType}_deadline_extended`,
+    data: {
+      postingId: payload.postingId,
+      sourceType: payload.sourceType,
+    },
+    webRoute: route,
+    mobileRoute: route,
+  });
+}
+
+export function notifyApplicantPostingStatusChanged(
+  payload: PostingNotificationPayload & {
+    status: "closed" | "canceled" | "completed" | "in_progress";
+  },
+) {
+  const route = myApplicationRoute(payload.sourceType, payload.postingId);
+  const titleByStatus = {
+    closed: "Posting closed",
+    canceled: "Posting canceled",
+    completed: "Posting completed",
+    in_progress: "Posting in progress",
+  } as const;
+  const bodyByStatus = {
+    closed: payload.postingTitle
+      ? `${payload.postingTitle} was closed`
+      : "A posting you applied to was closed",
+    canceled: payload.postingTitle
+      ? `${payload.postingTitle} was canceled`
+      : "A posting you applied to was canceled",
+    completed: payload.postingTitle
+      ? `${payload.postingTitle} was completed`
+      : "A posting you applied to was completed",
+    in_progress: payload.postingTitle
+      ? `${payload.postingTitle} is now in progress`
+      : "A posting you applied to is now in progress",
+  } as const;
+
+  return sendNotificationToUser({
+    userId: payload.recipientUserId,
+    title: titleByStatus[payload.status],
+    body: bodyByStatus[payload.status],
+    type:
+      payload.sourceType === "projects" ? "launchpad_update" : "application",
+    eventType: `${payload.sourceType}_posting_${payload.status}`,
+    data: {
+      postingId: payload.postingId,
+      sourceType: payload.sourceType,
+      status: payload.status,
+    },
+    webRoute: route,
+    mobileRoute: route,
+  });
+}
+
+export function notifyApplicantParticipationConfirmed(
+  payload: PostingNotificationPayload,
+) {
+  const route = managePostingRoute(payload.sourceType, payload.postingId);
+
+  return sendNotificationToUser({
+    userId: payload.recipientUserId,
+    title: "Applicant confirmed participation",
+    body: payload.applicantName
+      ? `${payload.applicantName} confirmed participation`
+      : "An applicant confirmed participation",
+    type:
+      payload.sourceType === "projects" ? "launchpad_update" : "application",
+    eventType: `${payload.sourceType}_application_confirmed`,
+    data: {
+      postingId: payload.postingId,
+      sourceType: payload.sourceType,
+    },
+    webRoute: route,
+    mobileRoute: route,
+  });
+}
+
+export function notifyApplicantApplicationWithdrawn(
+  payload: PostingNotificationPayload,
+) {
+  const route = managePostingRoute(payload.sourceType, payload.postingId);
+
+  return sendNotificationToUser({
+    userId: payload.recipientUserId,
+    title: "Applicant withdrew application",
+    body: payload.applicantName
+      ? `${payload.applicantName} withdrew their application`
+      : "An applicant withdrew their application",
+    type:
+      payload.sourceType === "projects" ? "launchpad_update" : "application",
+    eventType: `${payload.sourceType}_application_withdrawn`,
+    data: {
+      postingId: payload.postingId,
+      sourceType: payload.sourceType,
+    },
+    webRoute: route,
+    mobileRoute: route,
+  });
+}
+
+export function notifyMyspaceAchievement(payload: MyspaceNotificationPayload) {
+  return sendNotificationToUser({
+    userId: payload.recipientUserId,
+    title: payload.title,
+    body: payload.body,
+    type: payload.type ?? "achievement",
+    eventType: payload.eventType,
+    data: payload.data,
+    webRoute: "/myspace",
+    mobileRoute: "/myspace",
+  });
+}
 
 export async function handleRegisterToken(
   c: Context,
@@ -189,6 +746,7 @@ export async function handleListNotifications(
 
     // Get all notification types from the enum
     const allTypes = [
+      "forum",
       "profile_view",
       "new_message",
       "achievement",
@@ -210,15 +768,17 @@ export async function handleListNotifications(
       title: n.title,
       body: n.body,
       imageUrl: n.imageUrl,
-      icon:
-        NOTIFICATION_ICON_MAP[n.type as NotificationType] ??
-        NOTIFICATION_ICON_MAP.system,
+      icon: resolveNotificationIcon(n.type, n.eventType),
       type: n.type,
+      eventType: n.eventType,
+      dedupeKey: n.dedupeKey,
+      aggregateCount: n.aggregateCount,
       data: n.data as Record<string, string> | null,
       isRead: n.isRead,
       readAt: n.readAt ? n.readAt.toISOString() : null,
       archived: n.archived,
       createdAt: n.createdAt.toISOString(),
+      updatedAt: n.updatedAt.toISOString(),
       webRoute: n.webRoute,
       mobileRoute: n.mobileRoute,
     }));
