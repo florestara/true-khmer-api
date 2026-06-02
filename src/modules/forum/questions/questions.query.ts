@@ -456,7 +456,7 @@ function hydratePublicQuestion(
 }
 
 function buildQuestionsBaseQuery(
-  viewerId: string,
+  viewerId: string | undefined,
   trendingRankingTimestampSql: SQL = sql`statement_timestamp()`,
 ) {
   const trendingScore = buildTrendingScoreSql(trendingRankingTimestampSql);
@@ -487,14 +487,14 @@ function buildQuestionsBaseQuery(
       forumQuestionVote,
       and(
         eq(forumQuestionVote.questionId, forumQuestion.id),
-        eq(forumQuestionVote.voterId, viewerId),
+        viewerId ? eq(forumQuestionVote.voterId, viewerId) : sql`false`,
       ),
     )
     .leftJoin(
       forumQuestionSave,
       and(
         eq(forumQuestionSave.questionId, forumQuestion.id),
-        eq(forumQuestionSave.saverId, viewerId),
+        viewerId ? eq(forumQuestionSave.saverId, viewerId) : sql`false`,
       ),
     );
 }
@@ -709,8 +709,13 @@ function buildQuestionsWhereClause(
   trendingRankingTimestampSql: SQL = sql`statement_timestamp()`,
   sortBy: QuestionSortBy = "mostRelevant",
   cursor?: QuestionsPageCursor,
+  authorId?: string,
 ) {
   const filters = [inArray(forumQuestion.status, VISIBLE_QUESTION_STATUSES)];
+
+  if (authorId) {
+    filters.push(eq(forumQuestion.authorId, authorId));
+  }
 
   if (categoryId) {
     filters.push(eq(forumQuestion.categoryId, categoryId));
@@ -783,6 +788,7 @@ async function countQuestions(
     sortBy,
   }: Omit<GetQuestionsQuery, "limit" | "cursor">,
   trendingRankingTimestampSql: SQL,
+  authorId?: string,
 ) {
   const [result] = await db
     .select({ total: sql<number>`count(*)::int` })
@@ -799,6 +805,8 @@ async function countQuestions(
         isTrending,
         trendingRankingTimestampSql,
         sortBy,
+        undefined,
+        authorId,
       ),
     );
 
@@ -989,6 +997,31 @@ export async function findQuestionById(
   return hydrateQuestion(questionRow, tags);
 }
 
+export async function findQuestionsPostedByUserId(
+  userId: string,
+  query: GetQuestionsQuery,
+  viewerId?: string,
+): Promise<QuestionsListResult> {
+  return findQuestions(query, viewerId, userId);
+}
+
+export async function countQuestionsPostedByUserId(
+  userId: string,
+): Promise<number> {
+  return countQuestions(
+    {
+      categoryId: undefined,
+      tagId: undefined,
+      search: undefined,
+      isUnanswered: false,
+      isTrending: false,
+      sortBy: "newest",
+    },
+    sql`statement_timestamp()`,
+    userId,
+  );
+}
+
 export async function findQuestionByIdPublic(
   id: string,
 ): Promise<ForumQuestionWithTags | null> {
@@ -1086,7 +1119,8 @@ export async function findQuestions(
     sortBy,
     cursor,
   }: GetQuestionsQuery,
-  viewerId: string,
+  viewerId: string | undefined,
+  authorId?: string,
 ): Promise<QuestionsListResult> {
   const trendingRankingTimestampSql =
     buildTrendingRankingTimestampSql(cursor);
@@ -1099,6 +1133,7 @@ export async function findQuestions(
     trendingRankingTimestampSql,
     sortBy,
     cursor,
+    authorId,
   );
   const baseQuery = buildQuestionsBaseQuery(
     viewerId,
@@ -1125,6 +1160,7 @@ export async function findQuestions(
         sortBy,
       },
       trendingRankingTimestampSql,
+      authorId,
     ),
   ]);
   const { pageRows: questionRows, pagination } =

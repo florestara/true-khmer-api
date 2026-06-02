@@ -61,6 +61,11 @@ const ACTIVE_VOLUNTEER_APPLICATION_STATUSES = [
   "CONFIRMED",
   "COMPLETED",
 ] as const;
+const PUBLIC_PROFILE_VOLUNTEER_OPPORTUNITY_STATUSES = [
+  "LIVE",
+  "IN_PROGRESS",
+  "COMPLETED",
+] as const;
 const DEFAULT_VOLUNTEER_ROLE_COMMITMENT_LABEL = "Regular";
 
 type VolunteerCategoryRow = typeof volunteerCategory.$inferSelect;
@@ -867,17 +872,27 @@ function buildVolunteerOpportunitiesWhereClause({
   locationId,
   search,
   cursor,
+  ownerId,
 }: Pick<
   GetVolunteerOpportunitiesQuery,
   "categoryId" | "locationId" | "search" | "cursor"
->) {
+> & { ownerId?: string }) {
   const filters: SQL<unknown>[] = [
-    eq(volunteerOpportunity.status, "LIVE"),
+    ownerId
+      ? inArray(
+          volunteerOpportunity.status,
+          PUBLIC_PROFILE_VOLUNTEER_OPPORTUNITY_STATUSES,
+        )
+      : eq(volunteerOpportunity.status, "LIVE"),
     isNull(volunteerOpportunity.deletedAt),
     eq(volunteerCategory.status, "ACTIVE"),
     eq(city.isActive, true),
     isNotNull(volunteerOpportunity.publishedAt),
   ];
+
+  if (ownerId) {
+    filters.push(eq(volunteerOpportunity.createdBy, ownerId));
+  }
 
   if (categoryId) {
     filters.push(eq(volunteerOpportunity.categoryId, categoryId));
@@ -957,7 +972,10 @@ async function countVolunteerOpportunities({
   categoryId,
   locationId,
   search,
-}: Omit<GetVolunteerOpportunitiesQuery, "limit" | "cursor">) {
+  ownerId,
+}: Omit<GetVolunteerOpportunitiesQuery, "limit" | "cursor"> & {
+  ownerId?: string;
+}) {
   const [result] = await db
     .select({ total: sql<number>`count(*)::int` })
     .from(volunteerOpportunity)
@@ -972,6 +990,7 @@ async function countVolunteerOpportunities({
         locationId,
         search,
         cursor: undefined,
+        ownerId,
       }),
     );
 
@@ -1457,6 +1476,7 @@ export async function getVolunteerOpportunities(
     cursor,
   }: GetVolunteerOpportunitiesQuery,
   viewerId?: string,
+  ownerId?: string,
 ): Promise<VolunteerOpportunitiesListResult> {
   const rowsQuery = db
     .select({
@@ -1482,6 +1502,7 @@ export async function getVolunteerOpportunities(
         locationId,
         search,
         cursor,
+        ownerId,
       }),
     )
     .orderBy(
@@ -1497,6 +1518,7 @@ export async function getVolunteerOpportunities(
       categoryId,
       locationId,
       search,
+      ownerId,
     }),
   ]);
   const { pageRows: paginatedRows, pagination } =
@@ -1534,6 +1556,25 @@ export async function getVolunteerOpportunities(
     opportunities,
     pagination,
   };
+}
+
+export async function getVolunteerOpportunitiesPostedByUserId(
+  userId: string,
+  query: GetVolunteerOpportunitiesQuery,
+  viewerId?: string,
+): Promise<VolunteerOpportunitiesListResult> {
+  return getVolunteerOpportunities(query, viewerId, userId);
+}
+
+export async function countVolunteerOpportunitiesPostedByUserId(
+  userId: string,
+): Promise<number> {
+  return countVolunteerOpportunities({
+    categoryId: undefined,
+    locationId: undefined,
+    search: undefined,
+    ownerId: userId,
+  });
 }
 
 export async function incrementVolunteerOpportunityViewCount(

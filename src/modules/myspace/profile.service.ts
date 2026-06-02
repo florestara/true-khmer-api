@@ -2,8 +2,11 @@ import type { Context } from "hono";
 import { getAuthUserId } from "../auth/utils/get-auth";
 import { validateCountryCityIds } from "../onboarding/onboarding.query";
 import { resolveR2PublicUrl } from "../uploads/uploads.service";
-import { getProfile, updateProfile } from "./profile.query";
-import type { UpdateProfilePayload } from "./profile.schema";
+import { getProfile, getPublicProfile, updateProfile } from "./profile.query";
+import type {
+  GetPublicProfileParams,
+  UpdateProfilePayload,
+} from "./profile.schema";
 
 function normalizeOwnedAvatarKey(userId: string, avatarKey: string): string | null {
   const rawKey = avatarKey.startsWith("/") ? avatarKey.slice(1) : avatarKey;
@@ -51,6 +54,23 @@ export async function handleGetProfile(c: Context) {
     return c.json({ ok: true, profile }, 200);
   } catch (err) {
     console.error("Failed to get profile", err);
+    return c.json({ ok: false, error: "Internal server error" }, 500);
+  }
+}
+
+export async function handleGetPublicProfile(
+  c: Context,
+  params: GetPublicProfileParams,
+) {
+  try {
+    const result = await getPublicProfile(params.userId);
+    if (!result) {
+      return c.json({ ok: false, error: "User not found" }, 404);
+    }
+
+    return c.json({ ok: true, profile: result.profile }, 200);
+  } catch (err) {
+    console.error("Failed to get public profile", err);
     return c.json({ ok: false, error: "Internal server error" }, 500);
   }
 }

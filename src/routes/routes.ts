@@ -18,6 +18,7 @@ import { launchpadRouter } from "../modules/launchpad/launchpad.router";
 import { launchpadApplicationsRouter } from "../modules/launchpad/applications/applications.router";
 import { myApplicationsRouter } from "../modules/my-application/my-application.router";
 import { myspaceRouter } from "../modules/myspace/myspace.router";
+import { publicProfileRouter } from "../modules/myspace/public-profile.router";
 import { managePostingRouter } from "../modules/workspace/manage-posting/manage-posting.router";
 import { notificationsRouter } from "../modules/notifications/notifications.router";
 
@@ -41,6 +42,7 @@ routes.route("/launchpad", launchpadRouter);
 routes.route("/launchpad", launchpadApplicationsRouter);
 routes.route("/my-application", myApplicationsRouter);
 routes.route("/me", myspaceRouter);
+routes.route("/profile", publicProfileRouter);
 routes.route("/workspace/manage-posting", managePostingRouter);
 routes.route("/notifications", notificationsRouter);
 

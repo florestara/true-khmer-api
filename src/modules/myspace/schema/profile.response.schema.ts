@@ -85,6 +85,65 @@ export const updateProfileResponseSchema = profileResponseSchema.openapi(
   "UpdateProfileResponse",
 );
 
+export const publicProfileResponseSchema = z
+  .object({
+    ok: z.literal(true),
+    profile: z.object({
+      user: z.object({
+        id: z.string(),
+        firstName: z.string(),
+        lastName: z.string(),
+        displayName: z.string().nullable(),
+        occupation: z.string().nullable(),
+        email: z.string().nullable(),
+        phoneNumber: z.string().nullable(),
+        telegramUsername: z.string().nullable(),
+      }),
+      profile: z.object({
+        avatarKey: z.string().nullable(),
+        avatarUrl: z.string().nullable(),
+        bio: z.string().nullable(),
+        country: z
+          .object({
+            id: z.string(),
+            name: z.string(),
+            iso2: z.string().nullable(),
+          })
+          .nullable(),
+        city: z
+          .object({
+            id: z.string(),
+            name: z.string(),
+          })
+          .nullable(),
+      }),
+      skills: z.array(z.object({ id: z.string(), name: z.string() })),
+      socialLinks: z.object({
+        website: z.string().nullable(),
+        linkedin: z.string().nullable(),
+        twitter: z.string().nullable(),
+        facebook: z.string().nullable(),
+      }),
+      tier: z
+        .object({
+          id: z.string(),
+          slug: z.string(),
+          name: z.string(),
+          rankOrder: z.number(),
+          minPoints: z.number(),
+        })
+        .nullable(),
+      postedCounts: z
+        .object({
+          forum: z.number().int().nonnegative(),
+          volunteer: z.number().int().nonnegative(),
+          project: z.number().int().nonnegative(),
+        })
+        .nullable(),
+    }),
+  })
+  .openapi("PublicProfileResponse");
+
 export const profileErrorResponseSchema = z
   .object({
     ok: z.literal(false),
