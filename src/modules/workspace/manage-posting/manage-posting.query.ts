@@ -2161,6 +2161,32 @@ async function updateVolunteerManagePostingAction(
       createdBy: userId,
     });
 
+    if (decision.action === "COMPLETE") {
+      const completedApplications = await tx
+        .update(volunteerApplication)
+        .set({
+          status: "COMPLETED",
+          updatedAt: sql`now()`,
+        })
+        .where(
+          and(
+            eq(volunteerApplication.opportunityId, params.postingId),
+            eq(volunteerApplication.status, "CONFIRMED"),
+          ),
+        )
+        .returning({ id: volunteerApplication.id });
+
+      if (completedApplications.length > 0) {
+        await tx.insert(volunteerApplicationLog).values(
+          completedApplications.map((application) => ({
+            volunteerApplicationId: application.id,
+            status: "COMPLETED" as const,
+            createdBy: userId,
+          })),
+        );
+      }
+    }
+
     return updated ? ("updated" as const) : ("not_found" as const);
   });
 
@@ -2271,6 +2297,32 @@ async function updateProjectManagePostingAction(
       createdBy: userId,
     });
 
+    if (decision.action === "COMPLETE") {
+      const completedApplications = await tx
+        .update(launchpadApplication)
+        .set({
+          status: "COMPLETED",
+          updatedAt: sql`now()`,
+        })
+        .where(
+          and(
+            eq(launchpadApplication.launchpadId, params.postingId),
+            eq(launchpadApplication.status, "CONFIRMED"),
+          ),
+        )
+        .returning({ id: launchpadApplication.id });
+
+      if (completedApplications.length > 0) {
+        await tx.insert(launchpadApplicationLog).values(
+          completedApplications.map((application) => ({
+            launchpadApplicationId: application.id,
+            status: "COMPLETED" as const,
+            createdBy: userId,
+          })),
+        );
+      }
+    }
+
     return updated ? ("updated" as const) : ("not_found" as const);
   });
 
@@ -2299,6 +2351,48 @@ export async function updateManagePostingAction(
   }
 
   return updateProjectManagePostingAction(userId, params);
+}
+
+export async function findManagePostingCompletionPointTargets(
+  userId: string,
+  params: UpdateManagePostingActionParam,
+) {
+  if (params.sourceType === "volunteer") {
+    return db
+      .select({
+        applicationId: volunteerApplication.id,
+        applicantId: volunteerApplication.applicantId,
+      })
+      .from(volunteerApplication)
+      .innerJoin(
+        volunteerOpportunity,
+        eq(volunteerOpportunity.id, volunteerApplication.opportunityId),
+      )
+      .where(
+        and(
+          eq(volunteerApplication.opportunityId, params.postingId),
+          eq(volunteerApplication.status, "COMPLETED"),
+          eq(volunteerOpportunity.createdBy, userId),
+          isNull(volunteerOpportunity.deletedAt),
+        ),
+      );
+  }
+
+  return db
+    .select({
+      applicationId: launchpadApplication.id,
+      applicantId: launchpadApplication.createdBy,
+    })
+    .from(launchpadApplication)
+    .innerJoin(launchpad, eq(launchpad.id, launchpadApplication.launchpadId))
+    .where(
+      and(
+        eq(launchpadApplication.launchpadId, params.postingId),
+        eq(launchpadApplication.status, "COMPLETED"),
+        eq(launchpad.createdBy, userId),
+        isNull(launchpad.deletedAt),
+      ),
+    );
 }
 
 async function extendVolunteerManagePostingDeadline(

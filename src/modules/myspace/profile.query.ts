@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../../db/index";
 import {
+  badge,
   city,
   country,
   skill,
@@ -10,8 +11,10 @@ import {
   userProgress,
   userSkill,
   userSocialLink,
+  userBadge,
 } from "../../db/schema";
 import type { UpdateProfilePayload } from "./profile.schema";
+import { evaluateProfileCompleteBadge } from "../badges/badges.service";
 import { countQuestionsPostedByUserId } from "../forum/questions/questions.query";
 import { countLaunchpadsPostedByUserId } from "../launchpad/launchpad.query";
 import { countVolunteerOpportunitiesPostedByUserId } from "../volunteer/post-volunteer/post-volunteer.query";
@@ -153,7 +156,7 @@ export async function getProfile(userId: string) {
     return null;
   }
 
-  const [profileRows, skillRows, socialRows, progressRows] = await Promise.all([
+  const [profileRows, skillRows, socialRows, progressRows, badgeRows] = await Promise.all([
     db
       .select({
         displayName: userProfile.displayName,
@@ -207,6 +210,18 @@ export async function getProfile(userId: string) {
       .where(eq(userProgress.userId, userId))
       .orderBy(desc(userProgress.totalPoints))
       .limit(1),
+    db
+      .select({
+        slug: badge.slug,
+        name: badge.name,
+        description: badge.description,
+        category: badge.category,
+        awardedAt: userBadge.awardedAt,
+      })
+      .from(userBadge)
+      .innerJoin(badge, eq(badge.id, userBadge.badgeId))
+      .where(eq(userBadge.userId, userId))
+      .orderBy(desc(userBadge.awardedAt), badge.name),
   ]);
 
   const profileRow = profileRows[0];
@@ -272,6 +287,7 @@ export async function getProfile(userId: string) {
             }
           : null,
     },
+    badges: badgeRows,
   };
 }
 
@@ -437,6 +453,10 @@ export async function updateProfile(
   if (!updated) {
     return null;
   }
+
+  await evaluateProfileCompleteBadge(userId).catch((err) =>
+    console.error("Failed to evaluate profile complete badge", err),
+  );
 
   return getProfile(userId);
 }

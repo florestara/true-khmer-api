@@ -3,6 +3,7 @@ import { getAuthUserId } from "../../auth/utils/get-auth";
 import {
   declineManagePostingApplication,
   extendManagePostingDeadline,
+  findManagePostingCompletionPointTargets,
   findManagePostingCandidate,
   findManagePostingApplicantNotificationTargets,
   findManagePostingDetail,
@@ -11,6 +12,7 @@ import {
   updateManagePostingApplication,
   upsertManagePostingCandidateNote,
 } from "./manage-posting.query";
+import { awardPoints } from "../../points/points.service";
 import {
   notifyApplicantApplicationApproved,
   notifyApplicantApplicationDeadlineExtended,
@@ -30,6 +32,12 @@ import type {
   UpsertManagePostingCandidateNoteBody,
   UpdateManagePostingActionParam,
 } from "./manage-posting.schema";
+import {
+  awardFirstContributionBadge,
+  evaluateLaunchpadBuilderBadge,
+  evaluateLaunchpadParticipantCompletionBadges,
+  evaluateVolunteerCompletionBadges,
+} from "../../badges/badges.service";
 
 async function notifyPostingApplicantsDeadlineExtended(
   userId: string,
@@ -73,6 +81,55 @@ async function notifyPostingApplicantsStatusChanged(
       }),
     ),
   );
+}
+
+async function awardPostingCompletionPoints(
+  userId: string,
+  params: UpdateManagePostingActionParam,
+) {
+  const targets = await findManagePostingCompletionPointTargets(userId, params);
+  const participantActionKey =
+    params.sourceType === "volunteer"
+      ? ("volunteer_mission_completed" as const)
+      : ("launchpad_completion_participant" as const);
+  const participantReferenceType =
+    params.sourceType === "volunteer"
+      ? "volunteer_application"
+      : "launchpad_application";
+  const awards = targets.map(async (target) => {
+    await Promise.all([
+      awardPoints({
+        userId: target.applicantId,
+        actionKey: participantActionKey,
+        referenceType: participantReferenceType,
+        referenceId: target.applicationId,
+      }),
+      awardFirstContributionBadge(target.applicantId),
+    ]);
+
+    if (params.sourceType === "volunteer") {
+      await evaluateVolunteerCompletionBadges(target.applicantId);
+      return;
+    }
+
+    await evaluateLaunchpadParticipantCompletionBadges(target.applicantId);
+  });
+
+  if (params.sourceType === "projects") {
+    awards.push(
+      Promise.all([
+        awardPoints({
+          userId,
+          actionKey: "launchpad_completion_proposer",
+          referenceType: "launchpad",
+          referenceId: params.postingId,
+        }),
+        evaluateLaunchpadBuilderBadge(userId),
+      ]).then(() => undefined),
+    );
+  }
+
+  await Promise.all(awards);
 }
 
 export async function handleGetManagePostings(
@@ -220,6 +277,12 @@ export async function handleUpdateManagePostingAction(
         notificationStatus,
       ).catch((err) =>
         console.error("Failed to notify posting status changed", err),
+      );
+    }
+
+    if (params.postingAction === "mark_complete") {
+      await awardPostingCompletionPoints(authResult.userId, params).catch(
+        (err) => console.error("Failed to award posting completion points", err),
       );
     }
 

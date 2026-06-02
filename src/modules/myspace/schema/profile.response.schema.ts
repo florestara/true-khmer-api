@@ -62,6 +62,21 @@ export const profileResponseSchema = z
           })
           .nullable(),
       }),
+      badges: z.array(
+        z.object({
+          slug: z.string(),
+          name: z.string(),
+          description: z.string(),
+          category: z.enum([
+            "ONBOARDING",
+            "COLLABORATION",
+            "KNOWLEDGE",
+            "VOLUNTEER",
+            "LAUNCHPAD",
+          ]),
+          awardedAt: z.string(),
+        }),
+      ),
     }),
   })
   .openapi("ProfileResponse");
