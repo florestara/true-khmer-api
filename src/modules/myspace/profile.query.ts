@@ -12,6 +12,9 @@ import {
   userSocialLink,
 } from "../../db/schema";
 import type { UpdateProfilePayload } from "./profile.schema";
+import { countQuestionsPostedByUserId } from "../forum/questions/questions.query";
+import { countLaunchpadsPostedByUserId } from "../launchpad/launchpad.query";
+import { countVolunteerOpportunitiesPostedByUserId } from "../volunteer/post-volunteer/post-volunteer.query";
 
 type NormalizedSkill = {
   name: string;
@@ -270,6 +273,61 @@ export async function getProfile(userId: string) {
           : null,
     },
   };
+}
+
+export async function getPublicProfile(userId: string) {
+  const profile = await getProfile(userId);
+  if (!profile) {
+    return null;
+  }
+
+  const postedCounts = await Promise.all([
+    countQuestionsPostedByUserId(userId),
+    countVolunteerOpportunitiesPostedByUserId(userId),
+    countLaunchpadsPostedByUserId(userId),
+  ]);
+
+  return {
+    profile: {
+      user: {
+        id: profile.user.id,
+        firstName: profile.user.firstName,
+        lastName: profile.user.lastName,
+        displayName: profile.user.displayName,
+        occupation: profile.user.occupation,
+        email: profile.user.email,
+        phoneNumber: profile.user.phoneNumber,
+        telegramUsername: profile.user.telegramUsername,
+      },
+      profile: {
+        avatarKey: profile.profile.avatarKey,
+        avatarUrl: profile.profile.avatarUrl,
+        bio: profile.profile.bio,
+        country: profile.profile.country,
+        city: profile.profile.city,
+      },
+      skills: profile.skills,
+      socialLinks: profile.socialLinks,
+      tier: profile.progress.tier,
+      postedCounts: {
+        forum: postedCounts[0],
+        volunteer: postedCounts[1],
+        project: postedCounts[2],
+      },
+    },
+  };
+}
+
+export async function profileUserExists(userId: string) {
+  const [profile] = await db
+    .select({
+      userId: user.id,
+    })
+    .from(user)
+    .where(eq(user.id, userId))
+    .limit(1);
+
+  return Boolean(profile);
 }
 
 export async function updateProfile(

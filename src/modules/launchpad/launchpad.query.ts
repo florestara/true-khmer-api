@@ -26,6 +26,11 @@ type launchpadInsert = typeof launchpad.$inferInsert;
 type launchpadRoleInsert = typeof launchpadRole.$inferInsert;
 type LaunchpadStatus = (typeof launchpad.$inferSelect)["status"];
 type LaunchpadTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+const PUBLIC_PROFILE_LAUNCHPAD_STATUSES = [
+  "LIVE",
+  "IN_PROGRESS",
+  "COMPLETED",
+] as const;
 
 export class LaunchpadRoleNotFoundError extends Error {
   constructor() {
@@ -179,8 +184,18 @@ function buildLaunchpadWhereClause(
   categoryId?: string,
   cityId?: string,
   search?: string,
+  ownerId?: string,
+  publicProfileOnly = false,
 ) {
   const conditions = [isNull(launchpad.deletedAt)];
+
+  if (publicProfileOnly) {
+    conditions.push(inArray(launchpad.status, PUBLIC_PROFILE_LAUNCHPAD_STATUSES));
+  }
+
+  if (ownerId) {
+    conditions.push(eq(launchpad.createdBy, ownerId));
+  }
 
   if (categoryId) {
     conditions.push(eq(launchpad.categoryId, categoryId));
@@ -912,12 +927,16 @@ export async function findLaunchpadById(
 export async function findLaunchpads(
   params: GetLaunchpadQueryListInput,
   viewerId?: string,
+  ownerId?: string,
+  publicProfileOnly = false,
 ): Promise<{ launchpads: LaunchpadListItem[]; nextCursor: string | null }> {
   const whereClause = buildLaunchpadWhereClause(
     params.cursor,
     params.categoryId,
     params.cityId,
     params.search,
+    ownerId,
+    publicProfileOnly,
   );
   const orderByClause = buildLaunchpadOrderBy(params.sortBy);
 
@@ -997,6 +1016,34 @@ export async function findLaunchpads(
     launchpads,
     nextCursor,
   };
+}
+
+export async function findLaunchpadsPostedByUserId(
+  userId: string,
+  params: GetLaunchpadQueryListInput,
+  viewerId?: string,
+): Promise<{ launchpads: LaunchpadListItem[]; nextCursor: string | null }> {
+  return findLaunchpads(params, viewerId, userId, true);
+}
+
+export async function countLaunchpadsPostedByUserId(
+  userId: string,
+): Promise<number> {
+  const [result] = await db
+    .select({ total: sql<number>`count(*)::int` })
+    .from(launchpad)
+    .where(
+      buildLaunchpadWhereClause(
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        userId,
+        true,
+      ),
+    );
+
+  return Number(result?.total ?? 0);
 }
 
 async function getSavedLaunchpadIdsByLaunchpadIds(

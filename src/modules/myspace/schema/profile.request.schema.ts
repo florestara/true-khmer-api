@@ -5,6 +5,34 @@ import { UUID_RE } from "../../../lib/constant";
 const uuidSchema = z.string().trim().regex(UUID_RE, "must be a valid UUID");
 const visibilitySchema = z.enum(["public", "members", "private"]);
 const genderSchema = z.enum(["male", "female", "other"]);
+const MAX_MY_POSTED_PAGE_SIZE = 50;
+const DEFAULT_MY_POSTED_PAGE_SIZE = 20;
+
+export const getPublicProfileParamsSchema = z
+  .object({
+    userId: uuidSchema,
+  })
+  .openapi("GetPublicProfileParams");
+
+export const myPostedSourceTypeSchema = z
+  .enum(["forum", "volunteer", "project"])
+  .openapi("MyPostedSourceType");
+
+export const getMyPostedQuerySchema = z
+  .object({
+    sourceType: myPostedSourceTypeSchema,
+    limit: z.coerce
+      .number()
+      .int()
+      .min(1, "limit must be between 1 and 50")
+      .max(MAX_MY_POSTED_PAGE_SIZE, "limit must be between 1 and 50")
+      .default(DEFAULT_MY_POSTED_PAGE_SIZE),
+    cursor: z.string().optional().openapi({
+      description:
+        "Opaque pagination cursor returned by the previous response for the selected sourceType.",
+    }),
+  })
+  .openapi("GetMyPostedQuery");
 
 function isValidDateOnly(value: string) {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
@@ -170,3 +198,7 @@ export const updateProfileSchema = z
   .openapi("UpdateProfileRequest");
 
 export type UpdateProfilePayload = z.infer<typeof updateProfileSchema>;
+export type GetPublicProfileParams = z.infer<
+  typeof getPublicProfileParamsSchema
+>;
+export type GetMyPostedQuery = z.infer<typeof getMyPostedQuerySchema>;
