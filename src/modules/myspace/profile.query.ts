@@ -396,7 +396,9 @@ export async function updateProfile(
     return null;
   }
 
-  await evaluateProfileCompleteBadge(userId);
+  await evaluateProfileCompleteBadge(userId).catch((err) =>
+    console.error("Failed to evaluate profile complete badge", err),
+  );
 
   return getProfile(userId);
 }
