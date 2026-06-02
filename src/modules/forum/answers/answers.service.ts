@@ -40,6 +40,10 @@ import {
   notifyForumAnswerUpvoted,
   notifyForumBestAnswerSelected,
 } from "../../notifications/notifications.service";
+import {
+  awardFirstContributionBadge,
+  evaluateBestAnswerBadge,
+} from "../../badges/badges.service";
 
 function quoteActivityText(value: string) {
   return `'${value}'`;
@@ -165,6 +169,11 @@ export async function handleCreateAnswer(c: Context, data: CreateAnswerInput) {
     }).catch((err) =>
       console.error("Failed to award forum answer points", err),
     );
+    if (question.authorId !== authResult.userId) {
+      awardFirstContributionBadge(authResult.userId).catch((err) =>
+        console.error("Failed to award first contribution badge", err),
+      );
+    }
 
     recordRecentActivityQuietly({
       userId: authResult.userId,
@@ -366,6 +375,9 @@ export async function handleMarkBestAnswer(
       questionId: markedAnswer.answer.questionId,
     }).catch((err) =>
       console.error("Failed to award forum best answer points", err),
+    );
+    evaluateBestAnswerBadge(markedAnswer.answer.author.id).catch((err) =>
+      console.error("Failed to evaluate best answer badge", err),
     );
 
     const question = await findQuestionById(markedAnswer.answer.questionId);

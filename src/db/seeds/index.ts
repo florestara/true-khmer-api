@@ -4,6 +4,7 @@ import { seedOnboardingLookups } from "./onboarding-lookups.seed";
 import { closeDb } from "../index";
 import { seedPointSystems } from "./point-systems.seed";
 import { seedLaunchpadCategories } from "./launchpad-categories.seed";
+import { seedBadges } from "./badges.seed";
 
 async function main() {
   console.log("🚀 Starting seed...\n");
@@ -12,6 +13,7 @@ async function main() {
   await seedOnboardingLookups();
   await seedForumCategories();
   await seedPointSystems();
+  await seedBadges();
   await seedLaunchpadCategories();
 
   console.log("\n🎉 All seeds complete.");
