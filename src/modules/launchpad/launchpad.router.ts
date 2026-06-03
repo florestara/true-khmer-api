@@ -284,6 +284,7 @@ const getLaunchpadByIdRoute = createRoute({
   method: "get",
   path: "/{launchpadId}",
   tags: ["Launchpad"],
+  middleware: [attachAuthIfValidAccessToken],
   request: {
     params: getLaunchpadQuerySchema,
   },

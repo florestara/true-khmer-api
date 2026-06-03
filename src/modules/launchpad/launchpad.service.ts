@@ -441,8 +441,11 @@ export async function handleFindLaunchpadById(
   c: Context,
   payload: GetLaunchpadQueryInput,
 ) {
+  const authResult = getAuthUserId(c);
+  const viewerId = authResult.ok ? authResult.userId : undefined;
+
   try {
-    const launchpad = await findLaunchpadById(payload.launchpadId);
+    const launchpad = await findLaunchpadById(payload.launchpadId, viewerId);
 
     if (!launchpad) {
       return c.json({ ok: false, error: "Launchpad not found" }, 404);
