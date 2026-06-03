@@ -139,6 +139,10 @@ function applicationCountText(count: number) {
   return `${count} ${count === 1 ? "application" : "applications"}`;
 }
 
+function applicantCountText(count: number) {
+  return `${count} ${count === 1 ? "applicant" : "applicants"}`;
+}
+
 async function sendMobilePushToUser(
   userId: string,
   payload: {
@@ -576,7 +580,7 @@ export function notifyApplicantParticipationConfirmed(
       ? payload.applicantName
         ? `${payload.applicantName} confirmed participation`
         : "An applicant confirmed participation"
-      : `${applicationCountText(count)} confirmed participation`;
+      : `${applicantCountText(count)} confirmed participation`;
 
   return sendNotificationToUser({
     userId: payload.recipientUserId,
@@ -607,7 +611,7 @@ export function notifyApplicantParticipationDeclined(
       ? payload.applicantName
         ? `${payload.applicantName} declined participation`
         : "An applicant declined participation"
-      : `${applicationCountText(count)} declined participation`;
+      : `${applicantCountText(count)} declined participation`;
 
   return sendNotificationToUser({
     userId: payload.recipientUserId,
