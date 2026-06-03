@@ -156,6 +156,7 @@ type ManagePostingDetail = {
 
 type ManagePostingCandidateDetail = {
   applicant: ManagePostingApplicant;
+  statusChanged?: boolean;
 };
 
 type PosterApplicationStatusChange = "UNDER_REVIEW" | "APPROVED";
@@ -1510,6 +1511,7 @@ async function updateVolunteerManagePostingApplication(
       return {
         outcome: "updated" as const,
         applicantId: current.applicantId,
+        statusChanged: false,
       };
     }
 
@@ -1588,6 +1590,7 @@ async function updateVolunteerManagePostingApplication(
     return {
       outcome: "updated" as const,
       applicantId: current.applicantId,
+      statusChanged: true,
     };
   });
 
@@ -1601,7 +1604,9 @@ async function updateVolunteerManagePostingApplication(
     result.applicantId,
   );
 
-  return detail ?? "not_found";
+  return detail
+    ? { ...detail, statusChanged: result.statusChanged }
+    : "not_found";
 }
 
 async function updateProjectManagePostingApplication(
@@ -1643,6 +1648,7 @@ async function updateProjectManagePostingApplication(
       return {
         outcome: "updated" as const,
         applicantId: current.createdBy,
+        statusChanged: false,
       };
     }
 
@@ -1721,6 +1727,7 @@ async function updateProjectManagePostingApplication(
     return {
       outcome: "updated" as const,
       applicantId: current.createdBy,
+      statusChanged: true,
     };
   });
 
@@ -1734,7 +1741,9 @@ async function updateProjectManagePostingApplication(
     result.applicantId,
   );
 
-  return detail ?? "not_found";
+  return detail
+    ? { ...detail, statusChanged: result.statusChanged }
+    : "not_found";
 }
 
 async function declineVolunteerManagePostingApplication(
