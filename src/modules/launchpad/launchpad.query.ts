@@ -20,6 +20,7 @@ import {
   launchpadSave,
   user,
   userProfile,
+  workspaceCandidateBlock,
 } from "../../db/schema";
 
 type launchpadInsert = typeof launchpad.$inferInsert;
@@ -97,6 +98,7 @@ export type LaunchpadDetail = {
     name: string;
   };
   roles: LaunchpadRole[];
+  viewerBlocked: boolean;
 };
 
 export type LaunchpadListItem = {
@@ -831,12 +833,14 @@ export async function createLaunchpad(
         description: role.description,
         capacity: role.capacity,
       })),
+      viewerBlocked: false,
     };
   });
 }
 
 export async function findLaunchpadById(
   launchpadId: string,
+  viewerId?: string,
 ): Promise<LaunchpadDetail | null> {
   const [row] = await db
     .select({
@@ -874,6 +878,23 @@ export async function findLaunchpadById(
         isNull(launchpad.deletedAt),
       ),
     );
+
+  const viewerBlocked = viewerId
+    ? (
+        await db
+          .select({ id: workspaceCandidateBlock.id })
+          .from(workspaceCandidateBlock)
+          .where(
+            and(
+              eq(workspaceCandidateBlock.sourceType, "PROJECT"),
+              eq(workspaceCandidateBlock.postingId, launchpadId),
+              eq(workspaceCandidateBlock.candidateId, viewerId),
+              eq(workspaceCandidateBlock.status, "ACTIVE"),
+            ),
+          )
+          .limit(1)
+      ).length > 0
+    : false;
 
   return {
     id: row.launchpad.id,
@@ -921,6 +942,7 @@ export async function findLaunchpadById(
       description: role.description,
       capacity: role.capacity,
     })),
+    viewerBlocked,
   };
 }
 

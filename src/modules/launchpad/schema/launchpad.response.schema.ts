@@ -175,6 +175,7 @@ export const getLaunchpadByIdResponseSchema = z
         })
         .optional(),
       roles: z.array(createLaunchpadRoleSchema),
+      viewerBlocked: z.boolean(),
       totalView: z.number(),
     }),
   })
