@@ -128,6 +128,21 @@ function quoteTitle(title?: string | null) {
   return normalizedTitle ? `"${normalizedTitle}"` : null;
 }
 
+function postingDedupeKey(
+  payload: PostingNotificationPayload,
+  eventType: string,
+) {
+  return `${eventType}:${payload.postingId}`;
+}
+
+function applicationCountText(count: number) {
+  return `${count} ${count === 1 ? "application" : "applications"}`;
+}
+
+function applicantCountText(count: number) {
+  return `${count} ${count === 1 ? "applicant" : "applicants"}`;
+}
+
 async function sendMobilePushToUser(
   userId: string,
   payload: {
@@ -369,16 +384,24 @@ export function notifyForumBestAnswerSelected(
 export function notifyApplicationReceived(payload: PostingNotificationPayload) {
   const route = managePostingRoute(payload.sourceType, payload.postingId);
   const title = payload.postingTitle ?? "your posting";
+  const eventType = `${payload.sourceType}_application_received`;
+  const formatBody = (count: number) =>
+    count === 1
+      ? payload.applicantName
+        ? `${payload.applicantName} applied to ${title}`
+        : `Someone applied to ${title}`
+      : `${applicationCountText(count)} received for ${title}`;
 
   return sendNotificationToUser({
     userId: payload.recipientUserId,
     title: "New application received",
-    body: payload.applicantName
-      ? `${payload.applicantName} applied to ${title}`
-      : `Someone applied to ${title}`,
+    body: formatBody(1),
     type:
       payload.sourceType === "projects" ? "launchpad_update" : "application",
-    eventType: `${payload.sourceType}_application_received`,
+    eventType,
+    dedupeKey: postingDedupeKey(payload, eventType),
+    reuseAfterRead: true,
+    aggregateBody: formatBody,
     data: {
       postingId: payload.postingId,
       sourceType: payload.sourceType,
@@ -392,16 +415,24 @@ export function notifyApplicantApplicationUnderReview(
   payload: PostingNotificationPayload,
 ) {
   const route = myApplicationRoute(payload.sourceType, payload.postingId);
+  const eventType = `${payload.sourceType}_application_under_review`;
+  const formatBody = (count: number) =>
+    count === 1
+      ? payload.postingTitle
+        ? `Your application for ${payload.postingTitle} is under review`
+        : "Your application is under review"
+      : `${applicationCountText(count)} for this posting are under review`;
 
   return sendNotificationToUser({
     userId: payload.recipientUserId,
     title: "Application under review",
-    body: payload.postingTitle
-      ? `Your application for ${payload.postingTitle} is under review`
-      : "Your application is under review",
+    body: formatBody(1),
     type:
       payload.sourceType === "projects" ? "launchpad_update" : "application",
-    eventType: `${payload.sourceType}_application_under_review`,
+    eventType,
+    dedupeKey: postingDedupeKey(payload, eventType),
+    reuseAfterRead: true,
+    aggregateBody: formatBody,
     data: {
       postingId: payload.postingId,
       sourceType: payload.sourceType,
@@ -415,16 +446,24 @@ export function notifyApplicantApplicationApproved(
   payload: PostingNotificationPayload,
 ) {
   const route = myApplicationRoute(payload.sourceType, payload.postingId);
+  const eventType = `${payload.sourceType}_application_approved`;
+  const formatBody = (count: number) =>
+    count === 1
+      ? payload.postingTitle
+        ? `Your application for ${payload.postingTitle} was approved`
+        : "Your application was approved"
+      : `${applicationCountText(count)} for this posting were approved`;
 
   return sendNotificationToUser({
     userId: payload.recipientUserId,
     title: "Application approved",
-    body: payload.postingTitle
-      ? `Your application for ${payload.postingTitle} was approved`
-      : "Your application was approved",
+    body: formatBody(1),
     type:
       payload.sourceType === "projects" ? "launchpad_update" : "application",
-    eventType: `${payload.sourceType}_application_approved`,
+    eventType,
+    dedupeKey: postingDedupeKey(payload, eventType),
+    reuseAfterRead: true,
+    aggregateBody: formatBody,
     data: {
       postingId: payload.postingId,
       sourceType: payload.sourceType,
@@ -438,16 +477,24 @@ export function notifyApplicantApplicationDeclined(
   payload: PostingNotificationPayload,
 ) {
   const route = myApplicationRoute(payload.sourceType, payload.postingId);
+  const eventType = `${payload.sourceType}_application_declined`;
+  const formatBody = (count: number) =>
+    count === 1
+      ? payload.postingTitle
+        ? `Your application for ${payload.postingTitle} was declined`
+        : "Your application was declined"
+      : `${applicationCountText(count)} for this posting were declined`;
 
   return sendNotificationToUser({
     userId: payload.recipientUserId,
     title: "Application declined",
-    body: payload.postingTitle
-      ? `Your application for ${payload.postingTitle} was declined`
-      : "Your application was declined",
+    body: formatBody(1),
     type:
       payload.sourceType === "projects" ? "launchpad_update" : "application",
-    eventType: `${payload.sourceType}_application_declined`,
+    eventType,
+    dedupeKey: postingDedupeKey(payload, eventType),
+    reuseAfterRead: true,
+    aggregateBody: formatBody,
     data: {
       postingId: payload.postingId,
       sourceType: payload.sourceType,
@@ -527,16 +574,55 @@ export function notifyApplicantParticipationConfirmed(
   payload: PostingNotificationPayload,
 ) {
   const route = managePostingRoute(payload.sourceType, payload.postingId);
+  const eventType = `${payload.sourceType}_application_confirmed`;
+  const formatBody = (count: number) =>
+    count === 1
+      ? payload.applicantName
+        ? `${payload.applicantName} confirmed participation`
+        : "An applicant confirmed participation"
+      : `${applicantCountText(count)} confirmed participation`;
 
   return sendNotificationToUser({
     userId: payload.recipientUserId,
     title: "Applicant confirmed participation",
-    body: payload.applicantName
-      ? `${payload.applicantName} confirmed participation`
-      : "An applicant confirmed participation",
+    body: formatBody(1),
     type:
       payload.sourceType === "projects" ? "launchpad_update" : "application",
-    eventType: `${payload.sourceType}_application_confirmed`,
+    eventType,
+    dedupeKey: postingDedupeKey(payload, eventType),
+    reuseAfterRead: true,
+    aggregateBody: formatBody,
+    data: {
+      postingId: payload.postingId,
+      sourceType: payload.sourceType,
+    },
+    webRoute: route,
+    mobileRoute: route,
+  });
+}
+
+export function notifyApplicantParticipationDeclined(
+  payload: PostingNotificationPayload,
+) {
+  const route = managePostingRoute(payload.sourceType, payload.postingId);
+  const eventType = `${payload.sourceType}_application_declined_by_applicant`;
+  const formatBody = (count: number) =>
+    count === 1
+      ? payload.applicantName
+        ? `${payload.applicantName} declined participation`
+        : "An applicant declined participation"
+      : `${applicantCountText(count)} declined participation`;
+
+  return sendNotificationToUser({
+    userId: payload.recipientUserId,
+    title: "Applicant declined participation",
+    body: formatBody(1),
+    type:
+      payload.sourceType === "projects" ? "launchpad_update" : "application",
+    eventType,
+    dedupeKey: postingDedupeKey(payload, eventType),
+    reuseAfterRead: true,
+    aggregateBody: formatBody,
     data: {
       postingId: payload.postingId,
       sourceType: payload.sourceType,
@@ -550,16 +636,24 @@ export function notifyApplicantApplicationWithdrawn(
   payload: PostingNotificationPayload,
 ) {
   const route = managePostingRoute(payload.sourceType, payload.postingId);
+  const eventType = `${payload.sourceType}_application_withdrawn`;
+  const formatBody = (count: number) =>
+    count === 1
+      ? payload.applicantName
+        ? `${payload.applicantName} withdrew their application`
+        : "An applicant withdrew their application"
+      : `${applicationCountText(count)} were withdrawn`;
 
   return sendNotificationToUser({
     userId: payload.recipientUserId,
     title: "Applicant withdrew application",
-    body: payload.applicantName
-      ? `${payload.applicantName} withdrew their application`
-      : "An applicant withdrew their application",
+    body: formatBody(1),
     type:
       payload.sourceType === "projects" ? "launchpad_update" : "application",
-    eventType: `${payload.sourceType}_application_withdrawn`,
+    eventType,
+    dedupeKey: postingDedupeKey(payload, eventType),
+    reuseAfterRead: true,
+    aggregateBody: formatBody,
     data: {
       postingId: payload.postingId,
       sourceType: payload.sourceType,

@@ -459,18 +459,20 @@ export async function handleUpdateManagePostingApplication(
       sourceType: params.sourceType,
     };
 
-    if (params.statusAction === "under_review") {
-      notifyApplicantApplicationUnderReview(notificationPayload).catch((err) =>
-        console.error("Failed to notify application under review", err),
-      );
-    } else if (params.statusAction === "approve") {
-      notifyApplicantApplicationApproved(notificationPayload).catch((err) =>
-        console.error("Failed to notify application approved", err),
-      );
-    } else {
-      notifyApplicantApplicationDeclined(notificationPayload).catch((err) =>
-        console.error("Failed to notify application declined", err),
-      );
+    if (result.statusChanged !== false) {
+      if (params.statusAction === "under_review") {
+        notifyApplicantApplicationUnderReview(notificationPayload).catch((err) =>
+          console.error("Failed to notify application under review", err),
+        );
+      } else if (params.statusAction === "approve") {
+        notifyApplicantApplicationApproved(notificationPayload).catch((err) =>
+          console.error("Failed to notify application approved", err),
+        );
+      } else {
+        notifyApplicantApplicationDeclined(notificationPayload).catch((err) =>
+          console.error("Failed to notify application declined", err),
+        );
+      }
     }
 
     return c.json(

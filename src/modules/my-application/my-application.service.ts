@@ -15,6 +15,7 @@ import {
 } from "./my-application.query";
 import {
   notifyApplicantApplicationWithdrawn,
+  notifyApplicantParticipationDeclined,
   notifyApplicantParticipationConfirmed,
 } from "../notifications/notifications.service";
 import type {
@@ -625,6 +626,10 @@ export async function handleChangeMyApplicationStatus(
         notifyApplicantParticipationConfirmed(posterNotificationPayload).catch(
           (err) =>
             console.error("Failed to notify application confirmed", err),
+        );
+      } else if (params.statusAction === "decline") {
+        notifyApplicantParticipationDeclined(posterNotificationPayload).catch(
+          (err) => console.error("Failed to notify application declined", err),
         );
       } else {
         notifyApplicantApplicationWithdrawn(posterNotificationPayload).catch(
