@@ -11,7 +11,7 @@ import {
   handleResendRegisterOtp,
   handleVerifyRegisterOtp,
 } from "./auth.service";
-import { requireAccessTokenAllowIncompleteOnboarding } from "../../middlewares/auth.middleware";
+import { requireAccessTokenAllowIncompleteSignUpAndOnboarding } from "../../middlewares/auth.middleware";
 import {
   authCompleteSignUpSchema,
   authGoogleSchema,
@@ -81,7 +81,7 @@ const verifyOtpRoute = createRoute({
 const completeSignUpRoute = createRoute({
   method: "post",
   path: "/register/complete",
-  middleware: [requireAccessTokenAllowIncompleteOnboarding],
+  middleware: [requireAccessTokenAllowIncompleteSignUpAndOnboarding],
   tags: ["Auth"],
   security: [{ BearerAuth: [] }],
   request: {

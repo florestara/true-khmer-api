@@ -17,6 +17,7 @@ export async function findUserRoleById(userId: string) {
 export async function findUserOnboardingStatusById(userId: string) {
   const [foundUser] = await db
     .select({
+      signupCompletedAt: user.signupCompletedAt,
       onboardingStep: user.onboardingStep,
       onboardingCompletedAt: user.onboardingCompletedAt,
     })
@@ -48,36 +49,61 @@ export async function completeUserSignUp(
   payload: AuthCompleteSignUpPayload,
 ) {
   const fullName = `${payload.firstName} ${payload.lastName}`.trim();
-  const [updatedUser] = await db
-    .update(user)
-    .set({
-      name: fullName,
-      firstName: payload.firstName,
-      lastName: payload.lastName,
-      gender: payload.gender,
-      occupation: payload.occupation,
-      phoneNumber: payload.phoneNumber,
-      signupCompletedAt: sql`COALESCE(${user.signupCompletedAt}, NOW())`,
-      onboardingStep: sql`GREATEST(${user.onboardingStep}, ${ONBOARDING_PROFILE_STEP})`,
-    })
-    .where(eq(user.id, userId))
-    .returning({
-      id: user.id,
-      email: user.email,
-      emailVerified: user.emailVerified,
-      name: user.name,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      gender: user.gender,
-      occupation: user.occupation,
-      phoneNumber: user.phoneNumber,
-      image: user.image,
-      signupCompletedAt: user.signupCompletedAt,
-      onboardingStep: user.onboardingStep,
-      onboardingCompletedAt: user.onboardingCompletedAt,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
-    });
+  const [updatedUser] = await db.transaction(async (tx) => {
+    const updatedRows = await tx
+      .update(user)
+      .set({
+        name: fullName,
+        firstName: payload.firstName,
+        lastName: payload.lastName,
+        gender: payload.gender,
+        occupation: payload.occupation,
+        phoneNumber: payload.phoneNumber,
+        signupCompletedAt: sql`COALESCE(${user.signupCompletedAt}, NOW())`,
+        onboardingStep: sql`GREATEST(${user.onboardingStep}, ${ONBOARDING_PROFILE_STEP})`,
+      })
+      .where(eq(user.id, userId))
+      .returning({
+        id: user.id,
+        email: user.email,
+        emailVerified: user.emailVerified,
+        name: user.name,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        gender: user.gender,
+        occupation: user.occupation,
+        phoneNumber: user.phoneNumber,
+        image: user.image,
+        signupCompletedAt: user.signupCompletedAt,
+        onboardingStep: user.onboardingStep,
+        onboardingCompletedAt: user.onboardingCompletedAt,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+      });
+
+    const [updatedUser] = updatedRows;
+    if (updatedUser?.image) {
+      await tx
+        .insert(userProfile)
+        .values({
+          userId: updatedUser.id,
+          displayName: fullName || null,
+          avatarKey: updatedUser.image,
+          avatarUrl: updatedUser.image,
+        })
+        .onConflictDoUpdate({
+          target: userProfile.userId,
+          set: {
+            displayName: fullName || null,
+            avatarKey: sql`COALESCE(${userProfile.avatarKey}, ${updatedUser.image})`,
+            avatarUrl: sql`COALESCE(${userProfile.avatarUrl}, ${updatedUser.image})`,
+            updatedAt: new Date(),
+          },
+        });
+    }
+
+    return updatedRows;
+  });
 
   return updatedUser ?? null;
 }

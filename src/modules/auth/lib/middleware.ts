@@ -78,6 +78,7 @@ async function authenticateAccessToken(c: Context) {
 }
 
 function createRequireAccessTokenMiddleware(options?: {
+  allowIncompleteSignUp?: boolean;
   allowIncompleteOnboarding?: boolean;
 }) {
   return createMiddleware(async (c, next) => {
@@ -91,13 +92,22 @@ function createRequireAccessTokenMiddleware(options?: {
       return authErrorResponse(c, 401, "Invalid access token payload");
     }
 
+    const onboardingStatus = await findUserOnboardingStatusById(auth.userId);
+
+    if (!onboardingStatus) {
+      return authErrorResponse(c, 401, "User not found");
+    }
+
+    if (!options?.allowIncompleteSignUp && !onboardingStatus.signupCompletedAt) {
+      return authErrorResponse(
+        c,
+        403,
+        "Sign up completion required",
+        "SIGNUP_COMPLETION_REQUIRED",
+      );
+    }
+
     if (!options?.allowIncompleteOnboarding) {
-      const onboardingStatus = await findUserOnboardingStatusById(auth.userId);
-
-      if (!onboardingStatus) {
-        return authErrorResponse(c, 401, "User not found");
-      }
-
       const isOnboardingCompleted =
         onboardingStatus.onboardingCompletedAt !== null &&
         onboardingStatus.onboardingStep >= ONBOARDING_COMPLETE_STEP;
@@ -120,6 +130,12 @@ export const requireAccessToken = createRequireAccessTokenMiddleware();
 
 export const requireAccessTokenAllowIncompleteOnboarding =
   createRequireAccessTokenMiddleware({
+    allowIncompleteOnboarding: true,
+  });
+
+export const requireAccessTokenAllowIncompleteSignUpAndOnboarding =
+  createRequireAccessTokenMiddleware({
+    allowIncompleteSignUp: true,
     allowIncompleteOnboarding: true,
   });
 
