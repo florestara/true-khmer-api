@@ -318,7 +318,8 @@ export async function handleExtendManagePostingDeadline(
       return c.json(
         {
           ok: false,
-          error: "Posting deadline can only be extended while it is in progress",
+          error:
+            "Posting deadline can only be extended while it is live or in progress",
         },
         409,
       );
