@@ -52,9 +52,21 @@ const envSchema = z
       emptyStringToUndefined,
       z.string().min(1).optional(),
     ),
+    GOOGLE_CLIENT_ID: z.preprocess(
+      emptyStringToUndefined,
+      z.string().min(1).optional(),
+    ),
+    GOOGLE_CLIENT_SECRET: z.preprocess(
+      emptyStringToUndefined,
+      z.string().min(1).optional(),
+    ),
     RESEND_API_KEY: z.preprocess(
       emptyStringToUndefined,
       z.string().min(1).optional(),
+    ),
+    RESEND_API_URL: z.preprocess(
+      emptyStringToUndefined,
+      z.string().url().optional(),
     ),
     RESEND_FROM_EMAIL: z.preprocess(
       emptyStringToUndefined,

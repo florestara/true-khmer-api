@@ -35,6 +35,31 @@ export const authRegisterSchema = z
 
 export type AuthRegisterPayload = z.infer<typeof authRegisterSchema>;
 
+export const authCompleteSignUpSchema = z
+  .object({
+    firstName: createCleanNameSchema({ label: "firstName", maxLength: 100 }),
+    lastName: createCleanNameSchema({ label: "lastName", maxLength: 100 }),
+    gender: genderSchema,
+    occupation: z.string().trim().min(1, "occupation is required").max(120),
+    phoneNumber: phoneNumberSchema,
+    memberAgreementAccepted: z.literal(true, {
+      error: "memberAgreementAccepted must be true",
+    }),
+  })
+  .openapi("AuthCompleteSignUpRequest");
+
+export type AuthCompleteSignUpPayload = z.infer<
+  typeof authCompleteSignUpSchema
+>;
+
+export const authGoogleSchema = z
+  .object({
+    idToken: z.string().trim().min(1, "idToken is required"),
+  })
+  .openapi("AuthGoogleRequest");
+
+export type AuthGooglePayload = z.infer<typeof authGoogleSchema>;
+
 export const authVerifyRegisterOtpSchema = z
   .object({
     email: emailSchema,

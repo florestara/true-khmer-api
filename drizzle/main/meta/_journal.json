@@ -407,6 +407,20 @@
       "when": 1780326283002,
       "tag": "0057_youthful_chimera",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1780502400000,
+      "tag": "0058_google_oauth_signup_completion",
+      "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1780588800000,
+      "tag": "0059_signup_completed_at",
+      "breakpoints": true
     }
   ]
 }

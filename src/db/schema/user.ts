@@ -24,7 +24,7 @@ export const user = pgTable("user", {
   gender: userGender("gender").default("other").notNull(),
   dateOfBirth: date("date_of_birth"),
   // Stores the user's occupation/profession.
-  occupation: text("occupation").notNull(),
+  occupation: text("occupation"),
   phoneNumber: varchar("phone_number", { length: 20 }),
   telegramUsername: varchar("telegram_username", { length: 32 }),
   email: text("email").notNull().unique(),
@@ -32,6 +32,7 @@ export const user = pgTable("user", {
   // Compatibility field for Better Auth; canonical avatar is stored in user_profile.
   image: text("image"),
   role: text("role").default("user").notNull(),
+  signupCompletedAt: timestamp("signup_completed_at"),
   onboardingStep: integer("onboarding_step").default(0).notNull(),
   onboardingCompletedAt: timestamp("onboarding_completed_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),

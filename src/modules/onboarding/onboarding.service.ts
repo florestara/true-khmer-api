@@ -34,6 +34,10 @@ function resolveAvatarUrl(avatarKey?: string): string | null {
     return null;
   }
 
+  if (isGoogleAvatarUrl(avatarKey)) {
+    return avatarKey.trim();
+  }
+
   const baseUrl = process.env.R2_PUBLIC_BASE_URL?.trim();
   if (!baseUrl) {
     throw new Error("R2_PUBLIC_BASE_URL is not configured");
@@ -46,8 +50,35 @@ function resolveAvatarUrl(avatarKey?: string): string | null {
   return `${normalizedBase}/${normalizedKey}`;
 }
 
+function isGoogleAvatarUrl(value?: string) {
+  if (!value) {
+    return false;
+  }
+
+  try {
+    const url = new URL(value.trim());
+    const allowedGoogleAvatarHosts = new Set([
+      "lh3.googleusercontent.com",
+      "lh4.googleusercontent.com",
+      "lh5.googleusercontent.com",
+      "lh6.googleusercontent.com",
+    ]);
+
+    return (
+      url.protocol === "https:" &&
+      allowedGoogleAvatarHosts.has(url.hostname)
+    );
+  } catch {
+    return false;
+  }
+}
+
 function isAvatarKeyOwnedByUser(userId: string, avatarKey?: string) {
   if (!avatarKey) {
+    return true;
+  }
+
+  if (isGoogleAvatarUrl(avatarKey)) {
     return true;
   }
 

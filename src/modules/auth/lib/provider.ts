@@ -12,6 +12,39 @@ import {
 import { jwtPluginConfig } from "./plugins/jwt";
 import { findUserFirstNameByEmail } from "../auth.query";
 
+function splitGoogleDisplayName(name?: string | null) {
+  const parts = (name ?? "").trim().split(/\s+/).filter(Boolean);
+  return {
+    firstName: parts[0] ?? "Google",
+    lastName: parts.length > 1 ? parts.slice(1).join(" ") : "User",
+  };
+}
+
+function buildSocialProviders() {
+  if (!authConfig.googleClientId || !authConfig.googleClientSecret) {
+    return undefined;
+  }
+
+  return {
+    google: {
+      clientId: authConfig.googleClientId,
+      clientSecret: authConfig.googleClientSecret,
+      mapProfileToUser: (profile: {
+        given_name?: string | null;
+        family_name?: string | null;
+        name?: string | null;
+      }) => {
+        const fallbackName = splitGoogleDisplayName(profile.name);
+        return {
+          firstName: profile.given_name?.trim() || fallbackName.firstName,
+          lastName: profile.family_name?.trim() || fallbackName.lastName,
+          gender: "other",
+        };
+      },
+    },
+  };
+}
+
 export const auth = betterAuth({
   baseURL: authConfig.betterAuthUrl,
   trustedOrigins: authConfig.allowedResetPageOrigins,
@@ -40,12 +73,22 @@ export const auth = betterAuth({
       },
       occupation: {
         type: "string",
-        required: true,
+        required: false,
       },
       phoneNumber: {
         type: "string",
-        required: true,
+        required: false,
       },
+    },
+  },
+  socialProviders: buildSocialProviders(),
+  account: {
+    updateAccountOnSignIn: true,
+    accountLinking: {
+      enabled: true,
+      trustedProviders: ["google"],
+      disableImplicitLinking: false,
+      allowDifferentEmails: false,
     },
   },
   emailAndPassword: {

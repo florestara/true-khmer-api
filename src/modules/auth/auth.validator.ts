@@ -2,6 +2,8 @@ import { z } from "zod";
 import type { ZodTypeAny } from "zod";
 import {
   authForgotPasswordSchema,
+  authGoogleSchema,
+  authCompleteSignUpSchema,
   authLoginSchema,
   authResendRegisterOtpSchema,
   authRefreshSchema,
@@ -63,6 +65,14 @@ function parseWithSchema<TSchema extends ZodTypeAny>(
 
 export function validateRegisterPayload(input: unknown) {
   return parseWithSchema(authRegisterSchema, input);
+}
+
+export function validateCompleteSignUpPayload(input: unknown) {
+  return parseWithSchema(authCompleteSignUpSchema, input);
+}
+
+export function validateGooglePayload(input: unknown) {
+  return parseWithSchema(authGoogleSchema, input);
 }
 
 export function validateVerifyRegisterOtpPayload(input: unknown) {
