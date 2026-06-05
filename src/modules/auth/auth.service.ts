@@ -35,6 +35,8 @@ import {
 } from "./auth.validator";
 
 type AuthNextStep = "COMPLETE_SIGNUP" | "ONBOARDING" | "APP";
+type AuthAccessState = "SIGNUP_REQUIRED" | "ONBOARDING_REQUIRED" | "ACTIVE";
+type AuthRequiredAction = "COMPLETE_SIGNUP" | "COMPLETE_ONBOARDING";
 type AuthFlowUser = {
   id: string;
   signupCompletedAt?: Date | string | null;
@@ -46,6 +48,8 @@ type AuthFlow = {
   requiresSignupCompletion: boolean;
   requiresOnboarding: boolean;
   nextStep: AuthNextStep;
+  accessState: AuthAccessState;
+  requiredAction: AuthRequiredAction | null;
 };
 
 const genericForgotPasswordResponse = {
@@ -239,10 +243,17 @@ function resolveAuthFlow(user: AuthFlowUser, isNewUser: boolean): AuthFlow {
     (user.onboardingStep ?? 0) < ONBOARDING_COMPLETE_STEP;
 
   let nextStep: AuthNextStep = "APP";
+  let accessState: AuthAccessState = "ACTIVE";
+  let requiredAction: AuthRequiredAction | null = null;
+
   if (requiresSignupCompletion) {
     nextStep = "COMPLETE_SIGNUP";
+    accessState = "SIGNUP_REQUIRED";
+    requiredAction = "COMPLETE_SIGNUP";
   } else if (requiresOnboarding) {
     nextStep = "ONBOARDING";
+    accessState = "ONBOARDING_REQUIRED";
+    requiredAction = "COMPLETE_ONBOARDING";
   }
 
   return {
@@ -250,6 +261,8 @@ function resolveAuthFlow(user: AuthFlowUser, isNewUser: boolean): AuthFlow {
     requiresSignupCompletion,
     requiresOnboarding,
     nextStep,
+    accessState,
+    requiredAction,
   };
 }
 
@@ -407,6 +420,23 @@ export async function handleCompleteSignUp(c: Context) {
     user: updatedUser,
     authFlow,
   });
+}
+
+export async function handleSession(c: Context) {
+  const auth = c.get("auth") as AuthContext | undefined;
+  if (!auth) {
+    return c.json({ ok: false, error: "Missing bearer token" }, 401);
+  }
+
+  const user = await findAuthFlowUserById(auth.userId);
+  if (!user) {
+    return c.json({ ok: false, error: "User not found" }, 401);
+  }
+
+  return c.json({
+    user,
+    authFlow: resolveAuthFlow(user, false),
+  }, 200);
 }
 
 export async function handleGoogle(c: Context) {

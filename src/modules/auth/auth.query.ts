@@ -154,12 +154,45 @@ export async function findAuthFlowUserById(userId: string) {
       onboardingCompletedAt: user.onboardingCompletedAt,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
+      profileId: userProfile.id,
+      profileDisplayName: userProfile.displayName,
+      profileAvatarKey: userProfile.avatarKey,
+      profileAvatarUrl: userProfile.avatarUrl,
     })
     .from(user)
+    .leftJoin(userProfile, eq(userProfile.userId, user.id))
     .where(eq(user.id, userId))
     .limit(1);
 
-  return foundUser ?? null;
+  if (!foundUser) {
+    return null;
+  }
+
+  const {
+    profileId,
+    profileDisplayName,
+    profileAvatarKey,
+    profileAvatarUrl,
+    ...authUser
+  } = foundUser;
+
+  return {
+    ...authUser,
+    profile: profileId
+      ? {
+          id: profileId,
+          displayName: profileDisplayName ?? undefined,
+          avatarKey: profileAvatarKey ?? undefined,
+          avatarUrl: profileAvatarUrl ?? undefined,
+        }
+      : {
+          id: authUser.id,
+          displayName: authUser.name,
+          avatarUrl:
+            authUser.image ??
+            "https://r2.bongit.net/1765707089130-account-avatar-profile-user-svgrepo-com.svg",
+        },
+  };
 }
 
 export async function findUserFirstNameByEmail(email: string) {

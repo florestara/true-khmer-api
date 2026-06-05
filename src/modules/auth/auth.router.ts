@@ -9,12 +9,14 @@ import {
   handleRegister,
   handleResetPassword,
   handleResendRegisterOtp,
+  handleSession,
   handleVerifyRegisterOtp,
 } from "./auth.service";
 import { requireAccessTokenAllowIncompleteSignUpAndOnboarding } from "../../middlewares/auth.middleware";
 import {
   authCompleteSignUpSchema,
   authGoogleSchema,
+  authProtectedErrorResponseSchema,
   authSimpleErrorResponseSchema,
   authTokenResponseSchema,
   completeSignUpResponseSchema,
@@ -30,6 +32,7 @@ import {
   authForgotPasswordSchema,
   authResetPasswordSchema,
   authRefreshSchema,
+  authSessionResponseSchema,
 } from "./auth.schema";
 
 export const authRouter = new OpenAPIHono<AppBindings>();
@@ -101,6 +104,32 @@ const completeSignUpRoute = createRoute({
     400: { description: "Validation failed" },
     401: { description: "Unauthorized" },
     404: { description: "User not found" },
+  },
+});
+
+const sessionRoute = createRoute({
+  method: "get",
+  path: "/session",
+  middleware: [requireAccessTokenAllowIncompleteSignUpAndOnboarding],
+  tags: ["Auth"],
+  security: [{ BearerAuth: [] }],
+  responses: {
+    200: {
+      description: "Authenticated user session and access state",
+      content: {
+        "application/json": {
+          schema: authSessionResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: "Unauthorized",
+      content: {
+        "application/json": {
+          schema: authProtectedErrorResponseSchema,
+        },
+      },
+    },
   },
 });
 
@@ -260,6 +289,7 @@ const resetPasswordRoute = createRoute({
 
 authRouter.openapi(registerRoute, handleRegister);
 authRouter.openapi(completeSignUpRoute, handleCompleteSignUp);
+authRouter.openapi(sessionRoute, handleSession);
 authRouter.openapi(googleRoute, handleGoogle);
 authRouter.openapi(verifyOtpRoute, handleVerifyRegisterOtp);
 authRouter.openapi(resendOtpRoute, handleResendRegisterOtp);

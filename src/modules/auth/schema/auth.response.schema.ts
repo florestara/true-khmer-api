@@ -28,12 +28,22 @@ export const authUserSchema = z
   })
   .openapi("AuthUser");
 
+export const authAccessStateSchema = z
+  .enum(["SIGNUP_REQUIRED", "ONBOARDING_REQUIRED", "ACTIVE"])
+  .openapi("AuthAccessState");
+
+export const authRequiredActionSchema = z
+  .enum(["COMPLETE_SIGNUP", "COMPLETE_ONBOARDING"])
+  .openapi("AuthRequiredAction");
+
 export const authFlowSchema = z
   .object({
     isNewUser: z.boolean(),
     requiresSignupCompletion: z.boolean(),
     requiresOnboarding: z.boolean(),
     nextStep: z.enum(["COMPLETE_SIGNUP", "ONBOARDING", "APP"]),
+    accessState: authAccessStateSchema,
+    requiredAction: authRequiredActionSchema.nullable(),
   })
   .openapi("AuthFlow");
 
@@ -63,6 +73,13 @@ export const completeSignUpResponseSchema = z
     authFlow: authFlowSchema.optional(),
   })
   .openapi("CompleteSignUpResponse");
+
+export const authSessionResponseSchema = z
+  .object({
+    user: authUserSchema,
+    authFlow: authFlowSchema,
+  })
+  .openapi("AuthSessionResponse");
 
 export const resendRegisterOtpResponseSchema = z
   .object({
@@ -96,6 +113,8 @@ export const authProtectedErrorResponseSchema = z
     ok: z.literal(false),
     error: z.string(),
     code: z.string().optional(),
+    requiredAction: authRequiredActionSchema.optional(),
+    accessState: authAccessStateSchema.optional(),
   })
   .openapi("AuthProtectedErrorResponse");
 

@@ -7,6 +7,15 @@ import type { Context } from "hono";
 import { UUID_RE } from "../../../lib/constant";
 
 const AUTH_USER_ID_UUID_RE = UUID_RE;
+const AUTH_ACCESS_STATE = {
+  SIGNUP_REQUIRED: "SIGNUP_REQUIRED",
+  ONBOARDING_REQUIRED: "ONBOARDING_REQUIRED",
+  ACTIVE: "ACTIVE",
+} as const;
+const AUTH_REQUIRED_ACTION = {
+  COMPLETE_SIGNUP: "COMPLETE_SIGNUP",
+  COMPLETE_ONBOARDING: "COMPLETE_ONBOARDING",
+} as const;
 
 function isAccessTokenPayload(payload: Record<string, unknown>) {
   const tokenType = payload.type ?? payload.tokenType ?? payload.token_type;
@@ -36,12 +45,16 @@ function authErrorResponse(
   status: 401 | 403,
   error: string,
   code?: string,
+  requiredAction?: (typeof AUTH_REQUIRED_ACTION)[keyof typeof AUTH_REQUIRED_ACTION],
+  accessState?: (typeof AUTH_ACCESS_STATE)[keyof typeof AUTH_ACCESS_STATE],
 ) {
   return c.json(
     {
       ok: false as const,
       error,
       ...(code ? { code } : {}),
+      ...(requiredAction ? { requiredAction } : {}),
+      ...(accessState ? { accessState } : {}),
     },
     status,
   );
@@ -104,6 +117,8 @@ function createRequireAccessTokenMiddleware(options?: {
         403,
         "Sign up completion required",
         "SIGNUP_COMPLETION_REQUIRED",
+        AUTH_REQUIRED_ACTION.COMPLETE_SIGNUP,
+        AUTH_ACCESS_STATE.SIGNUP_REQUIRED,
       );
     }
 
@@ -118,6 +133,8 @@ function createRequireAccessTokenMiddleware(options?: {
           403,
           "Onboarding required",
           "ONBOARDING_REQUIRED",
+          AUTH_REQUIRED_ACTION.COMPLETE_ONBOARDING,
+          AUTH_ACCESS_STATE.ONBOARDING_REQUIRED,
         );
       }
     }
@@ -180,6 +197,37 @@ export const requireAdmin = createMiddleware(async (c, next) => {
 
   if (!user) {
     return authErrorResponse(c, 401, "User not found");
+  }
+
+  const onboardingStatus = await findUserOnboardingStatusById(auth.userId);
+  if (!onboardingStatus) {
+    return authErrorResponse(c, 401, "User not found");
+  }
+
+  if (!onboardingStatus.signupCompletedAt) {
+    return authErrorResponse(
+      c,
+      403,
+      "Sign up completion required",
+      "SIGNUP_COMPLETION_REQUIRED",
+      AUTH_REQUIRED_ACTION.COMPLETE_SIGNUP,
+      AUTH_ACCESS_STATE.SIGNUP_REQUIRED,
+    );
+  }
+
+  const isOnboardingCompleted =
+    onboardingStatus.onboardingCompletedAt !== null &&
+    onboardingStatus.onboardingStep >= ONBOARDING_COMPLETE_STEP;
+
+  if (!isOnboardingCompleted) {
+    return authErrorResponse(
+      c,
+      403,
+      "Onboarding required",
+      "ONBOARDING_REQUIRED",
+      AUTH_REQUIRED_ACTION.COMPLETE_ONBOARDING,
+      AUTH_ACCESS_STATE.ONBOARDING_REQUIRED,
+    );
   }
 
   if (user.role !== "admin") {
