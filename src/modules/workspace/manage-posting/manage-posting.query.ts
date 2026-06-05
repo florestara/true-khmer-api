@@ -204,7 +204,10 @@ const MANAGE_POSTING_EDITABLE_STATUSES = new Set<ManagePostingStatus>([
   "LIVE",
   "DRAFT",
 ]);
-const DEADLINE_EXTENSION_SOURCE_STATUS: ManagePostingStatus = "IN_PROGRESS";
+const DEADLINE_EXTENSION_ALLOWED_STATUSES = new Set<ManagePostingStatus>([
+  "LIVE",
+  "IN_PROGRESS",
+]);
 const DEADLINE_EXTENSION_REOPEN_STATUS: ManagePostingStatus = "LIVE";
 
 const POSTER_LOCKED_APPLICATION_STATUSES = new Set<ManagePostingApplicantStatus>(
@@ -889,7 +892,7 @@ function isManagePostingEditable(status: ManagePostingStatus): boolean {
 }
 
 function canExtendManagePostingDeadline(status: ManagePostingStatus): boolean {
-  return status === DEADLINE_EXTENSION_SOURCE_STATUS;
+  return DEADLINE_EXTENSION_ALLOWED_STATUSES.has(status);
 }
 
 function isDeadlineExtensionLater(

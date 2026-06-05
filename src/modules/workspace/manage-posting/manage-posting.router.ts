@@ -319,7 +319,7 @@ const updateManagePostingActionRoute = createRoute({
 
 const extendManagePostingDeadlineRoute = createRoute({
   method: "post",
-  path: "/{sourceType}/{postingId}/extend-deadline",
+  path: "/{sourceType}/{postingId}/extend-application-deadline",
   tags: ["Workspace"],
   middleware: [requireAccessToken],
   security: [{ BearerAuth: [] }],

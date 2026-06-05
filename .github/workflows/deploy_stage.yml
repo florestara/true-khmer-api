@@ -31,7 +31,7 @@ jobs:
           tags: docker-registry-local.bongit.net/true-khmer-api-stage:latest
       - name: Deploy to Dokploy
         run: |
-          curl --request GET 'https://dokploy.bongit.net/api/deploy/WadRfsy_hwOc6kkiFwyfe'
+          curl --request GET 'https://dokploy.bongit.net/api/deploy/4I5hIfd28_B-p0OmsGL40'
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
