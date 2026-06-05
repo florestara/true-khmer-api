@@ -13,6 +13,11 @@ export const LAUNCHPAD_DOCUMENT_MAX_BYTES = 10 * 1024 * 1024;
 
 const MAX_LAUNCHPADS_PAGE_SIZE = 50;
 const DEFAULT_LAUNCHPADS_PAGE_SIZE = 20;
+const LAUNCHPAD_LISTING_FILTERS = [
+  "recentlyAdded",
+  "startingSoon",
+  "mostSpotsAvailable",
+] as const;
 
 function normalizeText(value: string) {
   return value.trim().replace(/\s+/g, " ");
@@ -379,6 +384,14 @@ const launchpadSortBySchema = z.enum(["newest", "oldest"]).openapi({
   description: "Launchpad ordering. Allowed values: newest, oldest.",
   example: "newest",
 });
+const launchpadListingFilterSchema = z
+  .enum(LAUNCHPAD_LISTING_FILTERS)
+  .default("recentlyAdded")
+  .openapi({
+    description:
+      "Launchpad listing filter. startingSoon means deadline is within the next 3 days.",
+    example: "recentlyAdded",
+  });
 
 export type LaunchpadSortBy = z.infer<typeof launchpadSortBySchema>;
 
@@ -407,6 +420,8 @@ function buildChronologicalLaunchpadPageCursorSchema<
       .string()
       .trim()
       .regex(FORUM_UUID_RE, "cursor.id must be a valid UUID"),
+    filter: z.enum(LAUNCHPAD_LISTING_FILTERS).default("recentlyAdded"),
+    availableSpots: z.number().int().optional(),
   });
 }
 
@@ -435,8 +450,12 @@ export function encodeLaunchpadPageCursor(cursor: LaunchpadPageCursor): string {
   return Buffer.from(
     JSON.stringify({
       sortBy: cursor.sortBy,
+      filter: cursor.filter,
       createdAt: normalizedTimestamp,
       id: cursor.id,
+      ...(cursor.availableSpots !== undefined
+        ? { availableSpots: cursor.availableSpots }
+        : {}),
     }),
     "utf8",
   ).toString("base64url");
@@ -480,6 +499,7 @@ export const getLaunchpadQueryListSchema = z
       .max(MAX_LAUNCHPADS_PAGE_SIZE, "limit must be between 1 and 50")
       .default(DEFAULT_LAUNCHPADS_PAGE_SIZE),
     sortBy: launchpadSortBySchema.default("newest"),
+    filter: launchpadListingFilterSchema,
     cursor: z.string().optional().openapi({
       description:
         "Opaque pagination cursor returned by a previous launchpads list response.",
@@ -531,10 +551,19 @@ export const getLaunchpadQueryListSchema = z
         path: ["cursor"],
       });
     }
+
+    if (decodedCursor && decodedCursor.filter !== value.filter) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "cursor filter does not match filter",
+        path: ["cursor"],
+      });
+    }
   })
   .transform((value) => ({
     limit: value.limit,
     sortBy: value.sortBy,
+    filter: value.filter,
     cursor: value.cursor
       ? (decodeLaunchpadPageCursor(value.cursor) as LaunchpadPageCursor)
       : undefined,

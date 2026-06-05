@@ -1,4 +1,4 @@
-import { sql, eq, and, ilike, inArray, isNull } from "drizzle-orm";
+import { sql, eq, and, ilike, inArray, isNull, type SQL } from "drizzle-orm";
 import { db } from "../../db";
 import {
   LAUNCHPAD_ADVISORY_LOCK_NAMESPACE,
@@ -144,8 +144,29 @@ function buildLaunchpadBaseQuery() {
     .where(isNull(launchpad.deletedAt))
     .groupBy(launchpad.createdBy)
     .as("launchpad_count");
+  const capacitySubquery = db
+    .select({
+      launchpadId: launchpadRole.launchpadId,
+      capacity: sql<number>`coalesce(sum(${launchpadRole.capacity}), 0)::int`.as(
+        "capacity",
+      ),
+    })
+    .from(launchpadRole)
+    .groupBy(launchpadRole.launchpadId)
+    .as("launchpad_capacity");
+  const confirmedApplicationSubquery = db
+    .select({
+      launchpadId: launchpadApplication.launchpadId,
+      applicationCount: sql<number>`count(*)::int`.as("application_count"),
+    })
+    .from(launchpadApplication)
+    .where(eq(launchpadApplication.status, "CONFIRMED"))
+    .groupBy(launchpadApplication.launchpadId)
+    .as("launchpad_confirmed_applications");
+  const availableSpotsExpression =
+    sql<number>`greatest(coalesce(${capacitySubquery.capacity}, 0) - coalesce(${confirmedApplicationSubquery.applicationCount}, 0), 0)`;
 
-  return db
+  const query = db
     .select({
       launchpad: launchpad,
       category: launchpadCategory,
@@ -156,6 +177,7 @@ function buildLaunchpadBaseQuery() {
       totalRoles: sql<number>`cast(count(${launchpadRole.id}) as int)`.as(
         "totalRoles",
       ),
+      availableSpots: availableSpotsExpression.as("available_spots"),
     })
     .from(launchpad)
     .leftJoin(launchpadCategory, eq(launchpad.categoryId, launchpadCategory.id))
@@ -166,6 +188,11 @@ function buildLaunchpadBaseQuery() {
       launchpadCountSubquery,
       eq(user.id, launchpadCountSubquery.userId),
     )
+    .leftJoin(capacitySubquery, eq(launchpad.id, capacitySubquery.launchpadId))
+    .leftJoin(
+      confirmedApplicationSubquery,
+      eq(launchpad.id, confirmedApplicationSubquery.launchpadId),
+    )
     .leftJoin(launchpadRole, eq(launchpad.id, launchpadRole.launchpadId))
     .groupBy(
       launchpad.id,
@@ -174,7 +201,11 @@ function buildLaunchpadBaseQuery() {
       user.id,
       userProfile.id,
       launchpadCountSubquery.count,
+      capacitySubquery.capacity,
+      confirmedApplicationSubquery.applicationCount,
     );
+
+  return { query, availableSpotsExpression };
 }
 
 function resolveLaunchpadStatus(status: LaunchpadStatus): LaunchpadStatus {
@@ -183,6 +214,8 @@ function resolveLaunchpadStatus(status: LaunchpadStatus): LaunchpadStatus {
 
 function buildLaunchpadWhereClause(
   cursor: GetLaunchpadQueryListInput["cursor"],
+  filter: GetLaunchpadQueryListInput["filter"] = "recentlyAdded",
+  availableSpotsExpression: SQL<number> = sql<number>`0`,
   categoryId?: string,
   cityId?: string,
   search?: string,
@@ -211,8 +244,21 @@ function buildLaunchpadWhereClause(
     conditions.push(ilike(launchpad.name, `%${search}%`));
   }
 
+  if (filter === "startingSoon") {
+    conditions.push(
+      sql`${launchpad.deadline} >= now() and ${launchpad.deadline} <= now() + interval '3 days'`,
+    );
+  }
+
   if (cursor) {
-    if (cursor.sortBy === "newest") {
+    if (
+      filter === "mostSpotsAvailable" &&
+      cursor.availableSpots !== undefined
+    ) {
+      conditions.push(
+        sql`(${availableSpotsExpression} < ${cursor.availableSpots} OR (${availableSpotsExpression} = ${cursor.availableSpots} AND ${launchpad.createdAt} < ${new Date(cursor.createdAt).toISOString()}::timestamptz) OR (${availableSpotsExpression} = ${cursor.availableSpots} AND ${launchpad.createdAt} = ${new Date(cursor.createdAt).toISOString()}::timestamptz AND ${launchpad.id} < ${cursor.id}))`,
+      );
+    } else if (cursor.sortBy === "newest") {
       conditions.push(
         sql`(${launchpad.createdAt} < ${new Date(cursor.createdAt).toISOString()}::timestamptz OR (${launchpad.createdAt} = ${new Date(cursor.createdAt).toISOString()}::timestamptz AND ${launchpad.id} < ${cursor.id}))`,
       );
@@ -226,7 +272,15 @@ function buildLaunchpadWhereClause(
   return conditions.length > 0 ? and(...conditions) : undefined;
 }
 
-function buildLaunchpadOrderBy(sortBy: GetLaunchpadQueryListInput["sortBy"]) {
+function buildLaunchpadOrderBy(
+  sortBy: GetLaunchpadQueryListInput["sortBy"],
+  filter: GetLaunchpadQueryListInput["filter"],
+  availableSpotsExpression: SQL<number>,
+) {
+  if (filter === "mostSpotsAvailable") {
+    return sql`${availableSpotsExpression} DESC, ${launchpad.createdAt} DESC, ${launchpad.id} DESC`;
+  }
+
   if (sortBy === "newest") {
     return sql`${launchpad.createdAt} DESC, ${launchpad.id} DESC`;
   } else {
@@ -952,19 +1006,24 @@ export async function findLaunchpads(
   ownerId?: string,
   publicProfileOnly = false,
 ): Promise<{ launchpads: LaunchpadListItem[]; nextCursor: string | null }> {
+  const { query, availableSpotsExpression } = buildLaunchpadBaseQuery();
   const whereClause = buildLaunchpadWhereClause(
     params.cursor,
+    params.filter,
+    availableSpotsExpression,
     params.categoryId,
     params.cityId,
     params.search,
     ownerId,
     publicProfileOnly,
   );
-  const orderByClause = buildLaunchpadOrderBy(params.sortBy);
+  const orderByClause = buildLaunchpadOrderBy(
+    params.sortBy,
+    params.filter,
+    availableSpotsExpression,
+  );
 
-  const baseQuery = buildLaunchpadBaseQuery()
-    .where(whereClause)
-    .orderBy(orderByClause);
+  const baseQuery = query.where(whereClause).orderBy(orderByClause);
 
   const rows = await baseQuery.limit(params.limit + 1);
 
@@ -985,6 +1044,10 @@ export async function findLaunchpads(
     const lastRow = launchpadRows[launchpadRows.length - 1];
     nextCursor = encodeLaunchpadPageCursor({
       sortBy: params.sortBy,
+      filter: params.filter,
+      ...(params.filter === "mostSpotsAvailable"
+        ? { availableSpots: Number(lastRow.availableSpots ?? 0) }
+        : {}),
       createdAt: lastRow.launchpad.createdAt,
       id: lastRow.launchpad.id,
     });
@@ -1056,6 +1119,8 @@ export async function countLaunchpadsPostedByUserId(
     .from(launchpad)
     .where(
       buildLaunchpadWhereClause(
+        undefined,
+        "recentlyAdded",
         undefined,
         undefined,
         undefined,
