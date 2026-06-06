@@ -147,9 +147,10 @@ function buildLaunchpadBaseQuery() {
   const capacitySubquery = db
     .select({
       launchpadId: launchpadRole.launchpadId,
-      capacity: sql<number>`coalesce(sum(${launchpadRole.capacity}), 0)::int`.as(
-        "capacity",
-      ),
+      totalCapacity:
+        sql<number>`coalesce(sum(${launchpadRole.capacity}), 0)::int`.as(
+          "total_capacity",
+        ),
     })
     .from(launchpadRole)
     .groupBy(launchpadRole.launchpadId)
@@ -164,7 +165,7 @@ function buildLaunchpadBaseQuery() {
     .groupBy(launchpadApplication.launchpadId)
     .as("launchpad_confirmed_applications");
   const availableSpotsExpression =
-    sql<number>`greatest(coalesce(${capacitySubquery.capacity}, 0) - coalesce(${confirmedApplicationSubquery.applicationCount}, 0), 0)`;
+    sql<number>`greatest(coalesce(${capacitySubquery.totalCapacity}, 0) - coalesce(${confirmedApplicationSubquery.applicationCount}, 0), 0)`;
 
   const query = db
     .select({
@@ -201,7 +202,7 @@ function buildLaunchpadBaseQuery() {
       user.id,
       userProfile.id,
       launchpadCountSubquery.count,
-      capacitySubquery.capacity,
+      capacitySubquery.totalCapacity,
       confirmedApplicationSubquery.applicationCount,
     );
 
