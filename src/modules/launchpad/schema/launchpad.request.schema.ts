@@ -13,7 +13,6 @@ export const LAUNCHPAD_DOCUMENT_MAX_BYTES = 10 * 1024 * 1024;
 
 const MAX_LAUNCHPADS_PAGE_SIZE = 50;
 const DEFAULT_LAUNCHPADS_PAGE_SIZE = 20;
-
 function normalizeText(value: string) {
   return value.trim().replace(/\s+/g, " ");
 }
@@ -375,10 +374,13 @@ export const getLaunchpadQuerySchema = z.object({
     .regex(FORUM_UUID_RE, "launchpadId is required and must be a valid UUID"),
 });
 
-const launchpadSortBySchema = z.enum(["newest", "oldest"]).openapi({
-  description: "Launchpad ordering. Allowed values: newest, oldest.",
-  example: "newest",
-});
+const launchpadSortBySchema = z
+  .enum(["newest", "oldest", "startingSoon", "mostSpotsAvailable"])
+  .openapi({
+    description:
+      "Launchpad ordering. startingSoon means deadline is within the next 3 days.",
+    example: "newest",
+  });
 
 export type LaunchpadSortBy = z.infer<typeof launchpadSortBySchema>;
 
@@ -398,7 +400,7 @@ const cursorCreatedAtSchema = z
   });
 
 function buildChronologicalLaunchpadPageCursorSchema<
-  TSortBy extends "newest" | "oldest",
+  TSortBy extends LaunchpadSortBy,
 >(sortBy: TSortBy) {
   return z.object({
     sortBy: z.literal(sortBy),
@@ -414,10 +416,18 @@ const newestLaunchpadPageCursorSchema =
   buildChronologicalLaunchpadPageCursorSchema("newest");
 const oldestLaunchpadPageCursorSchema =
   buildChronologicalLaunchpadPageCursorSchema("oldest");
+const startingSoonLaunchpadPageCursorSchema =
+  buildChronologicalLaunchpadPageCursorSchema("startingSoon");
+const mostSpotsAvailableLaunchpadPageCursorSchema =
+  buildChronologicalLaunchpadPageCursorSchema("mostSpotsAvailable").extend({
+    availableSpots: z.number().int(),
+  });
 
 const launchpadPageCursorSchema = z.discriminatedUnion("sortBy", [
   newestLaunchpadPageCursorSchema,
   oldestLaunchpadPageCursorSchema,
+  startingSoonLaunchpadPageCursorSchema,
+  mostSpotsAvailableLaunchpadPageCursorSchema,
 ]);
 
 export type LaunchpadPageCursor = z.infer<typeof launchpadPageCursorSchema>;
@@ -437,6 +447,9 @@ export function encodeLaunchpadPageCursor(cursor: LaunchpadPageCursor): string {
       sortBy: cursor.sortBy,
       createdAt: normalizedTimestamp,
       id: cursor.id,
+      ...("availableSpots" in cursor && cursor.availableSpots !== undefined
+        ? { availableSpots: cursor.availableSpots }
+        : {}),
     }),
     "utf8",
   ).toString("base64url");

@@ -11,6 +11,11 @@ const MIN_VOLUNTEER_APPLICATION_DOCUMENT_COUNT = 1;
 const MAX_VOLUNTEER_APPLICATION_DOCUMENT_COUNT = 3;
 const DEFAULT_VOLUNTEER_OPPORTUNITIES_PAGE_SIZE = 10;
 const VOLUNTEER_COMMITMENT_LABELS = ["Light", "Regular", "Intensive"] as const;
+const VOLUNTEER_LISTING_FILTERS = [
+  "recentlyAdded",
+  "startingSoon",
+  "mostSpotsAvailable",
+] as const;
 
 export const VOLUNTEER_COVER_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 export const VOLUNTEER_APPLICATION_DOCUMENT_MAX_BYTES = 10 * 1024 * 1024;
@@ -103,11 +108,21 @@ const cursorTimestampSchema = z.string().trim().transform((value, ctx) => {
   return normalized;
 });
 
-const volunteerOpportunitiesPageCursorSchema = z.object({
+const volunteerOpportunitiesBasePageCursorSchema = z.object({
   publishedAt: cursorTimestampSchema,
   createdAt: cursorTimestampSchema,
   id: z.string().trim().regex(VOLUNTEER_UUID_RE, "cursor.id must be a valid UUID"),
 });
+
+const volunteerOpportunitiesPageCursorSchema = z.discriminatedUnion("filter", [
+  volunteerOpportunitiesBasePageCursorSchema.extend({
+    filter: z.literal("mostSpotsAvailable"),
+    availableSpots: z.number().int(),
+  }),
+  volunteerOpportunitiesBasePageCursorSchema.extend({
+    filter: z.enum(["recentlyAdded", "startingSoon"]),
+  }),
+]);
 
 const savedVolunteerOpportunitiesPageCursorSchema = z.object({
   savedAt: cursorTimestampSchema,
@@ -143,9 +158,13 @@ export function encodeVolunteerOpportunitiesPageCursor(
 
   return Buffer.from(
     JSON.stringify({
+      filter: "filter" in cursor ? cursor.filter : "recentlyAdded",
       publishedAt,
       createdAt,
       id: cursor.id,
+      ...("availableSpots" in cursor && cursor.availableSpots !== undefined
+        ? { availableSpots: cursor.availableSpots }
+        : {}),
     }),
     "utf8",
   ).toString("base64url");
@@ -777,6 +796,8 @@ export const getVolunteerOpportunitiesQuerySchema = z
       .trim()
       .max(300, "search must be <= 300 characters")
       .optional(),
+    filter: z.enum(VOLUNTEER_LISTING_FILTERS).default("recentlyAdded"),
+    timeCommitment: z.enum(VOLUNTEER_COMMITMENT_LABELS).optional(),
     limit: z.coerce
       .number()
       .int()
@@ -799,10 +820,27 @@ export const getVolunteerOpportunitiesQuerySchema = z
       return cursor;
     }),
   })
+  .superRefine((value, ctx) => {
+    const cursor = value.cursor;
+    if (
+      cursor &&
+      "filter" in cursor &&
+      cursor.filter !== undefined &&
+      cursor.filter !== value.filter
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "cursor filter does not match filter",
+        path: ["cursor"],
+      });
+    }
+  })
   .transform((value) => ({
     categoryId: value.categoryId,
     locationId: value.locationId,
     search: value.search,
+    filter: value.filter,
+    timeCommitment: value.timeCommitment,
     limit: value.limit,
     cursor: value.cursor,
   }))
