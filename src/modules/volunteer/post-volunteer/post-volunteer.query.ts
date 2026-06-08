@@ -1050,14 +1050,21 @@ function buildNextVolunteerOpportunitiesCursor(
     );
   }
 
+  if (filter === "mostSpotsAvailable") {
+    return encodeVolunteerOpportunitiesPageCursor({
+      filter,
+      publishedAt: row.opportunity.publishedAt,
+      createdAt: row.opportunity.createdAt,
+      id: row.opportunity.id,
+      availableSpots: toInteger(row.availableSpots ?? 0),
+    });
+  }
+
   return encodeVolunteerOpportunitiesPageCursor({
     filter,
     publishedAt: row.opportunity.publishedAt,
     createdAt: row.opportunity.createdAt,
     id: row.opportunity.id,
-    ...(filter === "mostSpotsAvailable"
-      ? { availableSpots: toInteger(row.availableSpots ?? 0) }
-      : {}),
   });
 }
 

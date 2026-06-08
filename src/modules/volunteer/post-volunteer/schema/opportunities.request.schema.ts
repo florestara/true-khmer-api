@@ -114,12 +114,14 @@ const volunteerOpportunitiesBasePageCursorSchema = z.object({
   id: z.string().trim().regex(VOLUNTEER_UUID_RE, "cursor.id must be a valid UUID"),
 });
 
-const volunteerOpportunitiesPageCursorSchema = z.union([
+const volunteerOpportunitiesPageCursorSchema = z.discriminatedUnion("filter", [
   volunteerOpportunitiesBasePageCursorSchema.extend({
-    filter: z.enum(VOLUNTEER_LISTING_FILTERS).default("recentlyAdded"),
-    availableSpots: z.number().int().optional(),
+    filter: z.literal("mostSpotsAvailable"),
+    availableSpots: z.number().int(),
   }),
-  volunteerOpportunitiesBasePageCursorSchema,
+  volunteerOpportunitiesBasePageCursorSchema.extend({
+    filter: z.enum(["recentlyAdded", "startingSoon"]),
+  }),
 ]);
 
 const savedVolunteerOpportunitiesPageCursorSchema = z.object({

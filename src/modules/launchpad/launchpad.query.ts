@@ -215,7 +215,7 @@ function resolveLaunchpadStatus(status: LaunchpadStatus): LaunchpadStatus {
 
 function buildLaunchpadWhereClause(
   cursor: GetLaunchpadQueryListInput["cursor"],
-  filter: GetLaunchpadQueryListInput["filter"] = "recentlyAdded",
+  sortBy: GetLaunchpadQueryListInput["sortBy"] = "newest",
   availableSpotsExpression: SQL<number> = sql<number>`0`,
   categoryId?: string,
   cityId?: string,
@@ -245,21 +245,18 @@ function buildLaunchpadWhereClause(
     conditions.push(ilike(launchpad.name, `%${search}%`));
   }
 
-  if (filter === "startingSoon") {
+  if (sortBy === "startingSoon") {
     conditions.push(
       sql`${launchpad.deadline} >= now() and ${launchpad.deadline} <= now() + interval '3 days'`,
     );
   }
 
   if (cursor) {
-    if (
-      filter === "mostSpotsAvailable" &&
-      cursor.availableSpots !== undefined
-    ) {
+    if (cursor.sortBy === "mostSpotsAvailable") {
       conditions.push(
         sql`(${availableSpotsExpression} < ${cursor.availableSpots} OR (${availableSpotsExpression} = ${cursor.availableSpots} AND ${launchpad.createdAt} < ${new Date(cursor.createdAt).toISOString()}::timestamptz) OR (${availableSpotsExpression} = ${cursor.availableSpots} AND ${launchpad.createdAt} = ${new Date(cursor.createdAt).toISOString()}::timestamptz AND ${launchpad.id} < ${cursor.id}))`,
       );
-    } else if (cursor.sortBy === "newest") {
+    } else if (cursor.sortBy === "newest" || cursor.sortBy === "startingSoon") {
       conditions.push(
         sql`(${launchpad.createdAt} < ${new Date(cursor.createdAt).toISOString()}::timestamptz OR (${launchpad.createdAt} = ${new Date(cursor.createdAt).toISOString()}::timestamptz AND ${launchpad.id} < ${cursor.id}))`,
       );
@@ -275,18 +272,17 @@ function buildLaunchpadWhereClause(
 
 function buildLaunchpadOrderBy(
   sortBy: GetLaunchpadQueryListInput["sortBy"],
-  filter: GetLaunchpadQueryListInput["filter"],
   availableSpotsExpression: SQL<number>,
 ) {
-  if (filter === "mostSpotsAvailable") {
+  if (sortBy === "mostSpotsAvailable") {
     return sql`${availableSpotsExpression} DESC, ${launchpad.createdAt} DESC, ${launchpad.id} DESC`;
   }
 
-  if (sortBy === "newest") {
-    return sql`${launchpad.createdAt} DESC, ${launchpad.id} DESC`;
-  } else {
+  if (sortBy === "oldest") {
     return sql`${launchpad.createdAt} ASC, ${launchpad.id} ASC`;
   }
+
+  return sql`${launchpad.createdAt} DESC, ${launchpad.id} DESC`;
 }
 
 async function updateCategoryTotalLaunchpadCount(
@@ -1010,7 +1006,7 @@ export async function findLaunchpads(
   const { query, availableSpotsExpression } = buildLaunchpadBaseQuery();
   const whereClause = buildLaunchpadWhereClause(
     params.cursor,
-    params.filter,
+    params.sortBy,
     availableSpotsExpression,
     params.categoryId,
     params.cityId,
@@ -1020,7 +1016,6 @@ export async function findLaunchpads(
   );
   const orderByClause = buildLaunchpadOrderBy(
     params.sortBy,
-    params.filter,
     availableSpotsExpression,
   );
 
@@ -1043,15 +1038,19 @@ export async function findLaunchpads(
   let nextCursor: string | null = null;
   if (hasNextPage && launchpadRows.length > 0) {
     const lastRow = launchpadRows[launchpadRows.length - 1];
-    nextCursor = encodeLaunchpadPageCursor({
-      sortBy: params.sortBy,
-      filter: params.filter,
-      ...(params.filter === "mostSpotsAvailable"
-        ? { availableSpots: Number(lastRow.availableSpots ?? 0) }
-        : {}),
-      createdAt: lastRow.launchpad.createdAt,
-      id: lastRow.launchpad.id,
-    });
+    nextCursor =
+      params.sortBy === "mostSpotsAvailable"
+        ? encodeLaunchpadPageCursor({
+            sortBy: params.sortBy,
+            availableSpots: Number(lastRow.availableSpots ?? 0),
+            createdAt: lastRow.launchpad.createdAt,
+            id: lastRow.launchpad.id,
+          })
+        : encodeLaunchpadPageCursor({
+            sortBy: params.sortBy,
+            createdAt: lastRow.launchpad.createdAt,
+            id: lastRow.launchpad.id,
+          });
   }
 
   const launchpads = launchpadRows.map((row) => ({
@@ -1121,7 +1120,7 @@ export async function countLaunchpadsPostedByUserId(
     .where(
       buildLaunchpadWhereClause(
         undefined,
-        "recentlyAdded",
+        "newest",
         undefined,
         undefined,
         undefined,
