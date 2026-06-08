@@ -73,13 +73,17 @@ function isGoogleAvatarUrl(value?: string) {
   }
 }
 
-function isAvatarKeyOwnedByUser(userId: string, avatarKey?: string) {
+function isAvatarKeyOwnedByUser(
+  userId: string,
+  avatarKey?: string,
+  ownerImage?: string | null,
+) {
   if (!avatarKey) {
     return true;
   }
 
   if (isGoogleAvatarUrl(avatarKey)) {
-    return true;
+    return avatarKey === ownerImage;
   }
 
   const rawKey = avatarKey.startsWith("/") ? avatarKey.slice(1) : avatarKey;
@@ -161,7 +165,13 @@ export async function handleSaveProfileStep(
     return c.json({ ok: false, error: "User not found" }, 404);
   }
 
-  if (!isAvatarKeyOwnedByUser(authResult.userId, payload.avatarKey)) {
+  if (
+    !isAvatarKeyOwnedByUser(
+      authResult.userId,
+      payload.avatarKey,
+      existingUser.image,
+    )
+  ) {
     return c.json(
       { ok: false, error: "avatarKey does not belong to current user" },
       400,
