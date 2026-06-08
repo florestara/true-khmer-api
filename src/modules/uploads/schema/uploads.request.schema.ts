@@ -8,16 +8,8 @@ const ALLOWED_AVATAR_CONTENT_TYPES = [
   "image/webp",
 ] as const;
 
-const SAFE_FILE_NAME = /^[A-Za-z0-9._-]+$/;
-
 export const presignAvatarUploadSchema = z
   .object({
-    fileName: z
-      .string()
-      .trim()
-      .min(1, "fileName is required")
-      .max(120, "fileName must be <= 120 characters")
-      .regex(SAFE_FILE_NAME, "fileName contains invalid characters"),
     contentType: z
       .string()
       .trim()
