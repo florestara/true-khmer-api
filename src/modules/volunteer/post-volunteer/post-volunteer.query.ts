@@ -901,12 +901,18 @@ function buildVolunteerOpportunitiesWhereClause({
   locationId,
   search,
   filter,
+  timeCommitment,
   cursor,
   ownerId,
   availableSpotsExpression,
 }: Pick<
   GetVolunteerOpportunitiesQuery,
-  "categoryId" | "locationId" | "search" | "filter" | "cursor"
+  | "categoryId"
+  | "locationId"
+  | "search"
+  | "filter"
+  | "timeCommitment"
+  | "cursor"
 > & { ownerId?: string; availableSpotsExpression?: SQL<number> }) {
   const filters: SQL<unknown>[] = [
     ownerId
@@ -931,6 +937,10 @@ function buildVolunteerOpportunitiesWhereClause({
 
   if (locationId) {
     filters.push(eq(volunteerOpportunity.cityId, locationId));
+  }
+
+  if (timeCommitment) {
+    filters.push(eq(volunteerOpportunity.commitmentLabel, timeCommitment));
   }
 
   if (search) {
@@ -1014,6 +1024,7 @@ async function countVolunteerOpportunities({
   locationId,
   search,
   filter,
+  timeCommitment,
   ownerId,
 }: Omit<GetVolunteerOpportunitiesQuery, "limit" | "cursor"> & {
   ownerId?: string;
@@ -1032,6 +1043,7 @@ async function countVolunteerOpportunities({
         locationId,
         search,
         filter,
+        timeCommitment,
         cursor: undefined,
         ownerId,
       }),
@@ -1528,6 +1540,7 @@ export async function getVolunteerOpportunities(
     locationId,
     search,
     filter,
+    timeCommitment,
     limit,
     cursor,
   }: GetVolunteerOpportunitiesQuery,
@@ -1601,6 +1614,7 @@ export async function getVolunteerOpportunities(
         locationId,
         search,
         filter,
+        timeCommitment,
         cursor,
         ownerId,
         availableSpotsExpression,
@@ -1616,6 +1630,7 @@ export async function getVolunteerOpportunities(
       locationId,
       search,
       filter,
+      timeCommitment,
       ownerId,
     }),
   ]);
@@ -1672,6 +1687,7 @@ export async function countVolunteerOpportunitiesPostedByUserId(
     locationId: undefined,
     search: undefined,
     filter: "recentlyAdded",
+    timeCommitment: undefined,
     ownerId: userId,
   });
 }

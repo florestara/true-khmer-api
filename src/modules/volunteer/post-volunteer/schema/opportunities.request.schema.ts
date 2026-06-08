@@ -797,6 +797,7 @@ export const getVolunteerOpportunitiesQuerySchema = z
       .max(300, "search must be <= 300 characters")
       .optional(),
     filter: z.enum(VOLUNTEER_LISTING_FILTERS).default("recentlyAdded"),
+    timeCommitment: z.enum(VOLUNTEER_COMMITMENT_LABELS).optional(),
     limit: z.coerce
       .number()
       .int()
@@ -839,6 +840,7 @@ export const getVolunteerOpportunitiesQuerySchema = z
     locationId: value.locationId,
     search: value.search,
     filter: value.filter,
+    timeCommitment: value.timeCommitment,
     limit: value.limit,
     cursor: value.cursor,
   }))
