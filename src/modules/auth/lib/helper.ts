@@ -2,6 +2,7 @@ import { auth } from "./provider";
 import { authConfig } from "./config";
 import {
   AuthForgotPasswordPayload,
+  AuthGooglePayload,
   AuthLoginPayload,
   AuthRegisterPayload,
   AuthResetPasswordPayload,
@@ -24,6 +25,9 @@ type UserLike = {
   name: string;
   phoneNumber?: string | null;
   image?: string | null;
+  signupCompletedAt?: string | Date | null;
+  onboardingStep?: number;
+  onboardingCompletedAt?: string | Date | null;
   createdAt: string;
   updatedAt: string;
   profile?: {
@@ -63,6 +67,7 @@ async function attachUserProfile<T extends { id: string }>(
     profile: {
       id: user.id,
       avatarUrl:
+        (user as { image?: string | null }).image ??
         "https://r2.bongit.net/1765707089130-account-avatar-profile-user-svgrepo-com.svg",
     },
   };
@@ -284,6 +289,53 @@ export async function signInWithEmailPassword(payload: AuthLoginPayload) {
     !isJsonRecord(user)
   ) {
     const errorBody = normalizeAuthErrorBody(body, "Login failed");
+    return {
+      ok: false,
+      status: response.status,
+      body: errorBody,
+    } as const;
+  }
+
+  const enrichedUser = await attachUserProfile(user as UserLike);
+
+  return {
+    ok: true,
+    body: {
+      token,
+      user: enrichedUser,
+    },
+  } as const;
+}
+
+export async function signInWithGoogleIdToken(payload: AuthGooglePayload) {
+  const response = await callAuth("/sign-in/social", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      provider: "google",
+      idToken: {
+        token: payload.idToken,
+      },
+    }),
+  });
+
+  const body = await parseResponseBody(response);
+  const parsedBody = isJsonRecord(body) ? body : null;
+  const token = parsedBody?.token;
+  const user = parsedBody?.user;
+
+  if (
+    !response.ok ||
+    typeof token !== "string" ||
+    !token ||
+    !isJsonRecord(user)
+  ) {
+    const errorBody = normalizeAuthErrorBody(
+      body,
+      "Google authentication failed",
+    );
     return {
       ok: false,
       status: response.status,

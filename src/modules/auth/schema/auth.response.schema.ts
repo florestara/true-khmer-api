@@ -15,16 +15,44 @@ export const authUserSchema = z
     email: z.string().email(),
     emailVerified: z.boolean().optional(),
     name: z.string().optional(),
+    firstName: z.string().optional(),
+    lastName: z.string().optional(),
+    gender: z.enum(["male", "female", "other"]).optional(),
+    occupation: z.string().nullable().optional(),
     phoneNumber: z.string().nullable().optional(),
+    image: z.string().nullable().optional(),
+    signupCompletedAt: z.union([z.string(), z.date()]).nullable().optional(),
+    onboardingCompletedAt: z.union([z.string(), z.date()]).nullable().optional(),
+    onboardingStep: z.number().int().optional(),
     profile: authUserProfileSchema.optional(),
   })
   .openapi("AuthUser");
+
+export const authAccessStateSchema = z
+  .enum(["SIGNUP_REQUIRED", "ONBOARDING_REQUIRED", "ACTIVE"])
+  .openapi("AuthAccessState");
+
+export const authRequiredActionSchema = z
+  .enum(["COMPLETE_SIGNUP", "COMPLETE_ONBOARDING"])
+  .openapi("AuthRequiredAction");
+
+export const authFlowSchema = z
+  .object({
+    isNewUser: z.boolean(),
+    requiresSignupCompletion: z.boolean(),
+    requiresOnboarding: z.boolean(),
+    nextStep: z.enum(["COMPLETE_SIGNUP", "ONBOARDING", "APP"]),
+    accessState: authAccessStateSchema,
+    requiredAction: authRequiredActionSchema.nullable(),
+  })
+  .openapi("AuthFlow");
 
 export const authTokenResponseSchema = z
   .object({
     accessToken: z.string(),
     refreshToken: z.string(),
     user: authUserSchema,
+    authFlow: authFlowSchema.optional(),
   })
   .openapi("AuthTokenResponse");
 
@@ -36,6 +64,22 @@ export const registerSuccessResponseSchema = z
     user: authUserSchema,
   })
   .openapi("RegisterSuccessResponse");
+
+export const completeSignUpResponseSchema = z
+  .object({
+    success: z.literal(true),
+    message: z.string(),
+    user: authUserSchema,
+    authFlow: authFlowSchema.optional(),
+  })
+  .openapi("CompleteSignUpResponse");
+
+export const authSessionResponseSchema = z
+  .object({
+    user: authUserSchema,
+    authFlow: authFlowSchema,
+  })
+  .openapi("AuthSessionResponse");
 
 export const resendRegisterOtpResponseSchema = z
   .object({
@@ -69,6 +113,8 @@ export const authProtectedErrorResponseSchema = z
     ok: z.literal(false),
     error: z.string(),
     code: z.string().optional(),
+    requiredAction: authRequiredActionSchema.optional(),
+    accessState: authAccessStateSchema.optional(),
   })
   .openapi("AuthProtectedErrorResponse");
 

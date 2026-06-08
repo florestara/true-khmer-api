@@ -5,6 +5,7 @@ import { ZodError } from "zod";
 import routes from "./routes/routes";
 import { AppBindings } from "./lib/types";
 import { scalarDocsPageHtml } from "./docs/scalar-docs";
+import { auth } from "./lib/auth";
 import { logger } from "hono/logger";
 
 const app = new OpenAPIHono<AppBindings>();
@@ -18,6 +19,7 @@ app.use("*", prettyJSON());
 
 // API routes
 app.route("/v1", routes);
+app.on(["GET", "POST"], "/api/auth/*", (c) => auth.handler(c.req.raw));
 
 // Health check
 app.get("/", (c) => {

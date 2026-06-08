@@ -154,6 +154,9 @@ export async function findUserById(userId: string) {
     .select({
       id: user.id,
       email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      image: user.image,
       role: user.role,
       onboardingStep: user.onboardingStep,
       onboardingCompletedAt: user.onboardingCompletedAt,

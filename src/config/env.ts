@@ -52,9 +52,21 @@ const envSchema = z
       emptyStringToUndefined,
       z.string().min(1).optional(),
     ),
+    GOOGLE_CLIENT_ID: z.preprocess(
+      emptyStringToUndefined,
+      z.string().min(1).optional(),
+    ),
+    GOOGLE_CLIENT_SECRET: z.preprocess(
+      emptyStringToUndefined,
+      z.string().min(1).optional(),
+    ),
     RESEND_API_KEY: z.preprocess(
       emptyStringToUndefined,
       z.string().min(1).optional(),
+    ),
+    RESEND_API_URL: z.preprocess(
+      emptyStringToUndefined,
+      z.string().url().optional(),
     ),
     RESEND_FROM_EMAIL: z.preprocess(
       emptyStringToUndefined,
@@ -83,6 +95,28 @@ const envSchema = z
     ),
   })
   .superRefine((data, ctx) => {
+    const googleCredentials = [
+      "GOOGLE_CLIENT_ID",
+      "GOOGLE_CLIENT_SECRET",
+    ] as const;
+
+    const missingGoogleCredentials = googleCredentials.filter(
+      (key) => data[key] === undefined || data[key] === "",
+    );
+
+    if (
+      missingGoogleCredentials.length > 0 &&
+      missingGoogleCredentials.length < googleCredentials.length
+    ) {
+      for (const key of missingGoogleCredentials) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [key],
+          message: "Required with other Google OAuth credentials",
+        });
+      }
+    }
+
     const firebaseKeys = [
       "FIREBASE_PROJECT_ID",
       "FIREBASE_CLIENT_EMAIL",

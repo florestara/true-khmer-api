@@ -4,6 +4,9 @@ export type OnboardingStateDto = {
   user: {
     id: string;
     email: string;
+    firstName?: string;
+    lastName?: string;
+    image?: string | null;
     role: string;
     onboardingStep: number;
     onboardingCompletedAt: Date | null;

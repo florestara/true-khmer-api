@@ -5,19 +5,27 @@ import {
   requestPasswordReset,
   resetPassword,
   requestEmailVerificationOtp,
+  signInWithGoogleIdToken,
   signInWithEmailPassword,
   signUpWithEmailPassword,
   verifyRegisterOtp,
 } from "./lib/helper";
 import {
+  completeUserSignUp,
+  findAuthFlowUserById,
   findUserByEmail,
+  markUserSignUpCompleted,
   revokeEmailVerificationOtp,
 } from "./auth.query";
+import type { AuthContext } from "./lib/types";
 import { authConfig } from "./lib/config";
+import { ONBOARDING_COMPLETE_STEP } from "../onboarding/constants";
 import {
   type ValidationFailure,
   type ValidationResult,
+  validateCompleteSignUpPayload,
   validateForgotPasswordPayload,
+  validateGooglePayload,
   validateLoginPayload,
   validateRefreshPayload,
   validateRegisterPayload,
@@ -25,6 +33,24 @@ import {
   validateResendRegisterOtpPayload,
   validateVerifyRegisterOtpPayload,
 } from "./auth.validator";
+
+type AuthNextStep = "COMPLETE_SIGNUP" | "ONBOARDING" | "APP";
+type AuthAccessState = "SIGNUP_REQUIRED" | "ONBOARDING_REQUIRED" | "ACTIVE";
+type AuthRequiredAction = "COMPLETE_SIGNUP" | "COMPLETE_ONBOARDING";
+type AuthFlowUser = {
+  id: string;
+  signupCompletedAt?: Date | string | null;
+  onboardingCompletedAt?: Date | string | null;
+  onboardingStep?: number | null;
+};
+type AuthFlow = {
+  isNewUser: boolean;
+  requiresSignupCompletion: boolean;
+  requiresOnboarding: boolean;
+  nextStep: AuthNextStep;
+  accessState: AuthAccessState;
+  requiredAction: AuthRequiredAction | null;
+};
 
 const genericForgotPasswordResponse = {
   success: true as const,
@@ -165,10 +191,103 @@ function normalizeResetPageUrl(rawResetPageUrl: string) {
   return { ok: true as const, url: resetPageUrl };
 }
 
+function decodeGoogleIdTokenEmail(idToken: string) {
+  const parsed = decodeGoogleIdTokenPayload(idToken);
+  const email = parsed?.email;
+  return typeof email === "string" && email.trim()
+    ? email.trim().toLowerCase()
+    : null;
+}
+
+function decodeGoogleIdTokenPayload(idToken: string) {
+  const [, payload] = idToken.split(".");
+  if (!payload) {
+    return null;
+  }
+
+  try {
+    const normalizedPayload = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const decodedPayload = Buffer.from(normalizedPayload, "base64").toString(
+      "utf8",
+    );
+    return JSON.parse(decodedPayload) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function resolveAuthFlow(user: AuthFlowUser, isNewUser: boolean): AuthFlow {
+  const requiresSignupCompletion = !user.signupCompletedAt;
+  const requiresOnboarding =
+    !user.onboardingCompletedAt ||
+    (user.onboardingStep ?? 0) < ONBOARDING_COMPLETE_STEP;
+
+  let nextStep: AuthNextStep = "APP";
+  let accessState: AuthAccessState = "ACTIVE";
+  let requiredAction: AuthRequiredAction | null = null;
+
+  if (requiresSignupCompletion) {
+    nextStep = "COMPLETE_SIGNUP";
+    accessState = "SIGNUP_REQUIRED";
+    requiredAction = "COMPLETE_SIGNUP";
+  } else if (requiresOnboarding) {
+    nextStep = "ONBOARDING";
+    accessState = "ONBOARDING_REQUIRED";
+    requiredAction = "COMPLETE_ONBOARDING";
+  }
+
+  return {
+    isNewUser,
+    requiresSignupCompletion,
+    requiresOnboarding,
+    nextStep,
+    accessState,
+    requiredAction,
+  };
+}
+
+function getUserIdFromAuthUser(user: unknown) {
+  if (!user || typeof user !== "object") {
+    return null;
+  }
+
+  const id = (user as Record<string, unknown>).id;
+  return typeof id === "string" && id.trim() ? id.trim() : null;
+}
+
+async function withAuthFlowUser(
+  user: unknown,
+  isNewUser: boolean,
+): Promise<{ user: unknown; authFlow?: AuthFlow }> {
+  const userId = getUserIdFromAuthUser(user);
+  if (!userId) {
+    return { user };
+  }
+
+  const authFlowUser = await findAuthFlowUserById(userId);
+  if (!authFlowUser) {
+    return { user };
+  }
+
+  return {
+    user:
+      user && typeof user === "object"
+        ? {
+            ...(user as Record<string, unknown>),
+            signupCompletedAt: authFlowUser.signupCompletedAt,
+            onboardingCompletedAt: authFlowUser.onboardingCompletedAt,
+            onboardingStep: authFlowUser.onboardingStep,
+          }
+        : authFlowUser,
+    authFlow: resolveAuthFlow(authFlowUser, isNewUser),
+  };
+}
+
 async function buildAuthTokenResponse(
   c: Context,
   refreshToken: string,
   user: unknown,
+  options?: { isNewUser?: boolean },
 ) {
   const accessTokenResult = await getAccessTokenFromRefreshToken(refreshToken);
 
@@ -181,10 +300,13 @@ async function buildAuthTokenResponse(
     );
   }
 
+  const enrichedAuth = await withAuthFlowUser(user, options?.isNewUser ?? false);
+
   return c.json({
     accessToken: accessTokenResult.token,
     refreshToken,
-    user,
+    user: enrichedAuth.user,
+    ...(enrichedAuth.authFlow ? { authFlow: enrichedAuth.authFlow } : {}),
   });
 }
 
@@ -215,6 +337,19 @@ export async function handleRegister(c: Context) {
     );
   }
 
+  const registeredUserId = getUserIdFromAuthUser(registerResult.body.user);
+  const completedUser = registeredUserId
+    ? await markUserSignUpCompleted(registeredUserId)
+    : null;
+  const responseUser = completedUser
+    ? {
+        ...(registerResult.body.user as Record<string, unknown>),
+        signupCompletedAt: completedUser.signupCompletedAt,
+        onboardingCompletedAt: completedUser.onboardingCompletedAt,
+        onboardingStep: completedUser.onboardingStep,
+      }
+    : registerResult.body.user;
+
   const otpResult = await requestEmailVerificationOtp(parsed.data.email);
 
   if (!otpResult.ok) {
@@ -224,7 +359,7 @@ export async function handleRegister(c: Context) {
         message:
           "Registration successful, but we could not send the OTP due to a temporary issue. Please request a new OTP to verify your email address.",
         otpSent: false,
-        user: registerResult.body.user,
+        user: responseUser,
       },
       201,
     );
@@ -235,9 +370,92 @@ export async function handleRegister(c: Context) {
       success: true,
       message: "Registration successful. OTP code sent to email.",
       otpSent: true,
-      user: registerResult.body.user,
+      user: responseUser,
     },
     201,
+  );
+}
+
+export async function handleCompleteSignUp(c: Context) {
+  const auth = c.get("auth") as AuthContext | undefined;
+  if (!auth) {
+    return c.json({ ok: false, error: "Missing bearer token" }, 401);
+  }
+
+  const parsed = await parseAndValidate(c, validateCompleteSignUpPayload);
+  if (!parsed.ok) {
+    return parsed.response;
+  }
+
+  const updatedUser = await completeUserSignUp(auth.userId, parsed.data);
+  if (!updatedUser) {
+    return c.json({ error: "User not found" }, 404);
+  }
+
+  const authFlow = resolveAuthFlow(updatedUser, false);
+
+  return c.json({
+    success: true as const,
+    message: "Sign up details completed successfully.",
+    user: updatedUser,
+    authFlow,
+  });
+}
+
+export async function handleSession(c: Context) {
+  const auth = c.get("auth") as AuthContext | undefined;
+  if (!auth) {
+    return c.json({ ok: false, error: "Missing bearer token" }, 401);
+  }
+
+  const user = await findAuthFlowUserById(auth.userId);
+  if (!user) {
+    return c.json({ ok: false, error: "User not found" }, 401);
+  }
+
+  return c.json({
+    user,
+    authFlow: resolveAuthFlow(user, false),
+  }, 200);
+}
+
+export async function handleGoogle(c: Context) {
+  const parsed = await parseAndValidate(c, validateGooglePayload);
+  if (!parsed.ok) {
+    return parsed.response;
+  }
+
+  const googleEmail = decodeGoogleIdTokenEmail(parsed.data.idToken);
+  const existingUser = googleEmail ? await findUserByEmail(googleEmail) : null;
+  const googleResult = await signInWithGoogleIdToken(parsed.data);
+
+  if (!googleResult.ok) {
+    return authProviderError(
+      c,
+      googleResult.status,
+      googleResult.body,
+      "Google authentication failed",
+    );
+  }
+
+  const userEmail =
+    googleResult.body.user &&
+    typeof googleResult.body.user === "object" &&
+    typeof (googleResult.body.user as Record<string, unknown>).email ===
+      "string"
+      ? ((googleResult.body.user as Record<string, unknown>).email as string)
+          .trim()
+          .toLowerCase()
+      : null;
+  const isNewUser =
+    Boolean(userEmail) &&
+    (!existingUser || existingUser.email.toLowerCase() !== userEmail);
+
+  return buildAuthTokenResponse(
+    c,
+    googleResult.body.token,
+    googleResult.body.user,
+    { isNewUser },
   );
 }
 

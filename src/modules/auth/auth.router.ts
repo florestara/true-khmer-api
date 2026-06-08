@@ -1,17 +1,25 @@
 import { OpenAPIHono, createRoute } from "@hono/zod-openapi";
 import type { AppBindings } from "../../lib/types";
 import {
+  handleCompleteSignUp,
   handleForgotPassword,
+  handleGoogle,
   handleLogin,
   handleRefresh,
   handleRegister,
   handleResetPassword,
   handleResendRegisterOtp,
+  handleSession,
   handleVerifyRegisterOtp,
 } from "./auth.service";
+import { requireAccessTokenAllowIncompleteSignUpAndOnboarding } from "../../middlewares/auth.middleware";
 import {
+  authCompleteSignUpSchema,
+  authGoogleSchema,
+  authProtectedErrorResponseSchema,
   authSimpleErrorResponseSchema,
   authTokenResponseSchema,
+  completeSignUpResponseSchema,
   refreshSuccessResponseSchema,
   registerSuccessResponseSchema,
   resendRegisterOtpResponseSchema,
@@ -24,6 +32,7 @@ import {
   authForgotPasswordSchema,
   authResetPasswordSchema,
   authRefreshSchema,
+  authSessionResponseSchema,
 } from "./auth.schema";
 
 export const authRouter = new OpenAPIHono<AppBindings>();
@@ -69,6 +78,81 @@ const verifyOtpRoute = createRoute({
       },
     },
     400: { description: "Invalid OTP" },
+  },
+});
+
+const completeSignUpRoute = createRoute({
+  method: "post",
+  path: "/register/complete",
+  middleware: [requireAccessTokenAllowIncompleteSignUpAndOnboarding],
+  tags: ["Auth"],
+  security: [{ BearerAuth: [] }],
+  request: {
+    body: {
+      content: { "application/json": { schema: authCompleteSignUpSchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Sign up details completed successfully",
+      content: {
+        "application/json": {
+          schema: completeSignUpResponseSchema,
+        },
+      },
+    },
+    400: { description: "Validation failed" },
+    401: { description: "Unauthorized" },
+    404: { description: "User not found" },
+  },
+});
+
+const sessionRoute = createRoute({
+  method: "get",
+  path: "/session",
+  middleware: [requireAccessTokenAllowIncompleteSignUpAndOnboarding],
+  tags: ["Auth"],
+  security: [{ BearerAuth: [] }],
+  responses: {
+    200: {
+      description: "Authenticated user session and access state",
+      content: {
+        "application/json": {
+          schema: authSessionResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: "Unauthorized",
+      content: {
+        "application/json": {
+          schema: authProtectedErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+const googleRoute = createRoute({
+  method: "post",
+  path: "/google",
+  tags: ["Auth"],
+  request: {
+    body: {
+      content: { "application/json": { schema: authGoogleSchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Google authentication successful",
+      content: {
+        "application/json": {
+          schema: authTokenResponseSchema,
+        },
+      },
+    },
+    400: { description: "Validation failed" },
+    401: { description: "Google authentication failed" },
   },
 });
 
@@ -204,6 +288,9 @@ const resetPasswordRoute = createRoute({
 });
 
 authRouter.openapi(registerRoute, handleRegister);
+authRouter.openapi(completeSignUpRoute, handleCompleteSignUp);
+authRouter.openapi(sessionRoute, handleSession);
+authRouter.openapi(googleRoute, handleGoogle);
 authRouter.openapi(verifyOtpRoute, handleVerifyRegisterOtp);
 authRouter.openapi(resendOtpRoute, handleResendRegisterOtp);
 authRouter.openapi(loginRoute, handleLogin);

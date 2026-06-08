@@ -47,8 +47,8 @@ function encodeRfc3986(value: string) {
   );
 }
 
-function buildAvatarKey(userId: string, fileName: string) {
-  return buildNestedImageObjectKey("avatars", userId, fileName);
+function buildAvatarKey(userId: string, contentType: string) {
+  return buildNestedImageObjectKeyFromContentType("avatars", userId, contentType);
 }
 
 function buildVolunteerCoverKey(userId: string, contentType: string) {
@@ -340,7 +340,7 @@ export async function handlePresignAvatarUpload(
   }
 
   try {
-    const avatarKey = buildAvatarKey(authResult.userId, payload.fileName);
+    const avatarKey = buildAvatarKey(authResult.userId, payload.contentType);
     const presigned = buildPresignedPutUrl(
       avatarKey,
       payload.contentType,

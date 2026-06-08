@@ -1,13 +1,18 @@
+import { env } from "../../../config/env";
+
 function requireEnv(name: string) {
-  const value = process.env[name];
+  const value = env[name as keyof typeof env];
   if (!value) {
     throw new Error(`Missing required environment variable: ${name}`);
   }
-  return value;
+  return String(value);
 }
 
 function optionalEnv(name: string, fallback: string) {
-  const value = process.env[name]?.trim();
+  const value = env[name as keyof typeof env];
+  if (typeof value !== "string") {
+    return fallback;
+  }
   return value || fallback;
 }
 
@@ -36,6 +41,8 @@ export const authConfig = {
   jwtExpiration: optionalEnv("JWT_EXPIRATION", "15m"),
   betterAuthUrl: requireEnv("BETTER_AUTH_URL"),
   betterAuthSecret: requireEnv("BETTER_AUTH_SECRET"),
+  googleClientId: env.GOOGLE_CLIENT_ID?.trim(),
+  googleClientSecret: env.GOOGLE_CLIENT_SECRET?.trim(),
   resendApiKey: requireEnv("RESEND_API_KEY"),
   resendFrom: requireEnv("RESEND_FROM_EMAIL"),
   resendApiUrl: requireEnv("RESEND_API_URL"),
