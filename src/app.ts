@@ -1,17 +1,19 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { cors } from "hono/cors";
-import { logger } from "hono/logger";
 import { prettyJSON } from "hono/pretty-json";
 import { ZodError } from "zod";
 import routes from "./routes/routes";
 import { AppBindings } from "./lib/types";
 import { scalarDocsPageHtml } from "./docs/scalar-docs";
 import { auth } from "./lib/auth";
+import { logger } from "hono/logger";
 
 const app = new OpenAPIHono<AppBindings>();
 
 // Middleware
-app.use("*", logger());
+if (process.env.NODE_ENV !== "production") {
+  app.use("*", logger());
+}
 app.use("*", cors());
 app.use("*", prettyJSON());
 

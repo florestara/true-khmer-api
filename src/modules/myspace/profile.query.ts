@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, sql } from "drizzle-orm";
 import { db } from "../../db/index";
 import {
   badge,
@@ -226,6 +226,19 @@ export async function getProfile(userId: string) {
 
   const profileRow = profileRows[0];
   const progressRow = progressRows[0];
+  const totalPoints = progressRow?.totalPoints ?? 0;
+  const [nextTierRow] = await db
+    .select({
+      id: tier.id,
+      slug: tier.slug,
+      name: tier.name,
+      rankOrder: tier.rankOrder,
+      minPoints: tier.minPoints,
+    })
+    .from(tier)
+    .where(gt(tier.minPoints, totalPoints))
+    .orderBy(asc(tier.minPoints))
+    .limit(1);
   const socialLinks = {
     website: null as string | null,
     linkedin: null as string | null,
@@ -270,7 +283,7 @@ export async function getProfile(userId: string) {
     skills: skillRows,
     socialLinks,
     progress: {
-      totalPoints: progressRow?.totalPoints ?? 0,
+      totalPoints,
       rank: progressRow?.rank ?? null,
       tier:
         progressRow?.tierId &&
@@ -286,6 +299,10 @@ export async function getProfile(userId: string) {
               minPoints: progressRow.tierMinPoints,
             }
           : null,
+      nextTier: nextTierRow ?? null,
+      pointsUntilNextTier: nextTierRow
+        ? Math.max(nextTierRow.minPoints - totalPoints, 0)
+        : 0,
     },
     badges: badgeRows,
   };

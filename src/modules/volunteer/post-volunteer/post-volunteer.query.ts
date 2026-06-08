@@ -135,6 +135,7 @@ type VolunteerOpportunityBaseRow = {
   opportunity: VolunteerOpportunityRow;
   category: VolunteerReference;
   location: VolunteerReference;
+  availableSpots?: number;
 };
 type SavedVolunteerOpportunityListRow = VolunteerOpportunityBaseRow & {
   applicationCount: number;
@@ -848,9 +849,37 @@ function hydrateVolunteerOpportunityDetail(
 
 function buildVolunteerOpportunitiesCursorFilter(
   cursor?: VolunteerOpportunitiesPageCursor,
+  filter: GetVolunteerOpportunitiesQuery["filter"] = "recentlyAdded",
+  availableSpotsExpression?: SQL<number>,
 ): SQL<unknown> | undefined {
   if (!cursor) {
     return undefined;
+  }
+
+  if (
+    filter === "mostSpotsAvailable" &&
+    availableSpotsExpression &&
+    "availableSpots" in cursor &&
+    cursor.availableSpots !== undefined
+  ) {
+    return or(
+      sql`${availableSpotsExpression} < ${cursor.availableSpots}`,
+      and(
+        sql`${availableSpotsExpression} = ${cursor.availableSpots}`,
+        lt(volunteerOpportunity.publishedAt, cursor.publishedAt),
+      ),
+      and(
+        sql`${availableSpotsExpression} = ${cursor.availableSpots}`,
+        eq(volunteerOpportunity.publishedAt, cursor.publishedAt),
+        lt(volunteerOpportunity.createdAt, cursor.createdAt),
+      ),
+      and(
+        sql`${availableSpotsExpression} = ${cursor.availableSpots}`,
+        eq(volunteerOpportunity.publishedAt, cursor.publishedAt),
+        eq(volunteerOpportunity.createdAt, cursor.createdAt),
+        lt(volunteerOpportunity.id, cursor.id),
+      ),
+    );
   }
 
   return or(
@@ -871,12 +900,20 @@ function buildVolunteerOpportunitiesWhereClause({
   categoryId,
   locationId,
   search,
+  filter,
+  timeCommitment,
   cursor,
   ownerId,
+  availableSpotsExpression,
 }: Pick<
   GetVolunteerOpportunitiesQuery,
-  "categoryId" | "locationId" | "search" | "cursor"
-> & { ownerId?: string }) {
+  | "categoryId"
+  | "locationId"
+  | "search"
+  | "filter"
+  | "timeCommitment"
+  | "cursor"
+> & { ownerId?: string; availableSpotsExpression?: SQL<number> }) {
   const filters: SQL<unknown>[] = [
     ownerId
       ? inArray(
@@ -900,6 +937,10 @@ function buildVolunteerOpportunitiesWhereClause({
 
   if (locationId) {
     filters.push(eq(volunteerOpportunity.cityId, locationId));
+  }
+
+  if (timeCommitment) {
+    filters.push(eq(volunteerOpportunity.commitmentLabel, timeCommitment));
   }
 
   if (search) {
@@ -960,7 +1001,17 @@ function buildVolunteerOpportunitiesWhereClause({
     }
   }
 
-  const cursorFilter = buildVolunteerOpportunitiesCursorFilter(cursor);
+  if (filter === "startingSoon") {
+    filters.push(
+      sql`${volunteerOpportunity.applicationDeadline} >= now() and ${volunteerOpportunity.applicationDeadline} <= now() + interval '3 days'`,
+    );
+  }
+
+  const cursorFilter = buildVolunteerOpportunitiesCursorFilter(
+    cursor,
+    filter,
+    availableSpotsExpression,
+  );
   if (cursorFilter) {
     filters.push(cursorFilter);
   }
@@ -972,6 +1023,8 @@ async function countVolunteerOpportunities({
   categoryId,
   locationId,
   search,
+  filter,
+  timeCommitment,
   ownerId,
 }: Omit<GetVolunteerOpportunitiesQuery, "limit" | "cursor"> & {
   ownerId?: string;
@@ -989,6 +1042,8 @@ async function countVolunteerOpportunities({
         categoryId,
         locationId,
         search,
+        filter,
+        timeCommitment,
         cursor: undefined,
         ownerId,
       }),
@@ -999,6 +1054,7 @@ async function countVolunteerOpportunities({
 
 function buildNextVolunteerOpportunitiesCursor(
   row: VolunteerOpportunityBaseRow,
+  filter: GetVolunteerOpportunitiesQuery["filter"] = "recentlyAdded",
 ): string {
   if (!row.opportunity.publishedAt) {
     throw new Error(
@@ -1006,7 +1062,18 @@ function buildNextVolunteerOpportunitiesCursor(
     );
   }
 
+  if (filter === "mostSpotsAvailable") {
+    return encodeVolunteerOpportunitiesPageCursor({
+      filter,
+      publishedAt: row.opportunity.publishedAt,
+      createdAt: row.opportunity.createdAt,
+      id: row.opportunity.id,
+      availableSpots: toInteger(row.availableSpots ?? 0),
+    });
+  }
+
   return encodeVolunteerOpportunitiesPageCursor({
+    filter,
     publishedAt: row.opportunity.publishedAt,
     createdAt: row.opportunity.createdAt,
     id: row.opportunity.id,
@@ -1472,12 +1539,48 @@ export async function getVolunteerOpportunities(
     categoryId,
     locationId,
     search,
+    filter,
+    timeCommitment,
     limit,
     cursor,
   }: GetVolunteerOpportunitiesQuery,
   viewerId?: string,
   ownerId?: string,
 ): Promise<VolunteerOpportunitiesListResult> {
+  const capacitySubquery = db
+    .select({
+      opportunityId: volunteerRole.opportunityId,
+      capacity: sql<number>`coalesce(sum(${volunteerRole.capacity}), 0)::int`.as(
+        "capacity",
+      ),
+    })
+    .from(volunteerRole)
+    .groupBy(volunteerRole.opportunityId)
+    .as("volunteer_opportunity_capacity");
+  const confirmedApplicationSubquery = db
+    .select({
+      opportunityId: volunteerApplication.opportunityId,
+      applicationCount: sql<number>`count(*)::int`.as("application_count"),
+    })
+    .from(volunteerApplication)
+    .where(eq(volunteerApplication.status, "CONFIRMED"))
+    .groupBy(volunteerApplication.opportunityId)
+    .as("volunteer_opportunity_confirmed_applications");
+  const availableSpotsExpression =
+    sql<number>`greatest(coalesce(${capacitySubquery.capacity}, 0) - coalesce(${confirmedApplicationSubquery.applicationCount}, 0), 0)`;
+  const orderBy =
+    filter === "mostSpotsAvailable"
+      ? [
+          desc(availableSpotsExpression),
+          desc(volunteerOpportunity.publishedAt),
+          desc(volunteerOpportunity.createdAt),
+          desc(volunteerOpportunity.id),
+        ]
+      : [
+          desc(volunteerOpportunity.publishedAt),
+          desc(volunteerOpportunity.createdAt),
+          desc(volunteerOpportunity.id),
+        ];
   const rowsQuery = db
     .select({
       opportunity: volunteerOpportunity,
@@ -1489,6 +1592,7 @@ export async function getVolunteerOpportunities(
         id: city.id,
         name: city.name,
       },
+      availableSpots: availableSpotsExpression.as("available_spots"),
     })
     .from(volunteerOpportunity)
     .innerJoin(
@@ -1496,20 +1600,27 @@ export async function getVolunteerOpportunities(
       eq(volunteerCategory.id, volunteerOpportunity.categoryId),
     )
     .innerJoin(city, eq(city.id, volunteerOpportunity.cityId))
+    .leftJoin(
+      capacitySubquery,
+      eq(capacitySubquery.opportunityId, volunteerOpportunity.id),
+    )
+    .leftJoin(
+      confirmedApplicationSubquery,
+      eq(confirmedApplicationSubquery.opportunityId, volunteerOpportunity.id),
+    )
     .where(
       buildVolunteerOpportunitiesWhereClause({
         categoryId,
         locationId,
         search,
+        filter,
+        timeCommitment,
         cursor,
         ownerId,
+        availableSpotsExpression,
       }),
     )
-    .orderBy(
-      desc(volunteerOpportunity.publishedAt),
-      desc(volunteerOpportunity.createdAt),
-      desc(volunteerOpportunity.id),
-    )
+    .orderBy(...orderBy)
     .limit(limit + 1);
 
   const [rows, total] = await Promise.all([
@@ -1518,6 +1629,8 @@ export async function getVolunteerOpportunities(
       categoryId,
       locationId,
       search,
+      filter,
+      timeCommitment,
       ownerId,
     }),
   ]);
@@ -1526,7 +1639,7 @@ export async function getVolunteerOpportunities(
       rows,
       limit,
       total,
-      getNextCursor: buildNextVolunteerOpportunitiesCursor,
+      getNextCursor: (row) => buildNextVolunteerOpportunitiesCursor(row, filter),
     });
   const opportunityIds = paginatedRows.map((row) => row.opportunity.id);
   const [
@@ -1573,6 +1686,8 @@ export async function countVolunteerOpportunitiesPostedByUserId(
     categoryId: undefined,
     locationId: undefined,
     search: undefined,
+    filter: "recentlyAdded",
+    timeCommitment: undefined,
     ownerId: userId,
   });
 }

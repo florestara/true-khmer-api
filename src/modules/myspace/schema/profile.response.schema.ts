@@ -2,6 +2,14 @@ import { z } from "zod";
 
 const visibilitySchema = z.enum(["public", "members", "private"]);
 
+const tierSchema = z.object({
+  id: z.string(),
+  slug: z.string(),
+  name: z.string(),
+  rankOrder: z.number(),
+  minPoints: z.number(),
+});
+
 export const profileResponseSchema = z
   .object({
     ok: z.literal(true),
@@ -52,15 +60,9 @@ export const profileResponseSchema = z
       progress: z.object({
         totalPoints: z.number(),
         rank: z.number().nullable(),
-        tier: z
-          .object({
-            id: z.string(),
-            slug: z.string(),
-            name: z.string(),
-            rankOrder: z.number(),
-            minPoints: z.number(),
-          })
-          .nullable(),
+        tier: tierSchema.nullable(),
+        nextTier: tierSchema.nullable(),
+        pointsUntilNextTier: z.number(),
       }),
       badges: z.array(
         z.object({
@@ -124,15 +126,7 @@ export const publicProfileResponseSchema = z
         twitter: z.string().nullable(),
         facebook: z.string().nullable(),
       }),
-      tier: z
-        .object({
-          id: z.string(),
-          slug: z.string(),
-          name: z.string(),
-          rankOrder: z.number(),
-          minPoints: z.number(),
-        })
-        .nullable(),
+      tier: tierSchema.nullable(),
       postedCounts: z
         .object({
           forum: z.number().int().nonnegative(),
