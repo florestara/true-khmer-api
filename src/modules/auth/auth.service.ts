@@ -216,26 +216,6 @@ function decodeGoogleIdTokenPayload(idToken: string) {
   }
 }
 
-function logGoogleIdTokenProfile(idToken: string) {
-  const payload = decodeGoogleIdTokenPayload(idToken);
-  if (!payload) {
-    console.info("Google auth profile: unable to decode ID token payload");
-    return;
-  }
-
-  console.info("Google auth profile", {
-    subject: payload.sub,
-    email: payload.email,
-    emailVerified: payload.email_verified,
-    name: payload.name,
-    givenName: payload.given_name,
-    familyName: payload.family_name,
-    picture: payload.picture,
-    locale: payload.locale,
-    hostedDomain: payload.hd,
-  });
-}
-
 function resolveAuthFlow(user: AuthFlowUser, isNewUser: boolean): AuthFlow {
   const requiresSignupCompletion = !user.signupCompletedAt;
   const requiresOnboarding =
@@ -444,8 +424,6 @@ export async function handleGoogle(c: Context) {
   if (!parsed.ok) {
     return parsed.response;
   }
-
-  logGoogleIdTokenProfile(parsed.data.idToken);
 
   const googleEmail = decodeGoogleIdTokenEmail(parsed.data.idToken);
   const existingUser = googleEmail ? await findUserByEmail(googleEmail) : null;
